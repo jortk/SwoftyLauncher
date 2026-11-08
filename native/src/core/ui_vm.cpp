@@ -524,15 +524,20 @@ private:
             const Option *master = find_master_option(m);
             std::string target_val;
 
-            if (is_action_option(o)) {
-                for (size_t s = 0; s < o.values.size(); s++) {
-                    if (o.values[s] == "locked" || o.values[s] == "disabled") {
-                        if (s < o.texts.size())
-                            target_val = o.texts[s];
-                        break;
+            // 1. Author-defined locked state text (available to any option)
+            for (size_t s = 0; s < o.values.size(); s++) {
+                if (o.values[s] == "locked" || o.values[s] == "disabled") {
+                    if (s < o.texts.size()) {
+                        target_val = o.texts[s];
+                        disp_index = int(s);
                     }
+                    break;
                 }
-                if (target_val.empty()) {
+            }
+
+            // 2. Dynamic resolution if no explicit locked state choice was declared
+            if (target_val.empty()) {
+                if (is_action_option(o)) {
                     std::string mode_name;
                     if (master) {
                         for (size_t s = 0; s < master->values.size(); s++) {
@@ -552,18 +557,18 @@ private:
                         else
                             target_val = mode_name + " mode only";
                     } else {
-                        target_val = "Custom mode only";
+                        target_val = "Locked";
                     }
-                }
-            } else if (master) {
-                std::string master_val = get_option_value(*master);
-                if (master_val == "default") {
-                    if (!o.values.empty())
-                        target_val = o.values[0];
-                    else if (!o.texts.empty())
-                        target_val = o.texts[0];
-                } else {
-                    target_val = master_val;
+                } else if (master) {
+                    std::string master_val = get_option_value(*master);
+                    if (master_val == "default") {
+                        if (!o.values.empty())
+                            target_val = o.values[0];
+                        else if (!o.texts.empty())
+                            target_val = o.texts[0];
+                    } else {
+                        target_val = master_val;
+                    }
                 }
             }
 
