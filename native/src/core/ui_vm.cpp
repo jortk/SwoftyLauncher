@@ -300,9 +300,12 @@ void register_view_model(const char *screen_prefix, Factory factory)
 namespace {
 
 struct Option {
-    std::string id, label, type;
-    std::vector<std::string> commands, texts;
+    std::string id, label, type, description;
+    std::vector<std::string> commands, texts, values;
     int current = 0;
+    std::string depend_id;
+    std::string depend_unlocked_val;
+    bool has_depend = false;
 };
 
 struct AddonInfo {
@@ -320,7 +323,7 @@ class AddonPage : public ViewModel {
 public:
     void on_activated() override
     {
-        const AddonInfo *m = find_addon();
+        AddonInfo *m = find_addon();
         if (!m) {
             set_text("title", screen().c_str());
             swofty::log("[ui] view model %s: no addon for this page in settings.json", screen().c_str());
@@ -339,6 +342,23 @@ public:
         if (!m)
             return false;
         std::string name = c.name ? c.name : "";
+
+        // Handle controller reset action / native F1 reset button commands
+        if (name == "reset_to_defaults" || name == "reset_to_default" || name == "reset" ||
+            name == "reset_pressed" || name == "restore_defaults" || name == "restore_default" ||
+            name == "trigger_default" || name == "swofty_reset" ||
+            c.hash == djb2("reset_to_defaults") || c.hash == djb2("reset_to_default") ||
+            c.hash == djb2("reset") || c.hash == djb2("reset_pressed") ||
+            c.hash == djb2("restore_defaults") || c.hash == djb2("restore_default") ||
+            c.hash == djb2("trigger_default") || c.hash == djb2("swofty_reset")) {
+            swofty::log("[ui] view model %s: reset defaults command received ('%s', 0x%08x)", screen().c_str(),
+                        name.c_str(), c.hash);
+            reset_addon_options_to_default(*m);
+            for (size_t j = 0; j < m->options.size(); j++)
+                publish(*m, j);
+            return true;
+        }
+
         for (size_t i = 0; i < m->options.size(); i++) {
             Option &o = m->options[i];
             int count = int(o.commands.size());
@@ -355,9 +375,29 @@ public:
                 next = o.type == "slider" ? (o.current > 0 ? o.current - 1 : 0) : (o.current + count - 1) % count;
             if (next < 0)
                 continue;
+            if (is_option_locked(*m, o)) {
+                swofty::log("[ui] view model %s: option %s is locked; ignoring command", screen().c_str(), o.id.c_str());
+                return true;
+            }
             o.current = next;
             settings_command(djb2(o.commands[next].c_str()));
-            publish(*m, i);
+            if (is_master_option(o)) {
+                for (size_t j = 0; j < m->options.size(); j++)
+                    publish(*m, j);
+            } else if (is_action_option(o)) {
+                std::string val = get_option_value(o);
+                if (val == "reset" || val == "Reset to default" || o.current == 1) {
+                    swofty::log("[ui] view model %s: reset action activated for %s", screen().c_str(), m->id.c_str());
+                    reset_addon_options_to_default(*m);
+                    o.current = 0;
+                    for (size_t j = 0; j < m->options.size(); j++)
+                        publish(*m, j);
+                } else {
+                    publish(*m, i);
+                }
+            } else {
+                publish(*m, i);
+            }
             return true;
         }
         return false;
@@ -374,23 +414,205 @@ private:
         return index >= 0 && size_t(index) < list.size() ? &list[size_t(index)] : nullptr;
     }
 
-    void publish(const AddonInfo &, size_t i)
+    bool is_master_option(const Option &o) const
     {
-        const Option &o = find_addon()->options[i];
+        return o.id == "override_mode" || o.id == "master_mode";
+    }
+
+    bool is_action_option(const Option &o) const
+    {
+        return o.id == "reset_to_default" || o.id == "reset" || o.id == "restore_defaults" ||
+               (o.id.size() >= 6 && o.id.rfind("_reset") == o.id.size() - 6);
+    }
+
+    bool shares_choices(const Option &a, const Option &b) const
+    {
+        for (const auto &va : a.values) {
+            if (va.empty() || va == "true" || va == "false" || va == "default" || va == "per_team" ||
+                va == "individual" || va == "custom" || va == "manual")
+                continue;
+            for (const auto &vb : b.values) {
+                if (va == vb)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    const Option *find_master_option(const AddonInfo &m) const
+    {
+        for (const auto &opt : m.options)
+            if (is_master_option(opt))
+                return &opt;
+        return nullptr;
+    }
+
+    std::string get_option_value(const Option &opt) const
+    {
+        if (opt.current >= 0 && opt.current < int(opt.values.size()))
+            return opt.values[size_t(opt.current)];
+        if (opt.current >= 0 && opt.current < int(opt.texts.size()))
+            return opt.texts[size_t(opt.current)];
+        return "";
+    }
+
+    void reset_addon_options_to_default(AddonInfo &m)
+    {
+        for (size_t j = 0; j < m.options.size(); j++) {
+            Option &opt = m.options[j];
+            if (is_master_option(opt) || is_action_option(opt))
+                continue;
+
+            // Reset to default state (index 0)
+            if (opt.current != 0 && !opt.commands.empty()) {
+                opt.current = 0;
+                settings_command(djb2(opt.commands[0].c_str()));
+            }
+        }
+    }
+
+    bool is_option_locked(const AddonInfo &m, const Option &o) const
+    {
+        // 1. Explicit dependency directive
+        if (o.has_depend) {
+            for (const auto &opt : m.options) {
+                if (opt.id == o.depend_id) {
+                    std::string cur_val = get_option_value(opt);
+                    return cur_val != o.depend_unlocked_val;
+                }
+            }
+        }
+
+        // 2. Master override mode: only locks options that depend on the master override
+        const Option *master = find_master_option(m);
+        if (master && master->id != o.id) {
+            std::string master_val = get_option_value(*master);
+            bool is_custom_mode = (master_val == "per_team" || master_val == "individual" ||
+                                   master_val == "custom" || master_val == "manual");
+
+            // Action option (e.g. reset_to_default) is locked when not in custom/individual mode
+            if (is_action_option(o))
+                return !is_custom_mode;
+
+            // Only lock options that share choices with the master override (or explicitly depend on it)
+            if (!is_custom_mode && !master_val.empty() && shares_choices(*master, o))
+                return true;
+        }
+
+        return false;
+    }
+
+    void publish(const AddonInfo &m, size_t i)
+    {
+        if (i >= m.options.size())
+            return;
+        const Option &o = m.options[i];
         char key[64];
         auto prop = [&](const char *leaf) {
             snprintf(key, sizeof key, "o%zu.%s", i, leaf);
             return key;
         };
         int count = int(o.commands.size());
-        set_text(prop("label"), o.label.c_str());
-        set_text(prop("text"), o.current >= 0 && o.current < int(o.texts.size()) ? o.texts[size_t(o.current)].c_str() : "");
-        set_int(prop("index"), o.current);
-        set_int(prop("value"), o.current);
-        set_int(prop("min"), 0);
-        set_int(prop("max"), count > 0 ? count - 1 : 0);
+        bool locked = is_option_locked(m, o);
+
+        std::string raw_text = o.current >= 0 && o.current < int(o.texts.size()) ? o.texts[size_t(o.current)] : "";
+        std::string disp_text;
+        std::string disp_label;
+        int disp_index = o.current;
+
+        if (locked) {
+            const Option *master = find_master_option(m);
+            std::string target_val;
+
+            if (is_action_option(o)) {
+                for (size_t s = 0; s < o.values.size(); s++) {
+                    if (o.values[s] == "locked" || o.values[s] == "disabled") {
+                        if (s < o.texts.size())
+                            target_val = o.texts[s];
+                        break;
+                    }
+                }
+                if (target_val.empty()) {
+                    std::string mode_name;
+                    if (master) {
+                        for (size_t s = 0; s < master->values.size(); s++) {
+                            const std::string &v = master->values[s];
+                            if (v == "per_team" || v == "individual" || v == "custom" || v == "manual") {
+                                if (s < master->texts.size())
+                                    mode_name = master->texts[s];
+                                break;
+                            }
+                        }
+                    }
+                    if (!mode_name.empty()) {
+                        std::string lower = mode_name;
+                        for (char &c : lower) c = tolower(uint8_t(c));
+                        if (lower.size() >= 4 && lower.rfind("mode") == lower.size() - 4)
+                            target_val = mode_name + " only";
+                        else
+                            target_val = mode_name + " mode only";
+                    } else {
+                        target_val = "Custom mode only";
+                    }
+                }
+            } else if (master) {
+                std::string master_val = get_option_value(*master);
+                if (master_val == "default") {
+                    if (!o.values.empty())
+                        target_val = o.values[0];
+                    else if (!o.texts.empty())
+                        target_val = o.texts[0];
+                } else {
+                    target_val = master_val;
+                }
+            }
+
+            std::string override_text;
+            if (!target_val.empty()) {
+                if (is_action_option(o)) {
+                    override_text = target_val;
+                } else {
+                    for (size_t s = 0; s < o.values.size(); s++) {
+                        if (o.values[s] == target_val) {
+                            disp_index = int(s);
+                            if (s < o.texts.size())
+                                override_text = o.texts[s];
+                            break;
+                        }
+                    }
+                    if (override_text.empty()) {
+                        for (size_t s = 0; s < o.texts.size(); s++) {
+                            if (o.texts[s].rfind(target_val, 0) == 0) {
+                                disp_index = int(s);
+                                override_text = o.texts[s];
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (override_text.empty())
+                override_text = raw_text;
+
+            disp_label = "{s:18_regular_upper_part_neg}" + o.label + "{/s}";
+            disp_text = "{s:18_regular_upper_part_neg}" + override_text + "{/s}";
+        } else {
+            disp_label = o.label;
+            disp_text = raw_text;
+            disp_index = o.current;
+        }
+
+        set_text(prop("label"), disp_label.c_str());
+        set_text(prop("text"), disp_text.c_str());
+        set_int(prop("index"), disp_index);
+        set_int(prop("value"), disp_index);
+        set_int(prop("min"), locked ? disp_index : 0);
+        set_int(prop("max"), locked ? disp_index : (count > 0 ? count - 1 : 0));
         set_int(prop("step"), 1);
         set_bool(prop("is_slider"), o.type == "slider");
+        set_bool(prop("enabled"), !locked);
+        set_bool(prop("disabled"), locked);
     }
 };
 
@@ -422,10 +644,41 @@ void load_addons(const std::wstring &settings_path)
             o.id = jo["id"].str();
             o.label = jo["label"].str(o.id.c_str());
             o.type = jo["type"].str();
+            o.description = jo["description"].str();
             o.current = int(jo["current"].num(0));
+
+            // Parse directive if present: e.g. [depends: mode=custom]
+            size_t dep_pos = o.description.find("[depends:");
+            if (dep_pos != std::string::npos) {
+                size_t end_pos = o.description.find("]", dep_pos);
+                if (end_pos != std::string::npos) {
+                    std::string clause = o.description.substr(dep_pos + 9, end_pos - (dep_pos + 9));
+                    size_t eq = clause.find('=');
+                    if (eq != std::string::npos) {
+                        o.depend_id = clause.substr(0, eq);
+                        o.depend_unlocked_val = clause.substr(eq + 1);
+                        auto trim = [](std::string &s) {
+                            while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.erase(s.begin());
+                            while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.pop_back();
+                        };
+                        trim(o.depend_id);
+                        trim(o.depend_unlocked_val);
+                        o.has_depend = !o.depend_id.empty();
+                    }
+                }
+            }
+
             for (auto &st : jo["states"].a) {
                 o.commands.push_back(st["command"].str());
                 o.texts.push_back(st["text"].str());
+                std::string val;
+                if (st["value"].type == json::Value::Str)
+                    val = st["value"].str();
+                else if (st["value"].type == json::Value::Bool)
+                    val = st["value"].b ? "true" : "false";
+                else if (st["value"].type == json::Value::Num)
+                    val = std::to_string(st["value"].num());
+                o.values.push_back(std::move(val));
             }
             m.options.push_back(std::move(o));
         }
