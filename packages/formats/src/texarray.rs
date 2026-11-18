@@ -87,11 +87,12 @@ impl Array {
     }
 
     /// Writes each slice of `source` that differs from `stock` over this array and
-    /// returns their indices. This array has `stock`'s layout and `source` fits it.
+    /// returns their indices. This array and `source` fit `stock`; the slice count of
+    /// this array stays, so a slice past it is left out.
     pub fn merge(&mut self, stock: &Array, source: &Array) -> Vec<usize> {
         let n = stock.slice_len();
         let mut changed = Vec::new();
-        for i in 0..source.count.min(stock.count) {
+        for i in 0..source.count.min(stock.count).min(self.count) {
             let theirs = source.slice(i);
             if theirs != stock.slice(i) {
                 self.data[i * n..(i + 1) * n].copy_from_slice(theirs);
@@ -146,6 +147,16 @@ mod tests {
         assert_eq!(base.data, [[6; 4], [9; 4], [2; 4], [3; 4]].concat());
         let longer = Array::read(&surface(2, &[[0; 4], [1; 4], [2; 4], [3; 4], [7; 4]])).unwrap();
         assert!(base.merge(&stock, &longer).is_empty());
+        let mut grown = Array::read(&surface(2, &[[0; 4], [1; 4], [2; 4], [3; 4], [8; 4], [9; 4]])).unwrap();
+        let one = Array::read(&surface(2, &[[0; 4], [1; 4], [5; 4], [3; 4]])).unwrap();
+        assert_eq!(grown.merge(&stock, &one), [2]);
+        assert_eq!(
+            grown.data,
+            [[0; 4], [1; 4], [5; 4], [3; 4], [8; 4], [9; 4]].concat()
+        );
+        let mut short = Array::read(&surface(2, &[[0; 4], [1; 4]])).unwrap();
+        assert_eq!(short.merge(&stock, &one), Vec::<usize>::new());
+        assert_eq!((short.count, short.data.len()), (2, 8));
         let wide = Array::read(&surface(4, &[[0; 4], [1; 4], [2; 4], [3; 4]])).unwrap();
         assert!(!wide.fits(&stock));
         assert!(Array::read(&surface(2, &[[0; 4]])).is_none());

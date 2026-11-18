@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace runtime::direct_start {
 
@@ -103,5 +105,54 @@ struct Driver {
         return link;
     }
 };
+
+// The flow link hook has work while the start drives the flow (profile, setup, leave) and, for a session target, until the
+// session's screen is up or the cover's wait ran out. After that, and after a failed start, it returns at once.
+inline bool link_needed(Phase phase, bool session_target, bool session_screen, uint64_t session_at, uint64_t now, uint64_t screen_wait_ms,
+                        bool diag)
+{
+    if (diag)
+        return true;
+    if (phase == Phase::off || phase == Phase::failed)
+        return false;
+    if (phase != Phase::left)
+        return true;
+    if (!session_target || session_screen)
+        return false;
+    return !session_at || now < session_at || now - session_at < screen_wait_ms;
+}
+
+// A game setup mode of the Grand Prix mode, by name, and whether one of its entrant setup modes offers the
+// requested entrant list.
+struct SetupModeOffer {
+    std::string name;
+    bool offers = false;
+};
+
+constexpr size_t NO_SETUP_MODE = size_t(-1);
+
+// The game setup mode a Grand Prix direct start takes. A requested name is taken as it is. Otherwise the host mode
+// when it offers the list, then the first mode that does, since the session's track data query pairs the setup mode
+// with the list's season and finds no track for a pair no track data set holds (swofty_f1 with the 2026 list);
+// the host mode when no mode offers the list.
+inline size_t pick_setup_mode(const std::vector<SetupModeOffer> &modes, const std::string &requested,
+                              const std::string &host)
+{
+    auto named = [&](const std::string &name) {
+        for (size_t i = 0; i < modes.size(); i++)
+            if (modes[i].name == name)
+                return i;
+        return NO_SETUP_MODE;
+    };
+    if (!requested.empty())
+        return named(requested);
+    size_t h = named(host);
+    if (h != NO_SETUP_MODE && modes[h].offers)
+        return h;
+    for (size_t i = 0; i < modes.size(); i++)
+        if (modes[i].offers)
+            return i;
+    return h;
+}
 
 }

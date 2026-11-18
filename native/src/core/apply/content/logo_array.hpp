@@ -46,7 +46,7 @@ inline void put32(std::string &s, size_t at, uint32_t v)
     std::memcpy(&s[at], &v, 4);
 }
 
-inline bool shape_of(const Stock &stock, Shape &out, std::string &why)
+inline bool shape_of_images(const Stock &stock, Shape &out, std::string &why)
 {
     if (stock.head.size() < HEAD_SIZE || stock.view.size() < VIEW_COUNT + 4)
         return why = "the stock fragments are shorter than an array header", false;
@@ -56,13 +56,45 @@ inline bool shape_of(const Stock &stock, Shape &out, std::string &why)
         return why = "unexpected stock array (format " + std::to_string(fmt) + ", " + std::to_string(mips) + " mips)", false;
     if (!w || !h || w % 4 || h % 4)
         return why = "the stock array is " + std::to_string(w) + "x" + std::to_string(h) + ", not a multiple of 4", false;
-    if (stock.data.size() != size_t(count) * w * h || stock.names.size() != count || le32(stock.view, VIEW_COUNT) != count)
-        return why = "the stock array holds " + std::to_string(stock.data.size()) + " byte(s), " +
-                     std::to_string(stock.names.size()) + " key(s) and a view count of " +
+    if (stock.data.size() != size_t(count) * w * h || le32(stock.view, VIEW_COUNT) != count)
+        return why = "the stock array holds " + std::to_string(stock.data.size()) + " byte(s) and a view count of " +
                      std::to_string(le32(stock.view, VIEW_COUNT)) + " for " + std::to_string(count) + " slice(s)",
                false;
     out = {w, h, count};
     return true;
+}
+
+inline bool repair_view(Stock &stock, uint32_t &said)
+{
+    if (stock.head.size() < HEAD_SIZE || stock.view.size() < VIEW_COUNT + 4)
+        return false;
+    uint32_t fmt = le32(stock.head, HEAD_FORMAT), w = le32(stock.head, HEAD_FORMAT + 4), h = le32(stock.head, HEAD_FORMAT + 8);
+    uint32_t mips = le32(stock.head, HEAD_MIPS), count = le32(stock.head, HEAD_COUNT);
+    if (fmt != FORMAT_BC7 || mips != 1 || !w || !h || w % 4 || h % 4 || !count || stock.data.size() != size_t(count) * w * h)
+        return false;
+    said = le32(stock.view, VIEW_COUNT);
+    if (said == count)
+        return false;
+    put32(stock.view, VIEW_COUNT, count);
+    return true;
+}
+
+inline bool shape_of(const Stock &stock, Shape &out, std::string &why)
+{
+    if (!shape_of_images(stock, out, why))
+        return false;
+    if (stock.names.size() != out.count)
+        return why = "the stock array holds " + std::to_string(out.count) + " slice(s) for " + std::to_string(stock.names.size()) + " key(s)",
+               false;
+    return true;
+}
+
+inline void pad(Stock &stock, const Shape &shape, const std::string &blank, uint32_t total)
+{
+    for (uint32_t i = shape.count; i < total; i++)
+        stock.data += blank;
+    put32(stock.head, HEAD_COUNT, total);
+    put32(stock.view, VIEW_COUNT, total);
 }
 
 inline bool grow(const Stock &stock, const std::vector<Slice> &add, Stock &out, std::string &why)

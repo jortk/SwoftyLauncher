@@ -1,6 +1,7 @@
 #pragma once
 #include "json.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -39,6 +40,15 @@
 // driver id: Final Classification (1134), Session History (1460), Car Setups (1233), Car Damage (1133), Car
 // Status (1445), Car Telemetry (1448), Lap Data (1399), Lap Positions (1231), Tyre Sets (231), Motion Ex (273)
 // and Event (45) index cars by carIdx only.
+//
+// Tracks. Session (1), 2024 and 2025: 753 bytes, trackId i8 at 36 (published F1 24 / F1 25 specification). An added
+// track's statId is given per install (254 down), so the byte means nothing to an overlay and differs between PCs.
+// For a track swofty/udp_ids.json or the core's track records name, the Session packet carries the trackId the
+// Swofty list gives it (`track_udp`, byte 64..254, the same on every PC; 128..254 read as -128..-2) or else -1 (the specification's "unknown"), and is
+// followed by a Swofty Track packet: the same 29-byte header with packetId 200 and
+// packetVersion 1, then u32 swoftyTrackId at 29 (packages/core/src/udp_ids.rs, the same on every PC: a listed id,
+// else 0x80000000 | FNV-1a 32 of "<addon>/<code>"), u8 the game's statId at 33 and char[64] "<addon>/<code>"
+// (NUL-terminated) at 34: 98 bytes. The 2026 Session packet's layout is not catalogued, so it is left alone.
 
 namespace runtime::udp_ids {
 
@@ -59,6 +69,9 @@ struct Map {
     std::vector<std::string> lines;
     bool any = false;
     mutable int model = MODEL_UNKNOWN;
+    std::map<int, std::string> tracks;
+    std::map<std::string, uint32_t> track_ids;
+    std::map<std::string, int> track_udp;
 
     Map()
     {
@@ -102,6 +115,21 @@ inline bool load(const std::string &text, Map &out, std::string &why)
     }
     for (auto &l : v["lines"].a)
         m.lines.push_back(l.str());
+    for (auto &[k, key] : v["tracks"].o) {
+        long long id = strtoll(k.c_str(), nullptr, 10);
+        if (id >= 0 && id < 256 && !key.str().empty())
+            m.tracks[int(id)] = key.str();
+    }
+    for (auto &[key, id] : v["track_ids"].o) {
+        double n = id.num(-1);
+        if (n >= 0 && n <= 4294967295.0)
+            m.track_ids[key] = uint32_t(n);
+    }
+    for (auto &[key, n] : v["track_udp"].o) {
+        double t = n.num(-1);
+        if (t >= 64 && t <= 254)
+            m.track_udp[key] = int(t);
+    }
     m.any = !m.teams.empty() || !m.drivers.empty();
     out = std::move(m);
     return true;
@@ -243,6 +271,58 @@ inline bool rewrite(const Map &m, uint8_t *p, size_t len, std::vector<Change> *c
         edit(e + l->team, false);
     }
     return changed;
+}
+
+constexpr int SESSION = 1;
+constexpr size_t SESSION_SIZE = 753;
+constexpr size_t SESSION_TRACK = 36;
+constexpr uint8_t TRACK_PACKET = 200;
+constexpr uint8_t TRACK_PACKET_VERSION = 1;
+constexpr size_t TRACK_KEY = 64;
+constexpr size_t TRACK_PACKET_SIZE = HEADER + 4 + 1 + TRACK_KEY;
+
+inline uint32_t hashed_track_id(const std::string &key)
+{
+    uint32_t h = 0x811c9dc5u;
+    for (unsigned char c : key) {
+        h ^= c;
+        h *= 0x01000193u;
+    }
+    return 0x80000000u | (h & 0x7fffffffu);
+}
+
+inline uint32_t swofty_track_id(const Map &m, const std::string &key)
+{
+    auto it = m.track_ids.find(key);
+    return it != m.track_ids.end() ? it->second : hashed_track_id(key);
+}
+
+// For a 2024 or 2025 Session packet of a track in `tracks` (statId -> "<addon>/<code>"): sets its trackId to its listed
+// one or -1 and
+// writes the Swofty Track packet into `out` (TRACK_PACKET_SIZE bytes). False, and nothing written, otherwise.
+inline bool session_track(const Map &m, const std::map<int, std::string> &tracks, uint8_t *p, size_t len, uint8_t *out)
+{
+    if (!p || len != SESSION_SIZE || p[6] != SESSION)
+        return false;
+    int format = p[0] | p[1] << 8;
+    if (format != 2024 && format != 2025)
+        return false;
+    uint8_t stat = p[SESSION_TRACK];
+    auto it = tracks.find(stat);
+    if (it == tracks.end())
+        return false;
+    uint32_t id = swofty_track_id(m, it->second);
+    memcpy(out, p, HEADER);
+    out[5] = TRACK_PACKET_VERSION;
+    out[6] = TRACK_PACKET;
+    for (int i = 0; i < 4; i++)
+        out[HEADER + i] = uint8_t(id >> (8 * i));
+    out[HEADER + 4] = stat;
+    memset(out + HEADER + 5, 0, TRACK_KEY);
+    memcpy(out + HEADER + 5, it->second.data(), std::min(it->second.size(), TRACK_KEY - 1));
+    auto listed = m.track_udp.find(it->second);
+    p[SESSION_TRACK] = listed != m.track_udp.end() ? uint8_t(listed->second) : 0xff;
+    return true;
 }
 
 }

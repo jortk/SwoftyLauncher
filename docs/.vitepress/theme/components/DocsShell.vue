@@ -201,6 +201,15 @@ onUnmounted(() => window.removeEventListener("hashchange", syncHash));
       >
         <Icon name="upload" /><span>Publishing</span>
       </a>
+      <a
+        class="publish"
+        :class="{ selected: samePage('/dmca', route.path) }"
+        :href="to('/dmca')"
+        aria-label="DMCA"
+        title="Report a copyright infringement"
+      >
+        <Icon name="scale" /><span>DMCA</span>
+      </a>
       <VPNavBarSearch />
     </div>
 

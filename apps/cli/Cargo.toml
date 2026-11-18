@@ -21,6 +21,7 @@ sha2.workspace = true
 swofty-builtins.workspace = true
 swofty-core.workspace = true
 swofty-formats.workspace = true
+swofty-shaders.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"

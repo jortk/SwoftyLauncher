@@ -4,9 +4,11 @@
 // on the obfuscated values. It checks that nothing is answered before the table is bound or without the
 // globals, the car list and the slot/owner/handle checks, decoding and re-encoding (the key is kept, the
 // plain half changes), range refusals (steering lock, differential, fuel over capacity, NaN), writes off
-// the flow thread, a car without a system, and cars::live::cars/get/set/scale/is_ai through the table.
+// the flow thread, a car without a system, cars::live::cars/get/set/scale/is_ai through the table, and the builds
+// the operations run on (car_build_for).
 // run_car_live_test.sh builds and runs it.
 #include "../../src/core/hooks/car_live.hpp"
+#include "../../src/core/hooks/player_facts.hpp"
 
 #include <swofty/systems/cars.hpp>
 
@@ -100,6 +102,8 @@ static void build_world()
     count = CARS;
 }
 
+static int writes = 0;
+
 static cl::Env make_env(bool globals = true)
 {
     cl::Env e;
@@ -108,6 +112,7 @@ static cl::Env make_env(bool globals = true)
         return true;
     };
     e.write = [](uintptr_t a, const void *in, size_t n) {
+        writes++;
         memcpy(reinterpret_cast<void *>(a), in, n);
         return true;
     };
@@ -146,7 +151,7 @@ static void core_ops()
                std::fabs(v - 0.001f) < 1e-9f,
            "suspension front damage scale decodes with the handle checked");
     expect(Ops::op_get(0, nullptr, SWOFTY_CAR_CLUTCH_TORQUE, &v) == SWOFTY_ASSET_OK && v == 1.5f, "clutch torque plain");
-    expect(Ops::op_get(0, nullptr, 99, &v) == SWOFTY_ASSET_INVALID, "an unknown field is invalid");
+    expect(Ops::op_get(0, nullptr, 200, &v) == SWOFTY_ASSET_INVALID, "an unknown field is invalid");
     expect(Ops::op_get(0, car_mem[1], SWOFTY_CAR_CLUTCH_TORQUE, &v) == SWOFTY_ASSET_LATE,
            "a handle that isn't the slot's car is late");
     expect(Ops::op_get(2, nullptr, SWOFTY_CAR_TURBO_MAX_BOOST, &v) == SWOFTY_ASSET_UNAVAILABLE,
@@ -319,6 +324,7 @@ static void build_v2()
         attach(c, cl::SUSPENSION, suspension[i]);
         at<float>(aero[i], 0x19a4) = 1.0f;
         at<float>(aero[i], 0x19a0) = 1.0f;
+        put_obf(aero[i], 0x118, 0.65f, 0x2468ace0u);
         at<float>(brake[i], 0x21d8) = 0.4f;
         at<float>(brake[i], 0x21dc) = 1.0f;
         put_obf(chassis[i], 0x28, 800.0f, 0x31415926u);
@@ -360,6 +366,12 @@ static void v2_fields()
                Ops::op_set(0, nullptr, SWOFTY_CAR_AERO_DRAG_SCALE, 0.96f) == SWOFTY_ASSET_OK &&
                plain(aero[0], 0x19a0) == 0.96f,
            "the aero scales are plain floats at +0x19a4 and +0x19a0 of F1Aero");
+    expect(Ops::op_get(0, nullptr, SWOFTY_CAR_AERO_SLIPSTREAM_DRAG, &v) == SWOFTY_ASSET_OK && std::fabs(v - 0.65f) < 1e-6f &&
+               Ops::op_set(0, nullptr, SWOFTY_CAR_AERO_SLIPSTREAM_DRAG, 0.6f) == SWOFTY_ASSET_OK &&
+               Ops::op_get(0, nullptr, SWOFTY_CAR_AERO_SLIPSTREAM_DRAG, &v) == SWOFTY_ASSET_OK && std::fabs(v - 0.6f) < 1e-6f &&
+               Ops::op_get(1, nullptr, SWOFTY_CAR_AERO_SLIPSTREAM_DRAG, &v) == SWOFTY_ASSET_OK && std::fabs(v - 0.65f) < 1e-6f &&
+               Ops::op_set(0, nullptr, SWOFTY_CAR_AERO_SLIPSTREAM_DRAG, 1.5f) == SWOFTY_ASSET_INVALID,
+           "the slipstream drag scale is an obfuscated float at +0x118 of F1Aero, per car, refused above 1");
     expect(Ops::op_get(0, nullptr, SWOFTY_CAR_BRAKES_BIAS, &v) == SWOFTY_ASSET_OK && v == 0.4f &&
                Ops::op_set(0, nullptr, SWOFTY_CAR_BRAKES_PRESSURE, 0.9f) == SWOFTY_ASSET_OK && plain(brake[0], 0x21dc) == 0.9f,
            "brake bias and pressure are plain floats at +0x21d8 and +0x21dc of the BrakeECU");
@@ -458,7 +470,16 @@ static void v2_virtual()
     uintptr_t eng = reinterpret_cast<uintptr_t>(engine[1]);
     expect(Ops::drive_torque(eng, 100.0f, 1000.0f, 1371.8f) == 100.0f && Ops::ai_grip(1, 0, 2.0f) == 2.0f,
            "no layer: the handlers change nothing");
+    int limiter_reads = 0;
+    auto limiter = [&] {
+        ++limiter_reads;
+        return 1371.8f;
+    };
+    expect(Ops::drive_torque_with(eng, 100.0f, 1000.0f, limiter) == 100.0f && limiter_reads == 0,
+           "no layer: the engine site reads no limiter");
     Ops::op_layer("profile", SWOFTY_CAR_ALL, SWOFTY_CAR_ENGINE_POWER_SCALE, SWOFTY_CAR_OP_SCALE, 0.9725f, 0, nullptr);
+    expect(std::fabs(Ops::drive_torque_with(eng, 100.0f, 1000.0f, limiter) - 97.25f) < 1e-3f && limiter_reads == 1,
+           "with a power layer the engine site reads the limiter once");
     Ops::op_layer("profile", SWOFTY_CAR_ALL, SWOFTY_CAR_ENGINE_LIMITER_OFFSET_RPM, SWOFTY_CAR_OP_ADD, -300.0f, 0, nullptr);
     Ops::op_layer("profile", SWOFTY_CAR_ALL, SWOFTY_CAR_AI_GRIP_SCALE, SWOFTY_CAR_OP_SCALE, 0.87f, 0, nullptr);
     float t = Ops::drive_torque(eng, 100.0f, 1000.0f, 1371.8f);
@@ -535,8 +556,289 @@ static void v2_refit()
     expect(Ops::op_refit_tyres(0, "ThisGroupNameIsFarTooLongForTheStringXX") == SWOFTY_ASSET_INVALID, "a name past 31 characters is invalid");
 }
 
+alignas(16) static uint8_t ecu[CARS][0x170];
+alignas(16) static uint8_t avail_mem[0x400];
+
+static void v3_fuel()
+{
+    build_world();
+    for (int i = 0; i < CARS; i++) {
+        attach(car_mem[i], cl::FUEL_ECU, ecu[i]);
+        for (int k = 0; k < 16; k++)
+            put_obf(ecu[i], 0x28 + 0x10 * k, 1.0f, 0x7000u + k + i);
+        at<int32_t>(ecu[i], cl::FUEL_ECU_MODE) = 1;
+    }
+    static std::vector<std::pair<uintptr_t, int>> calls;
+    calls.clear();
+    cl::Env e = make_env();
+    e.fuel_set_mode = [](uintptr_t ecu_at, int mode) { calls.emplace_back(ecu_at, mode); };
+    e.mode_avail = [] { return reinterpret_cast<uintptr_t>(avail_mem); };
+    Ops::bind(std::move(e));
+
+    float v = 0;
+    uint32_t id = 0;
+    expect(Ops::op_field("fuel_ecu.fuel_power_scale.rich", &id) == SWOFTY_ASSET_OK && id == SWOFTY_CAR_FUEL_POWER_LEAN + 2,
+           "fuel_ecu.fuel_power_scale.rich is field 54");
+    expect(Ops::op_field("fuel_ecu.temperature_scale.max", &id) == SWOFTY_ASSET_OK && id == SWOFTY_CAR_FUEL_TEMPERATURE_LEAN + 3,
+           "fuel_ecu.temperature_scale.max is field 63");
+    expect(Ops::op_set(0, nullptr, SWOFTY_CAR_FUEL_POWER_LEAN + 2, 1.05f) == SWOFTY_ASSET_OK &&
+               (at<uint32_t>(ecu[0], 0x28 + 0x40 + 0x20) ^ (0x7000u + 6)) == bits(1.05f) &&
+               (at<uint32_t>(ecu[0], 0x28 + 0x40 + 0x10) ^ (0x7000u + 5)) == bits(1.0f),
+           "a mode table entry is written under its own key and only that entry");
+    expect(calls.size() == 2 && calls[0] == std::make_pair(reinterpret_cast<uintptr_t>(ecu[0]), 0) &&
+               calls[1] == std::make_pair(reinterpret_cast<uintptr_t>(ecu[0]), 1),
+           "the active mode is re-run: another mode and back");
+    calls.clear();
+    at<int32_t>(ecu[0], cl::FUEL_ECU_MODE) = 0;
+    expect(Ops::op_set(0, nullptr, SWOFTY_CAR_FUEL_BURN_LEAN, 0.9f) == SWOFTY_ASSET_OK && calls.size() == 2 &&
+               calls[0].second == 1 && calls[1].second == 0,
+           "from lean the toggle goes to standard and back");
+    expect(Ops::op_set(0, nullptr, SWOFTY_CAR_FUEL_REVS_LEAN, 0.1f) == SWOFTY_ASSET_INVALID &&
+               Ops::op_set(0, nullptr, SWOFTY_CAR_FUEL_BURN_LEAN, 11.0f) == SWOFTY_ASSET_INVALID,
+           "values outside the range are invalid");
+    expect(Ops::op_get(0, nullptr, SWOFTY_CAR_FUEL_BURN_LEAN, &v) == SWOFTY_ASSET_OK && std::fabs(v - 0.9f) < 1e-6f,
+           "a table entry reads back");
+
+    uint32_t mode = 9;
+    expect(Ops::op_fuel_mix(0, &mode) == SWOFTY_ASSET_OK && mode == 0, "fuel_mix reads the car's mode");
+
+    memset(avail_mem, 0xff, sizeof avail_mem);
+    expect(Ops::op_unlock_fuel_mixes("", 4) == SWOFTY_ASSET_INVALID && Ops::op_unlock_fuel_mixes("a", 16) == SWOFTY_ASSET_INVALID,
+           "an empty owner and an unknown mix bit are invalid");
+    expect(Ops::op_unlock_fuel_mixes("a", SWOFTY_CAR_FUEL_MIX_RICH) == SWOFTY_ASSET_OK, "an owner unlocks rich");
+    Ops::unlock_tick();
+    bool ok = true;
+    for (uint32_t c = 0; c < CARS; c++)
+        for (uint32_t m = 0; m < 4; m++) {
+            uint32_t got = at<uint32_t>(avail_mem, cl::MODE_AVAIL_FUEL + c * cl::MODE_AVAIL_STRIDE + m * 4);
+            ok = ok && (got == (m == 2 ? 0u : 0xffffffffu));
+        }
+    expect(ok, "only the rich entry of every car is cleared");
+    memset(avail_mem, 0xff, sizeof avail_mem);
+    count = 32;
+    Ops::unlock_tick();
+    count = CARS;
+    bool tail = true;
+    for (size_t i = cl::MODE_AVAIL_FUEL + cl::MODE_AVAIL_CARS * cl::MODE_AVAIL_STRIDE; i < sizeof avail_mem; i++)
+        tail = tail && avail_mem[i] == 0xff;
+    expect(tail, "the unlock never writes past the 26 car entries of the table");
+    memset(avail_mem, 0xff, sizeof avail_mem);
+    Ops::unlock_tick();
+    writes = 0;
+    Ops::unlock_tick();
+    expect(writes == 0, "an entry already cleared is not written again");
+    uint32_t one = 1;
+    memcpy(avail_mem + cl::MODE_AVAIL_FUEL + 1 * cl::MODE_AVAIL_STRIDE + 8, &one, 4);
+    Ops::unlock_tick();
+    expect(writes == 1 && at<uint32_t>(avail_mem, cl::MODE_AVAIL_FUEL + 1 * cl::MODE_AVAIL_STRIDE + 8) == 0,
+           "only the entry the game relocked is written");
+    expect(Ops::op_unlock_fuel_mixes("a", 0) == SWOFTY_ASSET_OK && Ops::unlocked_mask() == 0, "withdrawing the mask stops the writes");
+
+    expect(SWOFTY_CAR_OPS_VERSION >= 4 && Ops::table.version >= 4 && Ops::table.set_fuel_mix == Ops::op_set_fuel_mix,
+           "the op table offers set_fuel_mix from version 4");
+    calls.clear();
+    memset(avail_mem, 0xff, sizeof avail_mem);
+    for (uint32_t m : { 0u, 1u })
+        memset(avail_mem + cl::MODE_AVAIL_FUEL + m * 4, 0, 4);
+    at<int32_t>(ecu[0], cl::FUEL_ECU_MODE) = 0;
+    expect(Ops::op_set_fuel_mix(0, 4) == SWOFTY_ASSET_INVALID && Ops::op_set_fuel_mix(0, 0xffffffffu) == SWOFTY_ASSET_INVALID,
+           "a mode above 3 is invalid");
+    expect(Ops::op_set_fuel_mix(CARS, 1) != SWOFTY_ASSET_OK, "an unknown car is refused");
+    expect(Ops::op_set_fuel_mix(0, 2) == SWOFTY_ASSET_INVALID && calls.empty(), "a mix the MFD does not offer is refused untouched");
+    expect(Ops::op_set_fuel_mix(0, 1) == SWOFTY_ASSET_OK && calls.size() == 1 &&
+               calls[0] == std::make_pair(reinterpret_cast<uintptr_t>(ecu[0]), 1),
+           "an offered mix goes through the game's mode switch");
+    calls.clear();
+    at<int32_t>(ecu[0], cl::FUEL_ECU_MODE) = 1;
+    expect(Ops::op_set_fuel_mix(0, 1) == SWOFTY_ASSET_OK && calls.empty(), "the active mix is not switched again");
+    flow = false;
+    expect(Ops::op_set_fuel_mix(0, 0) == SWOFTY_ASSET_LATE && calls.empty(), "off the flow thread the switch is late");
+    flow = true;
+    cl::Env none = make_env();
+    none.mode_avail = [] { return reinterpret_cast<uintptr_t>(avail_mem); };
+    Ops::bind(std::move(none));
+    expect(Ops::op_set_fuel_mix(0, 1) == SWOFTY_ASSET_UNAVAILABLE, "without the game's mode switch the op is unavailable");
+}
+
+static void replay_frames()
+{
+    build_world();
+    for (int i = 0; i < CARS; i++) {
+        attach(car_mem[i], cl::FUEL_ECU, ecu[i]);
+        for (int k = 0; k < 16; k++)
+            put_obf(ecu[i], 0x28 + 0x10 * k, 1.0f, 0x7000u + k + i);
+        at<int32_t>(ecu[i], cl::FUEL_ECU_MODE) = 1;
+    }
+    static int calls;
+    calls = 0;
+    cl::Env e = make_env();
+    e.fuel_set_mode = [](uintptr_t, int) { calls++; };
+    Ops::bind(std::move(e));
+    for (uint32_t k = 0; k < 16; k++)
+        Ops::op_layer("rfm", SWOFTY_CAR_ALL, SWOFTY_CAR_FUEL_BASE + k, SWOFTY_CAR_OP_SCALE, 1.05f, 0, nullptr);
+    Ops::flush();
+    Ops::apply_all();
+    calls = 0;
+    for (int frame = 0; frame < 3; frame++) {
+        for (int c = 0; c < CARS; c++)
+            Ops::replayed(reinterpret_cast<uintptr_t>(car_mem[c]) + cl::CAR_LOADER, 0.5f);
+        for (int c = 0; c < CARS; c++)
+            Ops::replayed(reinterpret_cast<uintptr_t>(car_mem[c]) + cl::CAR_LOADER, 0.75f);
+        auto batch = Ops::take_frame();
+        expect(batch.size() == size_t(CARS) && batch[0].progress == 0.75f, "a replay frame queues each car once, with its last progress");
+        for (auto &p : batch)
+            Ops::apply_car(p.index);
+    }
+    expect(calls == 0, "unchanged fuel layers are not re-run on every replay frame");
+    writes = 0;
+    for (int c = 0; c < CARS; c++)
+        Ops::apply_car(c);
+    expect(writes == 0, "a steady frame writes nothing: the game's values are the targets");
+    Ops::flush();
+    expect(writes == 0, "and a flush with no layer change does nothing");
+    at<uint32_t>(ecu[0], 0x28) ^= 0x1;
+    writes = 0;
+    Ops::apply_car(0);
+    expect(writes >= 1, "a game reset of one value is written back");
+    int first = writes;
+    Ops::apply_car(0);
+    expect(writes == first, "and only once: the next frame is steady again");
+    expect(calls == 2, "a game reset of a fuel entry re-runs the mix once for the car, not once per entry");
+}
+
+static void replay_hold()
+{
+    using W = Ops::What;
+    expect(!Ops::skip_in_replay(W::replayed, false) && !Ops::resume_due(false), "live frames apply and have nothing to resume");
+    expect(!Ops::skip_in_replay(W::built, true) && !Ops::resume_due(true), "a built car applies even in a replay");
+    expect(Ops::skip_in_replay(W::replayed, true), "a replayed car is held while the replay shows");
+    expect(Ops::skip_in_replay(W::reset, true) && Ops::skip_in_replay(W::setup, true), "a reset or setup is held too");
+    expect(!Ops::resume_due(true), "nothing resumes while the replay still shows");
+    expect(Ops::resume_due(false), "the first live frame re-applies every car");
+    expect(!Ops::resume_due(false), "and only once");
+}
+
+static uint32_t control_modes[8];
+static int control_answer = SWOFTY_ASSET_OK;
+
+static int fake_control(uint32_t car, uint32_t *mode)
+{
+    if (control_answer != SWOFTY_ASSET_OK)
+        return control_answer;
+    if (car >= 8)
+        return SWOFTY_ASSET_INVALID;
+    *mode = control_modes[car];
+    return SWOFTY_ASSET_OK;
+}
+
+static void player_facts_control()
+{
+    namespace hk = swofty_core::hooks;
+    build_world();
+    Ops::bind(make_env());
+    hk::Facts f;
+    hk::player_facts::Cache cache;
+    f.session.emplace();
+    f.epoch = 1;
+    for (int i = 0; i < 3; i++) {
+        at<uint32_t>(car_mem[i], cl::CAR_IS_AI) = 0;
+        control_modes[i] = 1;
+    }
+    control_modes[2] = 0;
+
+    auto built = hk::player_facts::sync<Ops>(cache, f, fake_control);
+    expect(built && built->player && built->player->car == 2, "a table with every is_ai flag clear takes the car the controller calls human");
+    expect(built && built->participants[0].human == false && built->participants[2].human, "a flagged car under an AI controller is not human");
+
+    hk::player_facts::Cache fresh;
+    control_answer = SWOFTY_ASSET_LATE;
+    auto early = hk::player_facts::sync<Ops>(fresh, f, fake_control);
+    expect(!early || !early->player, "no controller answer yet leaves the player empty");
+    expect(!fresh.scanned, "and the table is scanned again on the next frame");
+    control_answer = SWOFTY_ASSET_OK;
+    auto later = hk::player_facts::sync<Ops>(fresh, f, fake_control);
+    expect(later && later->player && later->player->car == 2, "the player appears once the controller answers");
+
+    control_modes[2] = 1;
+    control_modes[1] = 0;
+    f.player = later->player;
+    f.participants = later->participants;
+    auto moved = hk::player_facts::sync<Ops>(fresh, f, fake_control);
+    expect(moved && moved->player && moved->player->car == 1, "the player follows the controller when the human control moves");
+}
+
+static void player_facts_sync()
+{
+    namespace hk = swofty_core::hooks;
+    build_world();
+    Ops::bind(make_env());
+    hk::Facts f;
+    hk::player_facts::Cache cache;
+    f.session.emplace();
+    f.epoch = 1;
+    auto apply = [&](const std::optional<hk::player_facts::Change> &c) {
+        if (!c)
+            return;
+        f.player = c->player;
+        f.participants = c->participants;
+        f.epoch++;
+    };
+
+    hk::Facts menu;
+    expect(!hk::player_facts::sync<Ops>(cache, menu), "no session, no cars: nothing to change");
+    auto first = hk::player_facts::sync<Ops>(cache, f);
+    expect(first && first->player && first->player->car == 0 && first->player->human, "the human car is the player");
+    expect(first && first->participants.size() == 3 && !first->participants[1].human, "every car is a participant");
+    apply(first);
+    expect(!hk::player_facts::sync<Ops>(cache, f), "an unchanged table changes nothing");
+    expect(!hk::player_facts::sync<Ops>(cache, f), "and stays quiet across frames");
+
+    at<uint32_t>(car_mem[0], cl::CAR_IS_AI) = 1;
+    at<uint32_t>(car_mem[2], cl::CAR_IS_AI) = 0;
+    auto moved = hk::player_facts::sync<Ops>(cache, f);
+    expect(moved && moved->player && moved->player->car == 2, "the player follows a changed human car");
+    apply(moved);
+
+    at<uint32_t>(car_mem[2], cl::CAR_IS_AI) = 1;
+    auto spectating = hk::player_facts::sync<Ops>(cache, f);
+    expect(spectating && !spectating->player && spectating->participants.size() == 3, "no human car leaves the player empty");
+    apply(spectating);
+
+    at<uint32_t>(car_mem[1], cl::CAR_IS_AI) = 0;
+    f.epoch++;
+    auto back = hk::player_facts::sync<Ops>(cache, f);
+    expect(back && back->player && back->player->car == 1, "a human car after spectating is found on the next epoch");
+    apply(back);
+
+    f.session.reset();
+    auto ended = hk::player_facts::sync<Ops>(cache, f);
+    expect(ended && !ended->player && ended->participants.empty(), "the session ending clears player and participants");
+    apply(ended);
+    expect(!hk::player_facts::sync<Ops>(cache, f), "and stays clear");
+
+    f.session.emplace();
+    count = 0;
+    expect(!hk::player_facts::sync<Ops>(cache, f), "no cars yet leaves the player empty");
+    count = CARS;
+}
+
+static void car_builds()
+{
+    const cl::CarBuild *kb = cl::car_build_for(1789118616u, 0x193e6000u);
+    expect(kb && kb->mode_avail_rva == 0x606ec28, "the KB build runs with g_Game_EngineModeAvail at 0x606ec28");
+    expect(!cl::car_build_for(1789118616u, 0x5000000u), "the KB stamp on a packed image is off");
+    const cl::CarBuild *steam = cl::car_build_for(1794312636u, 0x18434000u);
+    expect(steam && steam->mode_avail_rva == 0x6070c28, "Steam 26566308 runs with g_Game_EngineModeAvail at 0x6070c28");
+    const cl::CarBuild *ea = cl::car_build_for(1794315435u, 0x1615e000u);
+    expect(ea && ea->mode_avail_rva == 0x61a7968, "EA 1.0.145 runs with g_Game_EngineModeAvail at 0x61a7968");
+    expect(!cl::car_build_for(1794312636u, 0x1615e000u), "a known stamp with another image size is off");
+    expect(!cl::car_build_for(1789128892u, 0x155dc000u), "the unchecked EA KB-version build is off");
+    expect(!cl::car_build_for(0, 0), "an unknown build is off");
+}
+
 int main()
 {
+    car_builds();
     core_ops();
     sdk_side();
     pending_queue();
@@ -547,6 +849,11 @@ int main()
     v2_virtual();
     v2_gating();
     v2_refit();
+    v3_fuel();
+    replay_frames();
+    replay_hold();
+    player_facts_sync();
+    player_facts_control();
     if (fails) {
         printf("car_live_test: %d failure(s)\n", fails);
         return 1;

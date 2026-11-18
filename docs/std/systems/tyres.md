@@ -372,6 +372,20 @@ At session load the core answers `session.tyres.class_of` from the active box, i
 
 Before handlers then see the answer and may change it.
 
+### Qualifying tyres per box
+
+From the late 1970s to 1991 the softest tyre was often a qualifying tyre, with no use in the race. The game's data cannot say "qualifying only". A box gets it in two parts:
+
+1. **Data.** The event's per-session preset (`tyres.allocation_tyre_presets.TyresPerSessionPreset_N`, picked by the track's `TyreData_0.softer_preset`, `balanced_preset` and `harder_preset`) gives the qualifying option sets only in `Qualifying1`..`Qualifying3`, and `0` for it in `Race`..`Race3`. Each count list is in option order: softer, medium, harder, intermediate, wet.
+2. **Rule.** `rules.qualifying_tyres` (`content.package` 1.5) names the options, for example `["softer"]`. The game tags each set with the session that handed it out, but in a race it still accepts a qualifying-tagged set (`Car_Tyre_CheckCompoundClassRule`). So after the box is pressed, the core refuses those options in race sessions in three places: the set usable check (`Car_Tyre_IsCompoundAllowed`, which feeds the pit tyre lists and the race strategy), the session tag check, and the garage and AI set choice (`Sess_Tyres_ClosestAvailableCompound`). Practice and qualifying are unchanged. A stock box press, or a box without the rule, clears it.
+
+```json
+{ "content.package": { "f1_1985": { "entrant_list": "f1_1985", "season": 1985,
+    "rules": { "qualifying_tyres": ["softer"] } } } }
+```
+
+The log shows the box's rule (`[tyres] box f1_1985 (...): softer only in qualifying, refused in races`), whether the hooks are armed, and the first refusals. `SWOFTY_QUALI_TYRES=0` turns the hooks off. The hooks have not been tested in game yet.
+
 ## Classes and the badge
 
 A class always has five options, and the game reads them by position. The F1 layout lists the same compound pool in every dry slot, and the track picks the compound per event. Its badge shows the slot (Soft, Medium, Hard), not the compound. The F2 layout gives each slot one compound and one badge.

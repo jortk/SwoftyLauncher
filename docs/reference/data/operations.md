@@ -68,6 +68,7 @@ An addon with only operations is a [data addon](./). An addon with code can list
 - `fields`: [Key names](/reference/ops/database#key-names). `strict`: [The completeness check](/reference/ops/database#the-completeness-check). `side_data`: [Acknowledging findings](/reference/ops/database#acknowledging-findings).
 - An unknown op name or field fails the build and names the file.
 - An ERP file may hold a `foreach` key at the top. The build drops it.
+- Any op file may hold a `when` at the top: with `"when": { "addon": "track.istanbul_park" }` the build drops the whole file while that addon is off. See [Settings](#settings).
 
 ### Prefixes
 
@@ -88,7 +89,9 @@ Every op takes two extras from the addon's [`db` settings](/reference/addons/set
 { "op": "set", "select": "rules.stop_go_penalty", "field": "penalty_duration",
   "value": "{{penalty_seconds}}" },              // {{id}} in any string: the setting's value
 { "op": "set", "select": "entrants.teams.team[_metadata_=gm_cadillac_26]", "field": "display_name_code",
-  "value": "CAD", "when": { "short_names": true } } // kept only when each listed setting has that value
+  "value": "CAD", "when": { "short_names": true } }, // kept only when each listed setting has that value
+{ "op": "set", "select": "f2.calendar.round[_metadata_=round_6]", "field": "track", "value": "istanbul_park",
+  "when": { "addon": "track.istanbul_park" } }      // kept only while that addon is on
 ```
 
 An <span v-pre>`{{id}}`</span> that names no option of the addon fails the build with `<addon id>: unknown option <id>`.

@@ -46,10 +46,14 @@ inline uint64_t fnv_index(uint64_t h, uint64_t index)
     return fnv_cont(h, buf, size_t(n));
 }
 
+// The row word of a table is its last path segment less one trailing 's' (entrants.teams -> team_N), except where
+// the game's schema capitalises it: the tracks table counts tracks._Track_instancecount_ and keys tracks.Track_N.
 inline std::string row_stem(const std::string &table)
 {
     size_t dot = table.rfind('.');
     std::string seg = dot == std::string::npos ? table : table.substr(dot + 1);
+    if (seg == "tracks")
+        return "Track";
     if (!seg.empty() && seg.back() == 's')
         seg.pop_back();
     return seg;

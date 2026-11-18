@@ -11,6 +11,10 @@ use crate::view::Event;
 pub use crate::run_helper::{claim_word, run_helper};
 
 pub const API_VERSION: u32 = 1;
+/// Optional support for the data-only native Chart view block.
+pub const VIEW_CHART: &str = "view.chart";
+/// Optional caller-supplied in-memory PNG pictures in generic table cells.
+pub const VIEW_CELL_IMAGE_DATA: &str = "view.cell.image_data";
 pub const RESTART: &str = "swofty.restart";
 // The host calls a launcher lists in hello's host_calls when it answers them.
 pub const ADDON_CALLS: [&str; 4] = ["addons", "install_addon", "set_addon_enabled", "remove_addon"];
@@ -20,6 +24,8 @@ pub const MOVE_ADDON: &str = "move_addon";
 pub const TASKS: &str = "tasks";
 // Listed from launcher 1.5.12 when the host knows the game.
 pub const PROFILE_HEADS: &str = "profile_heads";
+// Listed from launcher 1.9.29, after the other host calls.
+pub const SAVE_DIR: &str = "save_dir";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Request<C> {
@@ -69,6 +75,9 @@ pub struct Hello {
     pub launcher: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub host_calls: Vec<String>,
+    /// Optional view/protocol features; absent on older hosts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -88,6 +97,7 @@ pub enum HostCall {
     RegistryDir,
     GameStatus,
     SteamSaveDir,
+    SaveDir,
     ProfileTracks,
     ProfileHeads,
     Addons,
@@ -179,6 +189,7 @@ mod tests {
                     profile: profile(),
                     launcher: Some("1.0.10".into()),
                     host_calls: Vec::new(),
+                    capabilities: Vec::new(),
                 }),
             },
             json!({"id": 0, "method": "hello", "params": {"api": 1, "addon": "example.addon",
@@ -191,6 +202,12 @@ mod tests {
             "host_calls": ADDON_CALLS}))
         .unwrap();
         assert_eq!(hello.host_calls, ADDON_CALLS);
+        assert!(hello.capabilities.is_empty());
+        let mut current = hello;
+        current.capabilities = vec![VIEW_CHART.into(), "future.feature".into()];
+        let json = serde_json::to_value(&current).unwrap();
+        assert_eq!(json["capabilities"], json!(["view.chart", "future.feature"]));
+        assert_eq!(serde_json::from_value::<Hello>(json).unwrap(), current);
         round(
             Request {
                 id: None,
@@ -397,6 +414,7 @@ mod tests {
             ("registry_dir", HostCall::RegistryDir),
             ("game_status", HostCall::GameStatus),
             ("steam_save_dir", HostCall::SteamSaveDir),
+            (SAVE_DIR, HostCall::SaveDir),
             ("profile_tracks", HostCall::ProfileTracks),
             (PROFILE_HEADS, HostCall::ProfileHeads),
             ("addons", HostCall::Addons),

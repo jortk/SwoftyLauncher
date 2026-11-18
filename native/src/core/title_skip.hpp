@@ -15,5 +15,8 @@ bool wanted();
 bool engaged();
 std::string state();
 uintptr_t node_set_bool();
+// Sets a flow state's sync point (a pair of VM bool nodes at +0x80 and +0xa0, as StateIntro's at +0xcd0) to
+// true where it is not yet, and answers whether the sync point is now complete.
+bool complete_sync(void *sync, const char *what);
 
 }

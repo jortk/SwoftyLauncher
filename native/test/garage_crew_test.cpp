@@ -168,6 +168,25 @@ int main()
         size_t kept = gc::compact(v.raw.data(), v.size(), SESSION, true, read, &m, nullptr, nullptr);
         expect(kept == 2, "a missing drop callback is allowed");
     }
+    {
+        expect(gc::setup_template_missing(0), "a null pit stops crew template is missing");
+        expect(gc::setup_template_missing(0x560), "a template below the user range is missing");
+        expect(!gc::setup_template_missing(TEMPLATE), "a template in the user range is kept");
+        expect(gc::SETUP_VECTOR_BEGIN == 0xa8, "the garage entry vector begin sits at rsp + 0xa8");
+    }
+    {
+        expect(gc::scene_missing(0), "a null garage crew scene is missing");
+        expect(gc::scene_missing(0xe0), "a scene below the user range is missing");
+        expect(!gc::scene_missing(TEMPLATE), "a scene in the user range is kept");
+    }
+    {
+        gc::SetupSkips skips;
+        expect(skips.first(3), "the first skip of a garage is logged");
+        expect(!skips.first(3), "a garage is logged once");
+        expect(skips.first(4), "another garage is logged on its own");
+        expect(!skips.first(gc::GARAGES), "a garage past the table is not logged");
+        expect(skips.first(gc::GARAGES - 1), "the last garage is logged");
+    }
 
     std::printf("%s\n", failed ? "FAILED" : "all passed");
     return failed ? 1 : 0;

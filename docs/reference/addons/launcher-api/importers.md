@@ -53,7 +53,7 @@ plugin    {"id":3,"result":["Imported okayama.exmod","Imported suzuka.exmod"]}
 ## How a drop is routed
 
 1. The launcher claims addons first: a folder with `swofty.json`, a `.swoftyaddon` file (or a legacy `.swoftymod`), or a zip that holds an addon. Those install as addons.
-2. It checks every plugin with `imports` or `claims`, in registry order. A plugin with `imports` claims a file when its extension matches, ignoring case. A plugin with `claims` decides for itself.
+2. It checks every plugin with `imports` or `claims` that is on in the active profile, in registry order. A plugin that's off isn't run and can't claim anything. A plugin with `imports` claims a file when its extension matches, ignoring case. A plugin with `claims` decides for itself.
 3. A claimed file goes to that plugin's `import`. An unclaimed one opens a dialog that names it, with **Go to Simplified Importer** and **Read the addon docs**.
 
 ## claims

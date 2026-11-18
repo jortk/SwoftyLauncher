@@ -18,6 +18,8 @@ pub struct Unusable {
     pub code: Option<String>,
     pub name: Option<String>,
     pub why: String,
+    /// What the player can do about it, in place of the advice to import a fixed version.
+    pub fix: Option<String>,
 }
 
 impl Unusable {
@@ -26,6 +28,7 @@ impl Unusable {
             code: None,
             name: None,
             why,
+            fix: None,
         }
     }
 
@@ -34,7 +37,11 @@ impl Unusable {
             Some(name) => format!("track {name}"),
             None => "its track".to_owned(),
         };
-        format!("{track} is left out; {}. {FIX}", self.why)
+        format!(
+            "{track} is left out; {}. {}",
+            self.why,
+            self.fix.as_deref().unwrap_or(FIX)
+        )
     }
 }
 
@@ -70,6 +77,8 @@ pub struct Activation {
     pub overrides: Vec<Override>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub track_overrides: Vec<Override>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sprint: Vec<String>,
 }
 
 impl Activation {
@@ -189,6 +198,7 @@ pub fn read_package(dir: &Path) -> std::result::Result<TrackPackage, Unusable> {
         code: Some(pkg.track_code.clone()),
         name: Some(pkg.display_name().to_owned()),
         why,
+        fix: None,
     };
     if pkg.activation.base_track().is_none() {
         return Err(unusable(NO_BASE_TRACK.to_owned()));
@@ -434,6 +444,7 @@ pub(crate) mod tests {
                 code: Some("portimao".into()),
                 name: Some("Portimao".into()),
                 why: NO_BASE_TRACK.into(),
+                fix: None,
             }
         );
         assert_eq!(

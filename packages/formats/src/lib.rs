@@ -1,5 +1,8 @@
+pub mod animclip;
+pub mod bc7_enc;
 pub mod bxml;
 pub mod cube;
+pub mod emb;
 pub mod erp;
 pub mod gvdb;
 pub mod hash;
@@ -9,8 +12,10 @@ pub mod material;
 pub mod nefs;
 pub mod pe;
 pub mod pkg;
+pub mod surface;
 pub mod texarray;
 pub mod texture;
+pub mod uipre;
 
 mod bytes;
 

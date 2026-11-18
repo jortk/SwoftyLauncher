@@ -1,8 +1,9 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use crate::scale::{Hit, px};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::{Sizable, h_flex, v_flex};
+use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use swofty_core::view::{colour_hex, parse_colour};
@@ -332,7 +333,7 @@ impl Render for ColourPicker {
                         .text_color(p.text_placeholder)
                         .child(label),
                 )
-                .child(Input::new(input).xsmall())
+                .child(Input::new(input).tap_xs())
         };
         let boxes = h_flex()
             .w(px(SQUARE_W))

@@ -15,19 +15,27 @@
 #include <windows.h>
 
 #include <atomic>
+#include <swofty_api.h>
 #endif
 
 // Guarded reads of game memory. Every read checks that the bytes are committed and readable
-// before touching them, so a stale or wrong pointer yields false instead of a crash. The
-// VirtualQuery answers are cached per thread for a short time (ttl_ms) in a small per-page table,
-// and regions of at least big_region bytes also in a small per-region table, so every page of the
-// game's large heap views shares one answer. VirtualQuery under Wine/Proton costs time linear in
-// the rest of the region (about 7 us per GB), so the region table is what makes the checks cheap
-// enough for per-frame use on large heaps; invalidate() drops every thread's cache
-// at once (call it after the game frees or remaps memory you were reading, or never: entries
-// expire on their own). in_image() and object_like() tell game objects from garbage: a C++ object
-// of the game starts with a vtable inside the exe image. c_string() reads a NUL-terminated string
-// and accepts it only as printable UTF-8, so a pointer's own bytes never pass as a name.
+// before touching them, so a stale or wrong pointer yields false instead of a crash.
+// readable() asks the core's page table: one table shared by every thread of every module, filled
+// from the working set (QueryWorkingSetEx, constant time per page) and from VirtualQuery only for
+// pages that are not resident; it never touches a page to test it, so guard pages stay armed. The
+// core defines SWOFTY_MEM_SHARED and links mem_pages.cpp, which holds the table. Any other module
+// (an addon) reaches it through the core export SwoftyCoreMem, which readable() looks up in
+// swofty_core.dll on its first call and keeps, the answer "not there" included. Without that
+// export (version.dll alone, or a core before it) the VirtualQuery answers are cached per thread
+// for a short time (ttl_ms) in a small per-page table, and regions of at least big_region bytes
+// also in a small per-region table, so every page of the game's large heap views shares one
+// answer. VirtualQuery under Wine/Proton costs time linear in the rest of the region (about 7 us
+// per GB), and on Windows a VirtualQuery inside the game's multi-GB heaps can take milliseconds.
+// invalidate() drops every cached answer at once, the core table's included (call it after the
+// game frees or remaps memory you were reading, or never: entries expire on their own).
+// in_image() and object_like() tell game objects from garbage: a C++ object of the game starts
+// with a vtable inside the exe image. c_string() reads a NUL-terminated string and accepts it only
+// as printable UTF-8, so a pointer's own bytes never pass as a name.
 
 namespace swofty::mem {
 
@@ -149,16 +157,55 @@ inline bool query(uintptr_t at, uintptr_t &hi)
 
 }
 
-// Drop every thread's cached VirtualQuery answers.
+#ifdef SWOFTY_MEM_SHARED
+namespace shared {
+struct Counts {
+    uint64_t resident, region;
+};
+bool readable(uintptr_t p, size_t n);
+void invalidate();
+Counts counts();
+}
+#else
+namespace detail {
+
+// The core's table, or null when swofty_core.dll is not loaded, has no SwoftyCoreMem export or
+// gives a table before version 1. Looked up on the first call; 1 stands for "not there".
+inline const SwoftyMem *core()
+{
+    static std::atomic<uintptr_t> found{0};
+    uintptr_t v = found.load(std::memory_order_acquire);
+    if (!v) {
+        HMODULE dll = GetModuleHandleW(L"swofty_core.dll");
+        auto get = dll ? reinterpret_cast<SwoftyCoreMemFn>(reinterpret_cast<void *>(GetProcAddress(dll, "SwoftyCoreMem")))
+                       : nullptr;
+        const SwoftyMem *t = get ? get() : nullptr;
+        v = t && t->version >= 1 ? reinterpret_cast<uintptr_t>(t) : 1;
+        found.store(v, std::memory_order_release);
+    }
+    return v == 1 ? nullptr : reinterpret_cast<const SwoftyMem *>(v);
+}
+
+}
+#endif
+
+// Drop every cached answer: every thread's VirtualQuery answers and the core's table.
 inline void invalidate()
 {
     detail::generation.fetch_add(1, std::memory_order_relaxed);
+#ifdef SWOFTY_MEM_SHARED
+    shared::invalidate();
+#else
+    if (const SwoftyMem *t = detail::core(); t && t->invalidate)
+        t->invalidate();
+#endif
 }
 
 // While one is alive, this thread's reads keep a big region's answer for ms
 // instead of ttl_ms. A VirtualQuery inside one of the game's multi-GB heaps
 // walks the rest of the region and can take milliseconds, so a poll of
 // objects that live as long as those heaps uses one to pay it once a while.
+// It changes only the per-thread caches; the core's table does not use it.
 class Trust {
 public:
     explicit Trust(uint32_t ms) : was_(detail::region_ttl) { detail::region_ttl = ms; }
@@ -173,6 +220,12 @@ private:
 // n bytes at p are committed and readable.
 inline bool readable(uintptr_t p, size_t n)
 {
+#ifdef SWOFTY_MEM_SHARED
+    return shared::readable(p, n);
+#else
+    if (const SwoftyMem *t = detail::core(); t && t->readable)
+        return t->readable(reinterpret_cast<const void *>(p), n) != 0;
+#endif
     if (!p || p + n < p)
         return false;
     for (uintptr_t at = p, end = p + (n ? n : 1); at < end;) {

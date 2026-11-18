@@ -490,6 +490,26 @@ static void year_map_tests()
     sn::YearMap none = sn::year_map(st, "f1_career_2026");
     expect(none.why.find("no career.season record has data group f1_career_2026") != std::string::npos,
            "a data group without records has no years");
+
+    // career.season 1.1: year packs register their seasons with no data group; a career mode takes them as variants.
+    for (int y = 2008; y <= 2012; y++)
+        st.add("mod.season-" + std::to_string(y), "career.season", std::to_string(y),
+               parse(R"({"year":)" + std::to_string(y) + R"(,"teams":[]})"), nullptr);
+    st.add("mod.season-2016", "career.season", "2016", parse(R"({"data_group":"","year":2016,"teams":[]})"), nullptr);
+    sn::YearMap pg_packs = sn::year_map(st, "f1_career_progressive");
+    expect(pg_packs.why.empty() && pg_packs.years.size() == 11,
+           "a pack's season with no data group, or an empty one, adds no year to a career: " + pg_packs.why);
+    for (int y = 2008; y <= 2012; y++) {
+        reg::Change ch;
+        ch.patch = parse(R"({"data_group":"f1_career_decades"})");
+        std::string id;
+        st.variant("mod.decades", "career.season", std::to_string(y),
+                   "mod.season-" + std::to_string(y) + "/" + std::to_string(y), ch, &id);
+    }
+    sn::YearMap decades = sn::year_map(st, "f1_career_decades");
+    expect(decades.why.empty() && decades.years.size() == 5 && sn::year_at(decades, 0, why) == 2008 &&
+               sn::year_at(decades, 4, why) == 2012,
+           "the career's variants of the five pack seasons map 2008-2012: " + decades.why);
 }
 
 static void clock_tests()

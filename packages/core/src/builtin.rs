@@ -9,6 +9,10 @@ use crate::{Result, io_err};
 pub use swofty_addon::CORE_ID;
 pub const CORE_MANIFEST: &str = include_str!("../../../addons/swoftymod/swofty.json");
 pub const CORE_DB: &str = include_str!("../../../addons/swoftymod/db/core.json");
+pub const CORE_INTRO: &str = include_str!("../../../addons/swoftymod/startup_intro/ops.json");
+pub const CORE_INTRO_VIDEO: &[u8] = include_bytes!("../../../addons/swoftymod/startup_intro/cm_f1_sting.bk2");
+pub const CORE_INTRO_CACHED: &str = "videos/cm_f1_sting.bk2";
+pub const CORE_INTRO_SUBTITLE: &str = "lng_subtitle_ea_sports_intro";
 pub const CORE_MODE: &str = "swofty_f1";
 pub const CORE_DLL: &str = "swofty/addons/core/swofty_core.dll";
 pub const LOADER_ENV: &str = "SWOFTY_LOADER_DIR";
@@ -20,6 +24,17 @@ pub fn core_manifest() -> AddonManifest {
 pub fn core_db_ops() -> OpFile {
     let doc = serde_json::from_str(CORE_DB).expect("the built-in database ops are JSON");
     OpFile::from_value(doc, FileKind::Database).expect("the built-in database ops are valid")
+}
+
+pub fn stage_intro(cache: &Path) -> Result<()> {
+    let path = cache.join(CORE_INTRO_CACHED);
+    if std::fs::read(&path).is_ok_and(|have| have == CORE_INTRO_VIDEO) {
+        return Ok(());
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(io_err(dir))?;
+    }
+    std::fs::write(&path, CORE_INTRO_VIDEO).map_err(io_err(&path))
 }
 
 thread_local! {

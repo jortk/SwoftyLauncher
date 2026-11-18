@@ -1,0 +1,8 @@
+{
+  "session.points": {
+    "too_many": {
+      "$comment": "at most 26 places",
+      "points": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    }
+  }
+}

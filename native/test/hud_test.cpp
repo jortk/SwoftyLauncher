@@ -10,7 +10,9 @@
 #include "hud_guard.hpp"
 #include "hud_image.hpp"
 #include "hud_input.hpp"
+#include "text_entry.hpp"
 #include "hud_png.hpp"
+#include "exec_plan.hpp"
 
 #include <array>
 #include <cstddef>
@@ -730,6 +732,14 @@ static void test_guard()
     CHECK(fg_in({"sl.dlss_g.dll", "sl.interposer.dll", "F1_25.exe"}).empty() &&
               streamline_in({"sl.dlss_g.dll", "sl.interposer.dll", "F1_25.exe"}),
           "streamline's frame generation hook alone is not a frame generation swapchain");
+    CHECK(streamline_caller("C:\\Games\\F1 25\\sl.common.dll") && streamline_caller("SL.INTERPOSER.DLL") &&
+              streamline_caller("sl.dlss_g.dll") && !streamline_caller("F1_25.exe") && !streamline_caller("medal-hook64-v2.dll"),
+          "streamline's modules are read off the module that calls Present");
+    CHECK(learned_fg(true, "").empty() && learned_fg(false, "") == "a non-direct present queue" &&
+              learned_fg(true, "nvngx_dlssg.dll") == "nvngx_dlssg.dll (calls Present)",
+          "a queue read from a swapchain is drawn on only when it is direct and no frame generation module presents");
+    CHECK(streamline_result_ok(0) && !streamline_result_ok(1) && !streamline_result_ok(-1),
+          "only sl::Result::eOk (0) lets the native swapchain be used");
     std::string hw = "<x>\n\t<antialiasing taa=\"true\" dlss=\"false\" />\n\t<frame_gen mode=\"0\" />\n\t"
                      "<multi_frame_gen value=\"0\" />\n</x>";
     FgSetting fs = fg_setting(hw);
@@ -737,6 +747,13 @@ static void test_guard()
     fs = fg_setting("<frame_gen mode=\"1\" /><multi_frame_gen value=\"2\" />");
     CHECK(fs.known && fs.mode == 1 && fs.multi == 2 && fs.on(), "frame_gen mode 1 reads as on");
     CHECK(fg_setting("<frame_gen />").on() && fg_setting("").on(), "a missing frame_gen mode reads as on");
+    CHECK(before_fg_wanted(-1, fg_setting("<frame_gen mode=\"1\" />")) &&
+              before_fg_wanted(-1, fg_setting("<frame_gen mode=\"3\" />")),
+          "drawing before frame generation is on by default when the game has frame generation on");
+    CHECK(!before_fg_wanted(-1, fg_setting(hw)) && !before_fg_wanted(-1, fg_setting("")),
+          "drawing before frame generation stays off when frame generation is off or the setting can't be read");
+    CHECK(!before_fg_wanted(0, fg_setting("<frame_gen mode=\"1\" />")) && before_fg_wanted(1, fg_setting(hw)),
+          "SWOFTY_OVERLAY_FG and \"overlay_fg\" override the game's setting");
     CHECK(hdr_mode("<resolution>\n\t\t\t<hdr mode=\"1\" peakNits=\"1000\" />") == 1 && hdr_mode("<x/>") == -1,
           "the game's hdr mode reads from hardware settings");
     CHECK(output_for(24, 12, 0) == HDR10_PQ && output_for(24, 0, 1) == SDR && output_for(24, COLOR_SPACE_UNSET, 1) == HDR10_PQ &&
@@ -751,6 +768,119 @@ static void test_guard()
     CHECK(!removal_after_draw(5000, 0), "a removal with no overlay draw is not attributed");
     CHECK(removal_after_draw(15000, 10000), "a removal 5 s after a draw is attributed");
     CHECK(removal_after_draw(20000, 10000) && !removal_after_draw(20001, 10000), "the window is 10 s");
+    CHECK(device_hooks_wanted_for({"C:\\Windows\\System32\\NvPresent64.dll", "F1_25.exe"}) &&
+              present_layer_in({"swofty_core.dll", "NVPRESENT64.DLL"}) == "NvPresent64.dll",
+          "the NVIDIA app's present layer in the process wants the device hooks");
+    CHECK(!device_hooks_wanted_for({"sl.interposer.dll", "sl.common.dll", "RTSSHooks64.dll", "F1_25.exe"}) &&
+              !device_hooks_wanted_for({}),
+          "Streamline, RivaTuner and the game alone do not");
+    int direct = 0, compute = 1, copy = 2;
+    void *a = &direct, *b = &compute, *c = &copy, *d = &a;
+    std::vector<ExecSeen> execs;
+    CHECK(!present_queue_from_execs(execs, 7), "no queue has executed yet");
+    execs = {{a, direct, 7, 100}, {b, direct, 9, 200}};
+    CHECK(present_queue_from_execs(execs, 7)->queue == a, "the direct queue on the presenting thread beats a newer one on another thread");
+    CHECK(present_queue_from_execs(execs, 5)->queue == b, "with no queue on the presenting thread the most recent direct queue wins");
+    execs = {{a, direct, 7, 100}, {c, direct, 7, 300}, {b, compute, 7, 400}, {d, copy, 7, 500}};
+    CHECK(present_queue_from_execs(execs, 7)->queue == c, "the newest direct queue on the thread wins over an older one");
+    execs = {{b, compute, 7, 400}, {d, copy, 7, 500}};
+    CHECK(!present_queue_from_execs(execs, 7), "compute and copy queues are never the present queue");
+
+    std::vector<std::string> dlssg = {"F1_25.exe", "sl.interposer.dll", "VERSION.dll", "swofty_core.dll",
+                                      "sl.common.dll", "sl.dlss.dll", "nvngx_dlss.dll", "NVNGX_DLSSG.DLL",
+                                      "sl.dlss_g.dll", "sl.pcl.dll", "sl.reflex.dll", "dxgi.dll"};
+    OnDemandArm on = on_demand_arm(dlssg, "dxgi.dll", -1);
+    CHECK(on.arms() && on.source == "nvngx_dlssg.dll, sl.dlss_g.dll, sl.interposer.dll" && on.refused.empty(),
+          "DLSS Frame Generation through Streamline arms the device hooks for a swapchain dxgi.dll presents");
+    CHECK(on_demand_arm(dlssg, "C:\\Windows\\System32\\nvngx_dlssg.dll", -1).arms() &&
+              on_demand_arm(dlssg, "sl.common.dll", -1).arms() && on_demand_arm(dlssg, "", -1).arms(),
+          "so does one DLSS Frame Generation, Streamline or an unknown module presents");
+    CHECK(on_demand_arm({"F1_25.exe", "NvPresent64.dll", "sl.interposer.dll"}, "NvPresent64.dll", -1).source ==
+              "NvPresent64.dll, sl.interposer.dll",
+          "the NVIDIA app's present layer is named first");
+    CHECK(on_demand_arm({"F1_25.exe", "sl.interposer.dll"}, "sl.interposer.dll", -1).source == "sl.interposer.dll",
+          "Streamline alone names its interposer");
+    CHECK(on_demand_arm(dlssg, "dxgi.dll", 1).arms(), "SWOFTY_OVERLAY_FG=1 leaves the on-demand arming on");
+    on = on_demand_arm(dlssg, "dxgi.dll", 0);
+    CHECK(!on.arms() && on.refused == "SWOFTY_OVERLAY_FG=0 / \"overlay_fg\": false",
+          "SWOFTY_OVERLAY_FG=0 / \"overlay_fg\": false keeps the device hooks off");
+    std::vector<std::string> amd = {"F1_25.exe", "sl.interposer.dll", "amd_fidelityfx_dx12.dll",
+                                    "amd_fidelityfx_framegeneration_dx12.dll", "libxess_fg.dll", "dxgi.dll"};
+    on = on_demand_arm(amd, "amd_fidelityfx_dx12.dll", -1);
+    CHECK(!on.arms() && on.refused == "amd_fidelityfx_dx12.dll presents it (AMD's or Intel's frame generation)",
+          "FidelityFX calling Present keeps the device hooks off");
+    CHECK(!on_demand_arm(amd, "C:\\Games\\ffx_frameinterpolation_x64.dll", -1).arms() &&
+              !on_demand_arm(amd, "libxess_fg.dll", -1).arms() &&
+              !on_demand_arm(amd, "dlssg_to_fsr3_amd_is_better.dll", -1).arms(),
+          "so do FSR 3 frame interpolation, XeSS frame generation and the DLSS-G to FSR 3 swap");
+    on = on_demand_arm({"F1_25.exe", "dxgi.dll", "medal-hook64-v2.dll"}, "medal-hook64-v2.dll", -1);
+    CHECK(!on.arms() && on.refused == "no NVIDIA frame generation, Streamline or present layer module is in the process",
+          "with no NVIDIA module in the process the device hooks stay off");
+
+    CHECK(unread_queue_step(false, false, false) == UnreadQueue::Arm, "the first unreadable queue asks to arm");
+    CHECK(unread_queue_step(false, true, false) == UnreadQueue::Refuse && unread_queue_step(false, true, true) == UnreadQueue::Refuse,
+          "a swapchain is refused once the arming was asked and ExecuteCommandLists is still not hooked");
+    CHECK(unread_queue_step(true, false, false) == UnreadQueue::Wait && unread_queue_step(true, false, true) == UnreadQueue::Learn,
+          "device hooks armed at start wait for, then learn, the queue without asking");
+    CHECK(unread_queue_step(true, true, false) == UnreadQueue::Wait && unread_queue_step(true, true, true) == UnreadQueue::Learn,
+          "device hooks armed on demand wait for, then learn, the queue");
+
+    {
+        bool exec_hooked = false, asked = false;
+        int asks = 0;
+        std::vector<ExecSeen> seen;
+        auto frame = [&](uint32_t tid, bool arms) -> const ExecSeen * {
+            UnreadQueue step = unread_queue_step(exec_hooked, asked, false);
+            if (step == UnreadQueue::Arm) {
+                asked = true;
+                asks++;
+                exec_hooked = arms;
+                step = unread_queue_step(exec_hooked, asked, false);
+            }
+            if (step == UnreadQueue::Refuse)
+                return nullptr;
+            const ExecSeen *q = present_queue_from_execs(seen, tid);
+            return unread_queue_step(true, asked, q != nullptr) == UnreadQueue::Learn ? q : nullptr;
+        };
+        CHECK(!frame(2368, true) && exec_hooked && asked, "frame 1 arms ExecuteCommandLists and draws nothing");
+        seen = {{b, compute, 2368, 1000}, {a, direct, 2368, 1010}, {c, direct, 4410, 1012}};
+        const ExecSeen *q = frame(2368, true);
+        CHECK(q && q->queue == a, "frame 2 learns the direct queue that executed on the presenting thread");
+        Gate g = gate_for_swapchain(learned_fg(true, ""), streamline_caller("dxgi.dll"), [] { return false; });
+        CHECK(draws_at_present(g), "a swapchain dxgi.dll presents draws at Present on that queue, with no back buffer "
+                                   "names the late device hooks missed");
+        CHECK(frame(2368, true) == q && asks == 1, "later frames keep the queue without asking again");
+        exec_hooked = asked = false;
+        asks = 0;
+        seen.clear();
+        CHECK(!frame(2368, false) && !frame(2368, false) && asks == 1, "a failed arming refuses the swapchain and asks once");
+    }
+
+    {
+        int presenting = 0, dispatched = 0;
+        auto present = [&](auto &&inner) {
+            if (!dispatches_present(presenting))
+                return;
+            presenting++;
+            dispatched++;
+            inner();
+            presenting--;
+        };
+        auto present1 = [&] { present([] {}); };
+        present([&] { present1(); });
+        CHECK(dispatched == 1 && presenting == 0, "a Present that calls Present1 inside it dispatches the frame once");
+        present1();
+        present1();
+        CHECK(dispatched == 3, "each Present1 a frame generation swapchain makes on its own is dispatched");
+    }
+    CHECK(gate_for_swapchain("libxess_fg.dll (calls Present)", false, false, [] { return true; }) == Gate::FrameGenNamed &&
+              gate_for_swapchain("nvngx_dlssg.dll (calls Present)", false, true, [] { return false; }) == Gate::Direct &&
+              gate_for_swapchain("", true, true, [] { return false; }) == Gate::Direct &&
+              gate_for_swapchain("", true, false, [] { return false; }) == Gate::FrameGenStreamline,
+          "a swapchain learned after the device hooks armed on demand is drawn on at Present; others keep their gate");
+    CHECK(std::string(fg_setting(hw).word()) == "off" && std::string(fg_setting("<frame_gen mode=\"2\" />").word()) == "on" &&
+              std::string(fg_setting("").word()) == "unknown",
+          "the start log words the game's frame generation setting");
 }
 
 // Models d3d12hooks::exec_original: the hook sits on the native queue's ExecuteCommandLists (vtable
@@ -929,6 +1059,238 @@ static void test_png(const char *out)
     }
 }
 
+static void test_device_hook_rival()
+{
+    using namespace hud::guard;
+    CHECK(device_hook_rival("RTSSHooks64.dll") == "RTSSHooks64.dll" &&
+              device_hook_rival("C:\\Program Files (x86)\\RivaTuner Statistics Server\\rtsshooks64.DLL") == "RTSSHooks64.dll" &&
+              device_hook_rival("RTSSHooks.dll") == "RTSSHooks.dll",
+          "rivatuner's hook module is a device hook rival by name, path and case");
+    CHECK(device_hook_rival("sl.interposer.dll").empty() && device_hook_rival("sl.dlss_g.dll").empty() &&
+              device_hook_rival("medal-hook64-v2.dll").empty() && device_hook_rival("F1_25.exe").empty() &&
+              device_hook_rival("").empty(),
+          "streamline, other overlays and the game are not rivals");
+    CHECK(device_hook_rival_in({"F1_25.exe", "sl.interposer.dll", "RTSSHooks64.dll", "dxgi.dll"}) == "RTSSHooks64.dll" &&
+              device_hook_rival_in({"F1_25.exe", "sl.interposer.dll", "dxgi.dll"}).empty() && device_hook_rival_in({}).empty(),
+          "a module list names its rival or none");
+    CHECK(device_hooks_allowed("", -1) && device_hooks_allowed("", 1) && !device_hooks_allowed("RTSSHooks64.dll", -1) &&
+              !device_hooks_allowed("RTSSHooks64.dll", 0) && device_hooks_allowed("RTSSHooks64.dll", 1),
+          "a rival keeps the device hooks off unless SWOFTY_OVERLAY_FG / overlay_fg forces them");
+    const ArmReasons none{}, menu{false, false, false, true}, overlay{true, false, false, false},
+        overlay_menu{true, false, false, true}, capture_menu{false, true, false, true}, cover_menu{false, false, true, true};
+    CHECK(!none.any() && menu.any() && overlay.any() && cover_menu.any(), "any reason asks for the present hook");
+    CHECK(menu.menu_only() && !none.menu_only() && !overlay.menu_only() && !overlay_menu.menu_only() &&
+              !capture_menu.menu_only() && !cover_menu.menu_only(),
+          "the main menu alone is menu-only; an overlay addon, a capture or a cover is not");
+    CHECK(!present_hook_yields(menu, "") && !present_hook_yields(overlay, "") && !present_hook_yields(overlay_menu, ""),
+          "without a rival the present hook arms for every reason");
+    CHECK(present_hook_yields(menu, "RTSSHooks64.dll") &&
+              present_hook_yields(menu, "RTSSHooks64.dll (RivaTuner Statistics Server is running)"),
+          "the main menu alone yields the present hook to rivatuner, by module or by its shared memory");
+    const ArmReasons cover{false, false, true, false}, overlay_capture{true, true, false, false};
+    CHECK(present_hook_yields(overlay, "RTSSHooks64.dll") && present_hook_yields(overlay_menu, "RTSSHooks64.dll") &&
+              present_hook_yields(overlay, "RTSSHooks64.dll (RivaTuner Statistics Server is running)") &&
+              present_hook_yields(cover, "RTSSHooks64.dll") && present_hook_yields(cover_menu, "RTSSHooks64.dll"),
+          "an overlay addon or a cover yields the present hook to rivatuner too");
+    CHECK(!present_hook_yields(capture_menu, "RTSSHooks64.dll") && !present_hook_yields(overlay_capture, "RTSSHooks64.dll"),
+          "a frame capture still arms the present hook with rivatuner in the process");
+    CHECK(present_hook_yields(overlay, "RTSSHooks64.dll", -1) && present_hook_yields(overlay, "RTSSHooks64.dll", 0) &&
+              !present_hook_yields(overlay, "RTSSHooks64.dll", 1) && !present_hook_yields(menu, "RTSSHooks64.dll", 1) &&
+              !present_hook_yields(overlay, "", 0),
+          "SWOFTY_OVERLAY_RIVAL / overlay_rival arms the present hook with rivatuner in the process");
+    CHECK(!present_hook_yields(none, "RTSSHooks64.dll"), "nothing to arm yields nothing");
+}
+
+static void test_fg_gate()
+{
+    using hud::guard::Gate;
+    CHECK(hud::guard::gate_for(false, false, true) == Gate::Direct, "no frame generation module draws at Present");
+    CHECK(hud::guard::gate_for(false, true, true) == Gate::Direct, "streamline with frame generation off draws at Present");
+    CHECK(hud::guard::gate_for(false, true, false) == Gate::FrameGenStreamline, "streamline with frame generation on is gated");
+    CHECK(hud::guard::gate_for(true, false, true) == Gate::FrameGenNamed, "a named frame generation module is gated");
+    CHECK(hud::guard::gate_for(true, true, true) == Gate::FrameGenNamed, "a named module wins over streamline");
+    // FidelityFX's loader creates the swapchain for upscaling too: it gates like Streamline, not like a named module
+    CHECK(hud::guard::ffx_loader("amd_fidelityfx_dx12.dll") &&
+              hud::guard::ffx_loader("C:\\Games\\F1 25\\AMD_FidelityFX_DX12.dll") &&
+              hud::guard::ffx_loader("amd_fidelityfx_dx12.dll (calls Present)"),
+          "the fidelityfx loader is recognised by name, path and as a Present caller");
+    CHECK(!hud::guard::ffx_loader("amd_fidelityfx_framegeneration_dx12.dll") &&
+              !hud::guard::ffx_loader("ffx_frameinterpolation_x64.dll") && !hud::guard::ffx_loader("") &&
+              !hud::guard::ffx_loader("sl.dlss_g.dll"),
+          "frame generation modules and other names are not the loader");
+    {
+        auto gate = [](const char *fg, bool streamline, bool fg_off) {
+            return hud::guard::gate_for_swapchain(fg, streamline, [=] { return fg_off; });
+        };
+        CHECK(gate("", false, true) == Gate::Direct && gate("", true, false) == Gate::FrameGenStreamline &&
+                  gate("libxess_fg.dll", false, true) == Gate::FrameGenNamed,
+              "gate_for_swapchain keeps the plain, streamline and named cases");
+        {
+            bool asked = false;
+            hud::guard::gate_for_swapchain("ffx_frameinterpolation_x64.dll", false, [&] { return asked = true; });
+            hud::guard::gate_for_swapchain("", false, [&] { return asked = true; });
+            CHECK(!asked, "the settings are not read when they cannot change the gate");
+        }
+        CHECK(gate("amd_fidelityfx_dx12.dll", false, true) == Gate::Direct,
+              "the fidelityfx loader with frame generation off draws at Present");
+        CHECK(gate("amd_fidelityfx_dx12.dll", true, true) == Gate::Direct,
+              "the fidelityfx loader over streamline's interposer with frame generation off draws at Present");
+        CHECK(gate("amd_fidelityfx_dx12.dll", false, false) == Gate::FrameGenStreamline,
+              "the fidelityfx loader with frame generation on is gated");
+        CHECK(gate("amd_fidelityfx_framegeneration_dx12.dll", false, true) == Gate::FrameGenNamed,
+              "a fidelityfx frame generation provider stays a named module");
+    }
+    CHECK(hud::guard::draws_at_present(Gate::Direct) && !hud::guard::draws_at_present(Gate::FrameGenNamed) &&
+              !hud::guard::draws_at_present(Gate::FrameGenStreamline),
+          "Present renders only for the direct gate");
+    CHECK(hud::guard::draws_before_present(Gate::FrameGenNamed, true) &&
+              hud::guard::draws_before_present(Gate::FrameGenStreamline, true),
+          "gated swapchains draw before Present when the device hooks armed");
+    CHECK(!hud::guard::draws_before_present(Gate::FrameGenNamed, false) && !hud::guard::draws_before_present(Gate::Direct, true),
+          "no device hooks or no gate means no exec-time draw");
+    for (int g = 0; g < 3; g++) {
+        auto gate = Gate(g);
+        CHECK(hud::guard::draws_at_present(gate) != hud::guard::draws_before_present(gate, true),
+              "a frame is drawn at Present or before it, never both");
+    }
+}
+
+static void test_fg_barriers()
+{
+    using namespace hud::guard;
+    CHECK(presents_back_buffer(STATE_RENDER_TARGET, STATE_PRESENT, 0), "render target to present/common counts");
+    CHECK(presents_back_buffer(STATE_RENDER_TARGET, STATE_PRESENT, 0x2), "an end-only split barrier counts");
+    CHECK(!presents_back_buffer(STATE_RENDER_TARGET, STATE_PRESENT, BARRIER_FLAG_BEGIN_ONLY), "a begin-only split does not");
+    CHECK(!presents_back_buffer(STATE_PRESENT, STATE_RENDER_TARGET, 0), "present to render target does not");
+    CHECK(!presents_back_buffer(STATE_RENDER_TARGET, 0x80, 0), "render target to a shader read does not");
+    CHECK(!presents_back_buffer(0x8, STATE_PRESENT, 0), "unordered access to present does not");
+    CHECK(state_after_draw(STATE_PRESENT) == STATE_PRESENT, "the overlay leaves the buffer in the state the game left it");
+    CHECK(renderable_format(27) == 28 && renderable_format(90) == 87 && renderable_format(23) == 24 &&
+              renderable_format(9) == 10,
+          "typeless back buffer formats get their typed view");
+    CHECK(renderable_format(24) == 24 && renderable_format(10) == 10 && renderable_format(87) == 87,
+          "typed formats stay as they are");
+    CHECK(output_for(renderable_format(23), 12, -1) == HDR10_PQ && output_for(renderable_format(9), COLOR_SPACE_UNSET, -1) == SCRGB,
+          "output mode follows the typed format and the recorded colour space");
+    CHECK(pending_fresh(1000, 1000) && pending_fresh(1250, 1000) && !pending_fresh(1251, 1000) && !pending_fresh(900, 1000),
+          "a pending frame is used for a quarter of a second");
+    CHECK(target_fits(1920, 1080, 1920, 1080) && !target_fits(1920, 1080, 1280, 720) && !target_fits(0, 0, 0, 0),
+          "the frame is drawn only into a buffer of its own size");
+}
+
+struct FakeQueue {};
+struct FakeList {};
+
+static void test_exec_plan()
+{
+    using Plan = d3d12hooks::BasicExecPlan<FakeQueue>;
+    FakeQueue q;
+    FakeList l[5];
+    FakeList *const lists[] = {&l[0], &l[1], &l[2], &l[3], &l[4]};
+    std::string log;
+    auto run = [&](FakeQueue *, unsigned count, FakeList *const *first) {
+        log += "[";
+        for (unsigned i = 0; i < count; i++)
+            log += char('0' + (first[i] - &l[0]));
+        log += "]";
+    };
+    auto mark = [&](const char *name) { return [&log, name](FakeQueue *) { log += name; }; };
+
+    Plan none;
+    run_plan(none, &q, 5u, lists, run);
+    CHECK(log == "[01234]" && none.steps.capacity() == 0, "no steps: one submission of every list, nothing allocated");
+
+    log.clear();
+    Plan split;
+    split.after(2, mark("a"));
+    run_plan(split, &q, 5u, lists, run);
+    CHECK(log == "[012]a[34]", "a step after list 2 splits the batch there");
+
+    log.clear();
+    Plan same;
+    same.after(1, mark("a"));
+    same.at_end(mark("e"));
+    same.after(1, mark("b"));
+    same.after(0, mark("z"));
+    run_plan(same, &q, 5u, lists, run);
+    CHECK(log == "[0]z[1]ab[234]e", "steps after one list run in subscription order, in list order, at_end last");
+
+    log.clear();
+    Plan last;
+    last.after(4, mark("a"));
+    last.at_end(mark("e"));
+    run_plan(last, &q, 5u, lists, run);
+    CHECK(log == "[01234]ae", "a step after the last list and the end steps share one submission");
+
+    log.clear();
+    Plan end_only;
+    end_only.at_end(mark("e"));
+    run_plan(end_only, &q, 3u, lists, run);
+    CHECK(log == "[012]e", "an end step runs after every list");
+
+    log.clear();
+    Plan beyond;
+    beyond.after(9, mark("a"));
+    run_plan(beyond, &q, 3u, lists, run);
+    CHECK(log == "[012]a", "an index past the batch means its end");
+
+    log.clear();
+    Plan first;
+    first.after(0, mark("a"));
+    first.after(0, mark("b"));
+    run_plan(first, &q, 1u, lists, run);
+    CHECK(log == "[0]ab", "a one-list batch with two steps");
+
+    log.clear();
+    Plan empty_batch;
+    empty_batch.at_end(mark("e"));
+    run_plan(empty_batch, &q, 0u, lists, run);
+    CHECK(log == "e", "an empty batch still runs its end steps");
+}
+
+static void test_text_entry()
+{
+    using namespace hud::input;
+    CHECK(text_entry::is_entry_message("team_name_entry") && text_entry::is_entry_message("Profile_Name_Entry"),
+          "a name entry popup counts as a text box");
+    CHECK(!text_entry::is_entry_message("rnd_research_complete") && !text_entry::is_entry_message("career_entrylist_popup") &&
+              text_entry::is_entry_message("driver_search") && text_entry::is_entry_message("lobby_text_input"),
+          "text entry names match whole words between underscores, not inside other words");
+    CHECK(!text_entry::is_entry_message("beta_motd") && !text_entry::is_entry_message("swofty_message"),
+          "an ordinary popup is not a text box");
+    text_entry::State st;
+    CHECK(!st.active(1000), "no text box is open at start");
+    st.begin(1000);
+    CHECK(st.active(1001) && st.active(1000 + text_entry::IDLE_MS - 1), "a text box is open from its popup");
+    CHECK(!st.active(1000 + text_entry::IDLE_MS), "an abandoned text box times out");
+    st.begin(1000);
+    st.key('B', 15000);
+    CHECK(st.active(30000), "typing keeps the text box open");
+    st.key(text_entry::KEY_ENTER, 31000);
+    CHECK(!st.active(31001), "enter closes the text box");
+    st.begin(40000);
+    st.key(text_entry::KEY_ESCAPE, 40010);
+    CHECK(!st.active(40011), "escape closes the text box");
+    st.key('B', 50000);
+    CHECK(!st.active(50001), "a key outside a text box does not open one");
+    st.begin(60000);
+    CHECK(st.first_suppression() && !st.first_suppression(), "a suppression is logged once per text box");
+    st.begin(61000);
+    CHECK(st.first_suppression(), "the next text box logs again");
+
+    Snapshot s;
+    fold(s, {{Ev::key_down, 'B', 0, 0}}, 1, 1);
+    Focus f;
+    SwoftyInput out{};
+    out.size = sizeof out;
+    view(s, f, "addon", out, true);
+    CHECK(!bit(out.keys_down, 'B') && !bit(out.keys_pressed, 'B') && !bit(out.keys_typed, 'B'),
+          "addons see no keys while a text box has focus");
+    out.size = sizeof out;
+    view(s, f, "addon", out, false);
+    CHECK(bit(out.keys_pressed, 'B'), "addons see keys when no text box has focus");
+}
+
 int main(int argc, char **argv)
 {
     test_font();
@@ -944,12 +1306,17 @@ int main(int argc, char **argv)
     test_cap();
     test_text_cache();
     test_input();
+    test_text_entry();
     test_registry();
     test_build_dispatch();
     test_image_registry();
     test_image_decode();
     test_guard();
     test_original_dispatch();
+    test_device_hook_rival();
+    test_fg_gate();
+    test_fg_barriers();
+    test_exec_plan();
     test_png(argc > 1 ? argv[1] : nullptr);
     test_scene(argc > 2 ? argv[2] : nullptr);
     if (failures)

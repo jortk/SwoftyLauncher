@@ -1,0 +1,25 @@
+[package]
+name = "swofty-ads"
+description = "Ad slots in the launcher: the Linux helper's protocol and the locked-down webview each slot runs in"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[features]
+view = ["dep:wry", "dep:open", "dep:webview2-com", "dep:windows-core"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+open = { version = "5", optional = true }
+wry = { version = "0.57.2", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = { version = "0.39", optional = true }
+windows-core = { version = "0.62", optional = true }
+
+[lints]
+workspace = true

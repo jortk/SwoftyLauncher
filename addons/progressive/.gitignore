@@ -1,5 +1,0 @@
-native/build/
-*.lib
-build/
-data/probe.json
-data/probe.applied

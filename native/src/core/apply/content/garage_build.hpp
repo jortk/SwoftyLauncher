@@ -236,6 +236,26 @@ inline std::string surface_header(const Image &img)
     return h;
 }
 
+inline std::string stream_descriptor(const std::string &root, const std::string &stem)
+{
+    constexpr size_t STOCK_LEN = 288;
+    std::string path = root;
+    if (path.rfind("eaid://", 0) == 0)
+        path.erase(0, 7);
+    path += stem + ".tif.2025.mipmaps";
+    std::string d;
+    d.push_back(char(uint8_t(std::min<size_t>(path.size(), 255))));
+    d += path.substr(0, 255);
+    d.push_back('\0');
+    d.append(4, '\0');
+    d.append(4, '\0');
+    const float one = 1.0f;
+    d.append(reinterpret_cast<const char *>(&one), 4);
+    if (d.size() < STOCK_LEN)
+        d.append(STOCK_LEN - d.size(), '\0');
+    return d;
+}
+
 inline std::string srv_data(const Image &img, const std::string &surface_name)
 {
     std::string d(24, '\0');
@@ -339,7 +359,7 @@ inline bool texture_file(const std::string &rel)
     return e == ".dds" || e == ".png";
 }
 
-inline Built build(const std::vector<Input> &files, const std::string &root, bool srgb)
+inline Built build(const std::vector<Input> &files, const std::string &root, bool srgb, bool descriptor = true)
 {
     Built out;
     std::vector<Res> list;
@@ -354,7 +374,8 @@ inline Built build(const std::vector<Input> &files, const std::string &root, boo
             continue;
         }
         std::string surface = root + stem + ".tif.image", view = root + stem + ".tif";
-        list.push_back(make_res(surface, "GfxSurfaceRes", SURFACE_ARG, {surface_header(img), img.pixels}));
+        list.push_back(make_res(surface, "GfxSurfaceRes", SURFACE_ARG, descriptor ? std::vector<std::string>{surface_header(img), img.pixels, stream_descriptor(root, stem)}
+                                                                    : std::vector<std::string>{surface_header(img), img.pixels}));
         list.push_back(make_res(view, "GfxSRVResource", SRV_ARG, {srv_data(img, surface)}));
         out.names.push_back(surface);
     }

@@ -233,6 +233,21 @@ static void slot_list()
     r = ad.apply_list({slot(1, 0xa1)}, ctx("s1", false));
     expect(!r.changed && !r.deleted.size(), "and the next list matches it by its slot key");
 
+    cs::Index tk;
+    tk.apply_list({slot(3, 0xc3, 9, cs::FLAG_MY_TEAM)}, ctx("s1", true));
+    for (const char *id : {"mt-00000001-00d00000", "mt-00000001-00bc0000"}) {
+        tk.set_text(id, "mode", "my_team");
+        tk.saved(id, 5);
+    }
+    r = tk.apply_list({slot(3, 0xc3, 9, cs::FLAG_MY_TEAM)}, ctx("s1", false));
+    expect(r.missing.empty() && r.deleted.empty() && tk.missing_ids().empty(),
+           "tracker-key ids of a my team career whose slot is listed are not missing");
+    tk.find("mt-00000001-00d00000")->operator[]("status") = Value("missing");
+    r = tk.apply_list({slot(3, 0xc3, 9, cs::FLAG_MY_TEAM)}, ctx("s1", false));
+    expect(r.changed && tk.missing_ids().empty(), "and one already marked missing is present again");
+    r = tk.apply_list({slot(1, 0xa1)}, ctx("s2", true));
+    expect(r.missing.size() == 3, "with no my team slot listed they are missing");
+
     cs::Index nd;
     r = nd.apply_list({slot(1, 0xa1, 0, 0x41), slot(2, 0xb2, 0, 0, false), slot(3, 0xc3, 0, 0x40), slot(4, 0xd4, 0, 0x01),
                        slot(5, 0xe5, 0, 0, true, 0)},

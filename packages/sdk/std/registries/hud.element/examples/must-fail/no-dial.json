@@ -1,0 +1,8 @@
+{
+  "hud.element": {
+    "bad": {
+      "$comment": "a record names the dial it grows",
+      "elements": []
+    }
+  }
+}

@@ -9,7 +9,16 @@
 #include <string>
 #include <type_traits>
 
+#include <swofty/ease.hpp>
 #include <swofty/events.hpp>
+#include <swofty/fake_hud.hpp>
+#include <swofty/hud_format.hpp>
+#include <swofty/hud_frame.hpp>
+#include <swofty/hud_leaves.hpp>
+#include <swofty/log_csv.hpp>
+#include <swofty/mem.hpp>
+#include <swofty/settings_struct.hpp>
+#include <swofty/timing.hpp>
 #include <swofty/hooks.hpp>
 #include <swofty/registry.hpp>
 #include <swofty/services.hpp>
@@ -22,6 +31,7 @@
 #include <swofty/systems/power.hpp>
 #include <swofty/systems/sessions.hpp>
 #include <swofty/systems/sounds.hpp>
+#include <swofty/systems/laps.hpp>
 #include <swofty/systems/spectator.hpp>
 #include <swofty/systems/teams.hpp>
 #include <swofty/systems/tyres.hpp>
@@ -38,6 +48,7 @@
 #include <swofty/db.hpp>
 #include <swofty/hub.hpp>
 #include <swofty/hud.hpp>
+#include <swofty/view.hpp>
 #include <swofty/lang.hpp>
 #include <swofty/popup.hpp>
 #include <swofty/storage.hpp>
@@ -462,7 +473,7 @@ static void schemas()
 {
     std::string s = career::seasons.schema();
     CHECK(s.find("\"x-registry\":\"career.season\"") != std::string::npos);
-    CHECK(s.find("\"x-version\":\"1.0\"") != std::string::npos);
+    CHECK(s.find("\"x-version\":\"1.1\"") != std::string::npos);
     CHECK(s.find("\"x-applies\":\"read\"") != std::string::npos);
     CHECK(s.find("\"x-snapshot\":true") != std::string::npos && s.find("\"x-snapshot-budget\":65536") != std::string::npos);
     CHECK(s.find("\"x-key\":[\"slot\"]") != std::string::npos);
@@ -479,6 +490,7 @@ static void schemas()
     CHECK(hs.find("\"ffb_scale\"") != std::string::npos && hs.find("\"tyre_physics_group\"") != std::string::npos);
     CHECK(hs.find("\"slipstream\"") != std::string::npos && hs.find("\"hardware\"") != std::string::npos);
     CHECK(hs.find("\"mode\":{\"type\":\"string\",\"enum\":[\"off\",\"lag_spoof\",\"full\"]") != std::string::npos);
+    CHECK(hs.find("\"op\":{\"type\":\"string\",\"enum\":[\"=\",\"+\",\"-\",\"*\"]}") != std::string::npos);
     CHECK(hs.find("\"chassis_com_z\":{\"type\":\"object\"") != std::string::npos);
     CHECK(v.find("\"drs_capable\":{\"type\":[\"boolean\",\"null\"]") != std::string::npos);
     CHECK(v.find("\"x-ref\":\"power.supplier\"") != std::string::npos && v.find("\"tyre_group\"") != std::string::npos);
@@ -641,6 +653,7 @@ static int fake_set_control(uint32_t car, uint32_t mode)
     g_mode = mode;
     return SWOFTY_ASSET_OK;
 }
+static int fake_disqualify(uint32_t car) { return car == 6 ? SWOFTY_ASSET_LATE : car == 2 ? SWOFTY_ASSET_OK : SWOFTY_ASSET_INVALID; }
 static int fake_active(int on) { return g_on = on, SWOFTY_ASSET_OK; }
 static int fake_follow(uint32_t car) { return g_follow = int(car), SWOFTY_ASSET_OK; }
 static int fake_camera(int32_t c) { return g_camera = c, c == 1 || c == 2 ? SWOFTY_ASSET_OK : SWOFTY_ASSET_INVALID; }
@@ -654,6 +667,25 @@ static int fake_current(int32_t *car, int32_t *camera)
 }
 static int fake_available() { return g_active; }
 
+static int fake_owned(const char *name)
+{
+    return std::string(name) == "f1_2026" ? SWOFTY_OWNERSHIP_OWNED : std::string(name) == "f1_2025" ? SWOFTY_OWNERSHIP_NOT_OWNED : SWOFTY_OWNERSHIP_UNKNOWN;
+}
+
+static void content_ownership()
+{
+    using swofty::content::Ownership;
+    CHECK(swofty::content::owned("f1_2026") == Ownership::unknown);
+    SwoftyContentOps ops{SWOFTY_CONTENT_OPS_VERSION, fake_owned};
+    swofty::detail::set_content_ops_table(&ops);
+    CHECK(swofty::content::owned("f1_2026") == Ownership::owned);
+    CHECK(swofty::content::owned("f1_2025") == Ownership::not_owned);
+    CHECK(swofty::content::owned("other") == Ownership::unknown);
+    ops.version = 0;
+    CHECK(swofty::content::owned("f1_2026") == Ownership::unknown);
+    swofty::detail::set_content_ops_table(nullptr);
+}
+
 static void session_operations()
 {
     cars::live::Car car(3);
@@ -661,8 +693,15 @@ static void session_operations()
     CHECK(!car.control());
     CHECK(spectator::set_active(true) == Result::unavailable && !spectator::current());
     SwoftySessionOps ops{SWOFTY_SESSION_OPS_VERSION, fake_available, fake_control, fake_set_control, fake_active,
-                         fake_follow, fake_camera, fake_current};
+                         fake_follow, fake_camera, fake_current, fake_disqualify};
+    CHECK(sessions::disqualify(car) == sessions::Result::unavailable);
     swofty::detail::set_session_ops_table(&ops);
+    CHECK(sessions::disqualify(cars::live::Car(2)) == sessions::Result::ok);
+    CHECK(sessions::disqualify(cars::live::Car(6)) == sessions::Result::late);
+    CHECK(sessions::disqualify(cars::live::Car(9)) == sessions::Result::invalid);
+    ops.version = 1;
+    CHECK(sessions::disqualify(cars::live::Car(2)) == sessions::Result::unavailable);
+    ops.version = SWOFTY_SESSION_OPS_VERSION;
     CHECK(sessions::set_control(car, sessions::Control::ai) == sessions::Result::ok && g_mode == 1);
     g_flags = 1;
     auto st = car.control();
@@ -683,10 +722,33 @@ static void session_operations()
     swofty::detail::set_session_ops_table(nullptr);
 }
 
+static void hud_runtime_headers()
+{
+    swofty::hud::Leaves leaves{"view_model_data.hud_probe_"};
+    auto flag = leaves.boolean("on");
+    auto rows = leaves.rows<swofty::hud::BoolLeaf>("r", 2, 2, [](swofty::hud::Leaves &l, int) { return l.boolean("a"); });
+    leaves.set(flag, true);
+    leaves.set(rows[1], true);
+    swofty::hud::Leaves::Atomic group(leaves);
+    CHECK(leaves.flush() == 0);
+    swofty::timing::Tower tower;
+    swofty::timing::Session session;
+    swofty::timing::Config config;
+    tower.update(session, {}, -1, 0.0, config);
+    CHECK(!tower.on() && tower.rows() == 0);
+    swofty::diag::Csv csv("probe", {{"a", swofty::diag::Csv::i32}}, 5);
+    CHECK(!csv.available() && !csv.row());
+    swofty::hud::Frame frame;
+    CHECK(!frame.begin({}, 0.01));
+    CHECK(swofty::ease::level(1.f, 4) == 4 && swofty::hud::format::speed(10.f).kph == 36);
+}
+
 int main()
 {
+    hud_runtime_headers();
     unavailable_without_core();
     session_operations();
+    content_ownership();
     liveries_records();
     payload_accessors();
     round_trip();

@@ -1,0 +1,55 @@
+{
+  "sponsor": {
+    "acme": {
+      "name": {
+        "literal": "Acme Lubricants"
+      },
+      "logo": "sponsors/acme/logo.png",
+      "list_tile": "sponsors/acme/tile.png",
+      "designs": [
+        {
+          "key": "p",
+          "image": "sponsors/acme/primary.png"
+        },
+        {
+          "key": "n",
+          "image": "sponsors/acme/alternate.png"
+        },
+        {
+          "key": "s1",
+          "image": "sponsors/acme/s1.png"
+        },
+        {
+          "key": "s2",
+          "image": null
+        }
+      ],
+      "career": {
+        "discovery": {
+          "title": {
+            "literal": "Acme wants in"
+          },
+          "description": {
+            "literal": "Acme Lubricants have been watching your team."
+          }
+        },
+        "loyalty": [
+          {
+            "level": 1,
+            "required_xp": 400,
+            "design": "s1"
+          },
+          {
+            "level": 2,
+            "required_xp": 400,
+            "design": "s2"
+          },
+          {
+            "level": 3,
+            "design": null
+          }
+        ]
+      }
+    }
+  }
+}

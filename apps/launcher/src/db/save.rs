@@ -2,24 +2,26 @@ use std::cell::Cell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::notices::{Notification, Notify};
+use crate::scale::{Hit, px};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants};
 use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
-use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Disableable, Icon, Sizable, WindowExt, h_flex, v_flex};
+use gpui_kit::component::{Disableable, Icon, WindowExt, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use swofty_core::dbedit::draft::Details;
 use swofty_core::dbedit::package::{self, Package};
 use swofty_core::manifest::Category;
 use swofty_core::store::Store;
+use swofty_i18n::{tr, trf, trn};
 
 use super::{Then, guarded, text};
-use crate::library::plural;
 use crate::shell::Shell;
 use crate::theme::{Palette, palette};
+use crate::ui::{Callout, Field};
 
 /// The author last typed, else one from an installed DB Editor addon; never
 /// the OS user name.
@@ -35,31 +37,17 @@ pub(crate) fn default_author(store: &Store, last: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-fn field(title: &'static str, input: &Entity<InputState>, p: Palette) -> Div {
-    v_flex()
-        .gap(px(6.))
-        .child(caption(title, p))
-        .child(Input::new(input).small())
-}
-
-fn caption(title: &'static str, p: Palette) -> Div {
-    div()
-        .text_size(px(12.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(p.text_muted)
-        .child(title)
-}
-
 fn category_label(c: Option<Category>) -> &'static str {
-    c.map_or("Uncategorised", Category::label)
+    c.map_or(tr("Uncategorised"), Category::label)
 }
 
-fn category_picker(chosen: Rc<Cell<Option<Category>>>, p: Palette) -> Div {
+fn category_picker(chosen: Rc<Cell<Option<Category>>>) -> Div {
     let current = chosen.get();
-    v_flex().gap(px(6.)).child(caption("CATEGORY", p)).child(
+    v_flex().child(Field::new(
+        tr("CATEGORY"),
         Button::new("db-save-category")
             .outline()
-            .small()
+            .tap_sm()
             .w_full()
             .label(category_label(current))
             .dropdown_caret(true)
@@ -79,7 +67,7 @@ fn category_picker(chosen: Rc<Cell<Option<Category>>>, p: Palette) -> Div {
                 }
                 menu
             }),
-    )
+    ))
 }
 
 #[derive(Clone)]
@@ -122,12 +110,12 @@ impl Shell {
             |m| m.author.clone(),
         );
         Form {
-            name: input(name, "e.g. Faster pit stops", cx),
+            name: input(name, tr("e.g. Faster pit stops"), cx),
             version: m.map(|m| input(m.version.to_string(), "1.0.0", cx)),
-            author: input(author, "Your name", cx),
+            author: input(author, tr("Your name"), cx),
             description: input(
                 m.and_then(|m| m.description.clone()).unwrap_or_default(),
-                "What the addon changes",
+                tr("What the addon changes"),
                 cx,
             ),
             category: Rc::new(Cell::new(m.and_then(|m| m.category))),
@@ -145,8 +133,8 @@ impl Shell {
 
     pub(crate) fn db_save_as(&mut self, then: Option<Then>, window: &mut Window, cx: &mut Context<Self>) {
         if self.db.draft.edits.is_empty() {
-            window.push_notification(
-                Notification::info("Change a value first, then save it as an addon."),
+            window.notify(
+                Notification::info(tr("Change a value first, then save it as an addon.")),
                 cx,
             );
             return;
@@ -157,13 +145,13 @@ impl Shell {
         let focus = Cell::new(true);
         let n = self.db.draft.edits.len();
         let note = if self.vanilla() {
-            "Vanilla stays stock: turn the addon on in another profile to use it.".to_owned()
+            tr("Vanilla stays stock: turn the addon on in another profile to use it.").to_owned()
         } else {
-            format!(
-                "{} {} an addon, turned on in {}.",
-                plural(n, "change", "changes"),
-                if n == 1 { "becomes" } else { "become" },
-                self.library.profile.name
+            trf!(
+                "{changes} {verb} an addon, turned on in {profile}.",
+                changes = trn(n, "{count} change", "{count} changes"),
+                verb = if n == 1 { tr("becomes") } else { tr("become") },
+                profile = self.library.profile.name
             )
         };
         window.open_alert_dialog(cx, move |alert, window, cx| {
@@ -173,7 +161,7 @@ impl Shell {
             let (shell, fields, then) = (shell.clone(), form.clone(), then.clone());
             alert
                 .width(px(520.))
-                .title("Save as Addon")
+                .title(tr("Save as Addon"))
                 .child(
                     v_flex()
                         .gap(px(14.))
@@ -183,21 +171,28 @@ impl Shell {
                                 .text_color(p.text_muted)
                                 .child(note.clone()),
                         )
-                        .child(field("NAME", &form.name, p))
+                        .child(Field::new(tr("NAME"), Input::new(&form.name).tap_sm()))
                         .child(
                             h_flex()
                                 .gap(px(12.))
-                                .child(div().flex_1().child(field("AUTHOR", &form.author, p)))
-                                .child(div().w(px(190.)).child(category_picker(form.category.clone(), p))),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .child(Field::new(tr("AUTHOR"), Input::new(&form.author).tap_sm())),
+                                )
+                                .child(div().w(px(190.)).child(category_picker(form.category.clone()))),
                         )
-                        .child(field("DESCRIPTION", &form.description, p)),
+                        .child(Field::new(
+                            tr("DESCRIPTION"),
+                            Input::new(&form.description).tap_sm(),
+                        )),
                 )
-                .ok_text("Save as Addon")
+                .ok_text(tr("Save as Addon"))
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {
                     let [name, _, author, description] = fields.read(cx);
                     if name.is_empty() {
-                        window.push_notification(Notification::error("Give the addon a name."), cx);
+                        window.notify(Notification::error(tr("Give the addon a name.")), cx);
                         return false;
                     }
                     let details = Details {
@@ -229,18 +224,22 @@ impl Shell {
             Ok(p) => p,
             Err(e) => {
                 crate::app_log::action("db editor: save the addon").failed(&e);
-                window.push_notification(Notification::error(e).title("Could not save the addon"), cx);
+                window.notify(Notification::error(e).title(tr("Could not save the addon")), cx);
                 return false;
             }
         };
         let profile = self.library.profile.name.clone();
         let on = !self.vanilla() && self.db_turn_on(&pkg.id).is_ok();
         let name = &details.name;
-        window.push_notification(
+        window.notify(
             Notification::success(if on {
-                format!("Saved {name} and turned it on in {profile}")
+                trf!(
+                    "Saved {name} and turned it on in {profile}",
+                    name = name,
+                    profile = profile
+                )
             } else {
-                format!("Saved {name}")
+                trf!("Saved {name}", name = name)
             }),
             cx,
         );
@@ -254,7 +253,7 @@ impl Shell {
         };
         if let Some(e) = self.db.addon_error.clone() {
             crate::app_log::action("db editor: save").failed(&e);
-            window.push_notification(Notification::error(e).title("Could not save"), cx);
+            window.notify(Notification::error(e).title(tr("Could not save")), cx);
             return false;
         }
         let name = self.db_draft_name();
@@ -262,13 +261,16 @@ impl Shell {
         let draft = &mut self.db.draft;
         match guarded(|| draft.save_addon(&store, &catalog).map_err(text)) {
             Ok(pkg) => {
-                window.push_notification(Notification::success(format!("Saved {name}")), cx);
+                window.notify(Notification::success(trf!("Saved {name}", name = name)), cx);
                 self.db_after_save(pkg.id, then, cx);
                 true
             }
             Err(e) => {
                 crate::app_log::action("db editor: save").failed(&e);
-                window.push_notification(Notification::error(e).title(format!("Could not save {name}")), cx);
+                window.notify(
+                    Notification::error(e).title(trf!("Could not save {name}", name = name)),
+                    cx,
+                );
                 false
             }
         }
@@ -296,18 +298,21 @@ impl Shell {
         }
         let shell = cx.entity().downgrade();
         let body = match self.db_bound() {
-            Some(info) => format!("This puts {} back to how it was last saved.", info.name),
-            None => "The new addon goes back to no changes.".to_owned(),
+            Some(info) => trf!(
+                "This puts {name} back to how it was last saved.",
+                name = info.name
+            ),
+            None => tr("The new addon goes back to no changes.").to_owned(),
         };
         window.open_alert_dialog(cx, move |alert, _, _| {
             let shell = shell.clone();
             alert
-                .title(format!(
-                    "Discard {}?",
-                    plural(n, "unsaved change", "unsaved changes")
+                .title(trf!(
+                    "Discard {changes}?",
+                    changes = trn(n, "{count} unsaved change", "{count} unsaved changes")
                 ))
-                .description(format!("{body} This can't be undone."))
-                .ok_text("Discard changes")
+                .description(trf!("{body} This can't be undone.", body = body))
+                .ok_text(tr("Discard changes"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
@@ -340,13 +345,13 @@ impl Shell {
                 .child(
                     Button::new("db-leave-cancel")
                         .outline()
-                        .label("Cancel")
+                        .label(tr("Cancel"))
                         .on_click(|_, window, cx| window.close_dialog(cx)),
                 )
                 .child(
                     Button::new("db-leave-discard")
                         .outline()
-                        .label("Discard")
+                        .label(tr("Discard"))
                         .on_click(move |_, window, cx| {
                             window.close_dialog(cx);
                             s1.update(cx, |s, cx| {
@@ -359,7 +364,7 @@ impl Shell {
                 .child(
                     Button::new("db-leave-save")
                         .primary()
-                        .label(if bound { "Save" } else { "Save as Addon…" })
+                        .label(if bound { tr("Save") } else { tr("Save as Addon…") })
                         .on_click(move |_, window, cx| {
                             window.close_dialog(cx);
                             s2.update(cx, |s, cx| {
@@ -374,10 +379,10 @@ impl Shell {
                 );
             alert
                 .width(px(480.))
-                .title(format!("Save changes to {name}?"))
-                .description(format!(
-                    "You have {}.",
-                    plural(n, "unsaved change", "unsaved changes")
+                .title(trf!("Save changes to {name}?", name = name))
+                .description(trf!(
+                    "You have {changes}.",
+                    changes = trn(n, "{count} unsaved change", "{count} unsaved changes")
                 ))
                 .footer(footer)
         });
@@ -396,14 +401,14 @@ impl Shell {
             Ok(p) => p,
             Err(e) => {
                 crate::app_log::action("db editor: read the addon").failed(&e);
-                window.push_notification(Notification::error(e).title("Could not read the addon"), cx);
+                window.notify(Notification::error(e).title(tr("Could not read the addon")), cx);
                 return;
             }
         };
         let form = self.db_form(Some(&pkg), window, cx);
         let shell = cx.entity().downgrade();
         let p = palette(cx);
-        let title = format!("{} details", pkg.manifest.name);
+        let title = trf!("{name} details", name = pkg.manifest.name);
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (shell, fields, id) = (shell.clone(), form.clone(), id.clone());
             alert
@@ -412,27 +417,36 @@ impl Shell {
                 .child(
                     v_flex()
                         .gap(px(14.))
-                        .child(field("NAME", &form.name, p))
+                        .child(Field::new(tr("NAME"), Input::new(&form.name).tap_sm()))
                         .child(
                             h_flex()
                                 .gap(px(12.))
                                 .child(
-                                    div()
-                                        .w(px(110.))
-                                        .children(form.version.as_ref().map(|v| field("VERSION", v, p))),
+                                    div().w(px(110.)).children(
+                                        form.version
+                                            .as_ref()
+                                            .map(|v| Field::new(tr("VERSION"), Input::new(v).tap_sm())),
+                                    ),
                                 )
-                                .child(div().flex_1().child(field("AUTHOR", &form.author, p)))
-                                .child(div().w(px(170.)).child(category_picker(form.category.clone(), p))),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .child(Field::new(tr("AUTHOR"), Input::new(&form.author).tap_sm())),
+                                )
+                                .child(div().w(px(170.)).child(category_picker(form.category.clone()))),
                         )
-                        .child(field("DESCRIPTION", &form.description, p))
+                        .child(Field::new(
+                            tr("DESCRIPTION"),
+                            Input::new(&form.description).tap_sm(),
+                        ))
                         .child(
                             div()
                                 .text_size(px(12.))
                                 .text_color(p.text_placeholder)
-                                .child(format!("ID {id} · versions look like 1.2.0")),
+                                .child(trf!("ID {id} · versions look like 1.2.0", id = id)),
                         ),
                 )
-                .ok_text("Save details")
+                .ok_text(tr("Save details"))
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {
                     let [name, version, author, description] = fields.read(cx);
@@ -459,15 +473,12 @@ impl Shell {
                         .unwrap_or_else(|_| Err("The launcher is closing".into()));
                     match result {
                         Ok(()) => {
-                            window.push_notification(Notification::success(format!("Saved {name}")), cx);
+                            window.notify(Notification::success(trf!("Saved {name}", name = name)), cx);
                             true
                         }
                         Err(e) => {
                             crate::app_log::action("db editor: save the details").failed(&e);
-                            window.push_notification(
-                                Notification::error(e).title("Could not save the details"),
-                                cx,
-                            );
+                            window.notify(Notification::error(e).title(tr("Could not save the details")), cx);
                             false
                         }
                     }
@@ -483,14 +494,14 @@ impl Shell {
         Button::new("db-export")
             .outline()
             .icon(IconName::FileUp)
-            .label("Export")
+            .label(tr("Export"))
             .dropdown_caret(true)
             .disabled(!(share || game) || self.db.catalog().is_none())
             .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
                 let (s1, s2) = (shell.clone(), shell.clone());
                 menu.min_w(px(240.))
                     .item(
-                        PopupMenuItem::new("Share addon (.zip)…")
+                        PopupMenuItem::new(tr("Share addon (.zip)…"))
                             .icon(IconName::Package)
                             .disabled(!share)
                             .on_click(move |_, window, cx| {
@@ -498,7 +509,7 @@ impl Shell {
                             }),
                     )
                     .item(
-                        PopupMenuItem::new("Export game files (.zip)…")
+                        PopupMenuItem::new(tr("Export game files (.zip)…"))
                             .icon(IconName::FileArchive)
                             .disabled(!game)
                             .on_click(move |_, window, cx| {
@@ -528,21 +539,22 @@ impl Shell {
                     let result = task.await;
                     cx.update(|window, cx| match result {
                         Ok(()) => {
-                            let mut body = format!("Saved to {}", path.display());
+                            let mut body = trf!("Saved to {path}", path = path.display());
                             if unsaved > 0 {
-                                body.push_str(&format!(
-                                    "\n{} aren't in it; save, then export again to include them.",
-                                    plural(unsaved, "unsaved change", "unsaved changes")
+                                body.push_str(&trf!(
+                                    "\n{changes} aren't in it; save, then export again to include them.",
+                                    changes =
+                                        trn(unsaved, "{count} unsaved change", "{count} unsaved changes")
                                 ));
                             }
-                            window.push_notification(
-                                Notification::success(body).title(format!("Exported {name}")),
+                            window.notify(
+                                Notification::success(body).title(trf!("Exported {name}", name = name)),
                                 cx,
                             );
                         }
                         Err(e) => {
                             crate::app_log::action("db editor: export").failed(&e);
-                            window.push_notification(Notification::error(e).title("Export failed"), cx)
+                            window.notify(Notification::error(e).title(tr("Export failed")), cx)
                         }
                     })
                     .ok();
@@ -563,9 +575,7 @@ impl Shell {
     }
 }
 
-const GAME_FILES_NOTE: &str = "Players extract this .zip into the F1 25 folder. Steam's Verify integrity of game files \
-                               undoes it, and Swofty Launcher won't start modded sessions while that file is \
-                               replaced. Players who use Swofty Launcher should get the addon .zip instead.";
+const GAME_FILES_NOTE: &str = "Players extract this .zip into the F1 25 folder. Steam's Verify integrity of game files undoes it, and Swofty Launcher won't start modded sessions while that file is replaced. Players who use Swofty Launcher should get the addon .zip instead.";
 
 fn choice_row(
     id: &'static str,
@@ -622,7 +632,7 @@ impl Shell {
     pub(crate) fn db_game_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let name = self
             .db_bound()
-            .map_or_else(|| "DB Editor changes".to_owned(), |i| i.name.clone());
+            .map_or_else(|| tr("DB Editor changes").to_owned(), |i| i.name.clone());
         let n = self.db.draft.edits.len();
         let draft = (n > 0)
             .then(|| guarded(|| Package::unsaved(&name, self.db.draft.edits.clone()).map_err(text)).ok())
@@ -649,8 +659,11 @@ impl Shell {
                 choice_row(
                     "db-ge-one",
                     !all,
-                    "The changes in the DB Editor".to_owned(),
-                    format!("{}, saved or not", plural(n, "change", "changes")),
+                    tr("The changes in the DB Editor").to_owned(),
+                    trf!(
+                        "{changes}, saved or not",
+                        changes = trn(n, "{count} change", "{count} changes")
+                    ),
                     true,
                     p,
                 )
@@ -665,11 +678,14 @@ impl Shell {
                 choice_row(
                     "db-ge-all",
                     all,
-                    format!("Every DB Editor addon on in {profile}"),
+                    trf!("Every DB Editor addon on in {profile}", profile = profile),
                     if enabled {
-                        format!("{} in load order", plural(stack.len(), "addon", "addons"))
+                        trf!(
+                            "{addons} in load order",
+                            addons = trn(stack.len(), "{count} addon", "{count} addons")
+                        )
                     } else {
-                        format!("No DB Editor addons are on in {profile}")
+                        trf!("No DB Editor addons are on in {profile}", profile = profile)
                     },
                     enabled,
                     p,
@@ -685,36 +701,18 @@ impl Shell {
             let stem = file_stem.clone();
             alert
                 .width(px(540.))
-                .title("Export game files")
+                .title(tr("Export game files"))
                 .child(
                     v_flex()
                         .gap(px(10.))
-                        .child(div().text_size(px(13.)).text_color(p.text_muted).child(
+                        .child(div().text_size(px(13.)).text_color(p.text_muted).child(tr(
                             "Saves a .zip with the game's database file, changed by the addons you pick.",
-                        ))
+                        )))
                         .children(single)
                         .child(stacked)
-                        .child(
-                            h_flex()
-                                .mt(px(4.))
-                                .gap(px(8.))
-                                .items_start()
-                                .px(px(10.))
-                                .py(px(8.))
-                                .rounded(px(6.))
-                                .bg(p.warning.opacity(0.1))
-                                .text_size(px(12.))
-                                .line_height(px(18.))
-                                .child(
-                                    Icon::new(IconName::TriangleAlert)
-                                        .size(px(13.))
-                                        .mt(px(2.))
-                                        .text_color(p.warning),
-                                )
-                                .child(div().flex_1().min_w_0().child(GAME_FILES_NOTE)),
-                        ),
+                        .child(div().mt(px(4.)).child(Callout::warning(tr(GAME_FILES_NOTE)))),
                 )
-                .ok_text("Export…")
+                .ok_text(tr("Export…"))
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {
                     if !ready {
@@ -740,14 +738,14 @@ impl Shell {
     fn db_game_export_to(&mut self, pick: Pick, file: String, window: &mut Window, cx: &mut Context<Self>) {
         let store = self.store.clone();
         let Some(game) = crate::sections::game(&store, self.install.as_ref()) else {
-            window.push_notification(
-                Notification::error("F1 25 was not found.").title("Export failed"),
+            window.notify(
+                Notification::error(tr("F1 25 was not found.")).title(tr("Export failed")),
                 cx,
             );
             return;
         };
         let run = move |out: PathBuf, window: &mut Window, cx: &mut Context<Self>| {
-            window.push_notification(Notification::info("Building the game files…"), cx);
+            window.notify(Notification::info(tr("Building the game files…")), cx);
             let (store, game, pick) = (store.clone(), game.clone(), pick.clone());
             cx.spawn_in(window, async move |_, cx| {
                 let target = out.clone();
@@ -765,14 +763,14 @@ impl Shell {
                     .await;
                 cx.update(|window, cx| match result {
                     Ok(done) => {
-                        let mut body = format!(
-                            "{} · {:.1} MB · saved to {}",
-                            plural(done.changes, "change", "changes"),
-                            done.bytes as f64 / 1_048_576.,
-                            out.display()
+                        let mut body = trf!(
+                            "{changes} · {size} · saved to {path}",
+                            changes = trn(done.changes, "{count} change", "{count} changes"),
+                            size = crate::format::size(done.bytes),
+                            path = out.display()
                         );
                         if !done.skipped.is_empty() {
-                            body.push_str(&format!("\n{} skipped:", done.skipped.len()));
+                            body.push_str(&trf!("\n{count} skipped:", count = done.skipped.len()));
                             for line in done.skipped.iter().take(4) {
                                 body.push_str(&format!("\n{line}"));
                             }
@@ -784,11 +782,11 @@ impl Shell {
                             true => Notification::success(body),
                             false => Notification::warning(body).autohide(false),
                         };
-                        window.push_notification(note.title("Exported game files"), cx);
+                        window.notify(note.title(tr("Exported game files")), cx);
                     }
                     Err(e) => {
                         crate::app_log::action("db editor: export").failed(&e);
-                        window.push_notification(Notification::error(e).title("Export failed"), cx)
+                        window.notify(Notification::error(e).title(tr("Export failed")), cx)
                     }
                 })
                 .ok();

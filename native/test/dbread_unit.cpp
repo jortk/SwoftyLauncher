@@ -112,6 +112,11 @@ int main()
     ok(dbread::row_stem("entrants.vehicles") == "vehicle", "stem vehicles->vehicle");
     ok(dbread::row_stem("entrants.entrant_lists") == "entrant_list", "stem entrant_lists->entrant_list");
     ok(dbread::row_stem("entrants.entrant_setup_modes") == "entrant_setup_mode", "stem setup_modes");
+    ok(dbread::row_stem("tracks") == "Track", "stem tracks->Track (the schema's capitalised row word)");
+    dbread::TableKeys trk = dbread::table_keys("tracks");
+    ok(trk.ok && trk.count_key == full("tracks._Track_instancecount_"), "table_keys tracks: count key tracks._Track_instancecount_");
+    ok(dbread::cell_key(trk.row_prefix, 3, "statId") == full("tracks.Track_3.statId"), "cell_key tracks.Track_3.statId");
+    ok(dbread::label_key(trk.row_prefix, 0) == full("tracks.Track_0._metadata_"), "label_key tracks.Track_0._metadata_");
 
     // table_keys builds the same hashes as the full dotted strings.
     dbread::TableKeys tk = dbread::table_keys("entrants.teams");
@@ -239,6 +244,34 @@ int main()
                (unsigned long long)n, label, (long long)at, stat ? dbread::read_i32(stat) : -1);
         ok(at >= 0 && stat, "gamedb file: the label's entrant list row and its stat_id are found");
         ok(at < 0 || !db.get(dbread::row_key(lists.row_prefix, uint64_t(at))), "gamedb file: the row path has no record");
+        // The tracks table through the generic table keys: its row word is Track, so the count and every row resolve.
+        // Labels are fnv32 hashes, so they are named through a list of the shipping track codes.
+        static const char *const CODES[] = {"_metadata_", "abu_dhabi", "abu_dhabi_2024", "acronym", "albert_park", "americas", "australia", "austria", "austria_2024", "autopolis", "azerbaijan", "bahrain", "bahrain24", "bahrain_2024", "bahrain_pad", "baku", "baku_2024", "belgium", "brazil", "brazil_2024", "buddh", "burn_per_lap", "canada", "catalunya", "catalunya_2024", "china", "city", "data_set", "date", "day", "france", "fuel", "germany", "gp", "great_britain", "hanoi", "harder", "hockenheimring", "hungaroring", "hungaroring_2024", "hungary", "igora_drive", "imola", "imola_2024", "india", "interlagos", "istanbul", "italy", "japan", "jeddah", "jeddah_2024", "laps", "las_vegas", "las_vegas_2024", "losail", "losail_2024", "madrid", "madrid_2026", "malaysia", "marina_bay", "medium", "melbourne", "melbourne_2022", "melbourne_2024", "mexico", "mexico_2024", "miami", "miami_2024", "monaco", "monaco_2024", "month", "montreal", "montreal_2024", "monza", "monza_2024", "mugello", "names", "netherlands", "nurburgring", "okayama", "paul_ricard", "pit", "portimao", "portugal", "profile", "qatar", "red_bull_ring", "ricard", "rodriguez", "russia", "saudi_arabia", "sepang", "shanghai", "shanghai_2024", "silverstone", "silverstone_2024", "silverstone_int", "singapore", "singapore_2024", "sochi", "softer", "spa", "spa_2022", "spa_2024", "spa_francorchamps", "spain", "speed_limit", "stop_time_dry", "stop_time_wet", "suzuka", "suzuka_2024", "suzuka_east", "texas", "texas_2024", "texas_nat", "title", "turkey", "tyres", "united_arab_emirates", "united_states", "valencia", "vegas", "version", "vietnam", "villeneuve", "yas_marina", "zandvoort", "zandvoort_2024"};
+        dbread::TableKeys trk = dbread::table_keys("tracks");
+        const void *tc = db.get(trk.count_key);
+        uint64_t tn = tc ? uint64_t(dbread::read_i32(tc)) : 0;
+        std::string rows;
+        int melbourne = -1, missing = 0;
+        for (uint64_t i = 0; i < tn; i++) {
+            const void *lab = db.get(dbread::label_key(trk.row_prefix, i));
+            const void *sid = db.get(dbread::cell_key(trk.row_prefix, i, "statId"));
+            if (!lab || !sid) {
+                missing++;
+                continue;
+            }
+            uint32_t meta = dbread::read_meta(lab);
+            const char *name = "?";
+            for (const char *c : CODES)
+                if (dbread::fnv32(c) == meta)
+                    name = c;
+            int id = dbread::read_i32(sid);
+            rows += (rows.empty() ? "" : ",") + std::to_string(id) + "=" + name;
+            if (meta == dbread::fnv32("melbourne"))
+                melbourne = id;
+        }
+        printf("      tracks: %llu rows, %d without a label or statId, melbourne statId %d\n      %s\n", (unsigned long long)tn, missing,
+               melbourne, rows.c_str());
+        ok(tn > 0 && !missing && melbourne >= 0, "gamedb file: the tracks table opens through table_keys and names melbourne's statId");
     }
 
     printf("%s: %d failure(s)\n", failures ? "FAIL" : "ok  ", failures);

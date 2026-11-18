@@ -1,4 +1,4 @@
-// tracks::set_track_fuel's layout and rules, moved from Progressive Career's race weekend fuel (addons/progressive/
+// tracks::set_track_fuel's layout and rules, moved from Progressive Career's race weekend fuel (its
 // native/src/fuel_logic.hpp, progressive_fuel.dll, proven in 1.2.2). The game keeps every track data set in
 // memory in the TRACK_DATA system (KB struct TrackDataSystem, read by 0x142e44b50, queried by
 // Game_TrackData_GetTrack 0x142e60e00): sets at +0x68..+0x70 (0x30 bytes each; mode, season and weekend format

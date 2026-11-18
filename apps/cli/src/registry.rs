@@ -7,7 +7,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::Subcommand;
-use swofty_core::ops::IdFrom;
+use swofty_core::ops::{IdFrom, UNLOCK_FRESH_FROM, is_unlock_ids};
 use swofty_core::row_ids;
 use swofty_core::stdlib::deps::{self, Level};
 use swofty_core::stdlib::{careers, reports};
@@ -89,10 +89,13 @@ pub fn row_id_lines(data: &std::path::Path, addon: &str) -> Result<Vec<String>> 
         "{addon}: {} added row(s) keep these stat ids",
         rows.len()
     )];
+    let unlock_next =
+        format!("the lowest free id from {UNLOCK_FRESH_FROM} in its unlock list when it was added");
     for (name, r) in names.iter().zip(&rows) {
         let from = match r.from {
             IdFrom::Seeded => "seeded from a profile's last build or a game session from before 1.6.10",
             IdFrom::Hashed => "hashed from the row's key by 1.6.10 or 1.6.11",
+            IdFrom::Next if is_unlock_ids(&r.table) => unlock_next.as_str(),
             IdFrom::Next => "the next free id in load order when it was added",
             IdFrom::Moved => "the next free id after its kept id was taken",
             IdFrom::Reused => "reused from an addon that was off or removed",

@@ -33,7 +33,7 @@ The renames and compatibility rules below are already built. In `owned_items` en
 | CLI | `ModsCommand`, `swofty mods list/install/enable/disable` | `AddonsCommand`, `swofty addons list/install/enable/disable` |
 | SDK | `SwoftyModInit`, `SwoftyModInitFn`, `INIT_SYMBOL`, `SWOFTY_MOD()` | `SwoftyAddonInit`, `SwoftyAddonInitFn`, `INIT_SYMBOLS`, `SWOFTY_ADDON()` |
 | Native core | `ModSettings`, `mods[]` in `manager.cpp`, `settings.cpp`, `ui_vm.cpp` | `AddonSettings`, `addons[]` |
-| Repository | `mods/swoftymod`, `mods/custom-grid-size`, `templates/mod` | `addons/swoftymod`, `addons/custom-grid-size`, `templates/addon` |
+| Repository | `mods/swoftymod`, `mods/custom-grid-size`, `templates/mod` | `addons/swoftymod`, `templates/addon`; Custom Grid Size is its own repository |
 | Data dir | `$DATA/mods/<id>/` | `$DATA/addons/<id>/` |
 | Data dir (new) | | `$DATA/addon-data/<id>/` for files an addon owns, `$DATA/cache/addons/<id>/` for its caches |
 | Profile file | `mods` | `addons`, plus a `state` object keyed by addon id |
@@ -563,7 +563,7 @@ Result overlay_file(std::string_view game_path, std::string_view file);
 
 ### 4.1 The addon
 
-- The crate `addons/simplified` (`swofty-addon-simplified`) is Rust and AGPL-3.0-or-later, like the rest of the repository. Its `mod.serps` reader, package root, content root and entry path checks are ported from the Simplified Launcher (GPL-3.0, used with Team Simplified's permission) and carry the Simplified Suite notice. `THIRD_PARTY.md` credits Team Simplified for the `.serps` format and the Simplified Suite, and the Mods section shows the credit.
+- The crate `addons/simplified` (`swofty-addon-simplified`) is Rust and PolyForm-Noncommercial-1.0.0, like the rest of the repository. Its `mod.serps` reader, package root, content root and entry path checks are ported from the Simplified Launcher (GPL-3.0, used with Team Simplified's permission) and carry the Simplified Suite notice. `THIRD_PARTY.md` credits Team Simplified for the `.serps` format and the Simplified Suite, and the Mods section shows the credit.
 - You can already use import, the library, profile state, the section and `swofty mods` (work item 13), diffs (work item 14), and merge and conflicts (work item 15).
 - Manifest: id `teamsimplified.mods`, name `Team Simplified`, author `Team Simplified`. No options and no native plugin.
 - It's built in and on by default in new profiles. Turn it off for a profile to hide its section.

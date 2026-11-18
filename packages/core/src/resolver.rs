@@ -18,6 +18,72 @@ fn glob_match(pattern: &str, id: &str) -> bool {
     }
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct Lacking {
+    off: Vec<String>,
+    missing: Vec<String>,
+}
+
+impl Lacking {
+    pub(crate) fn off(&mut self, name: &str) {
+        if !self.off.iter().any(|n| n == name) {
+            self.off.push(name.to_owned());
+        }
+    }
+
+    pub(crate) fn missing(&mut self, id: &str) {
+        if !self.missing.iter().any(|n| n == id) {
+            self.missing.push(id.to_owned());
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.off.is_empty() && self.missing.is_empty()
+    }
+
+    pub(crate) fn headline(&self, who: &str, verb: &str, profile: &str) -> String {
+        let off = format!(
+            "{}, which {} off in profile {profile}",
+            crate::conflicts::and_list(&self.off),
+            if self.off.len() == 1 { "is" } else { "are" }
+        );
+        let missing = format!(
+            "{}, which {} installed",
+            crate::conflicts::and_list(&self.missing),
+            if self.missing.len() == 1 {
+                "isn't"
+            } else {
+                "aren't"
+            }
+        );
+        match (self.off.is_empty(), self.missing.is_empty()) {
+            (false, true) => format!("{who} {verb} {off}"),
+            (true, _) => format!("{who} {verb} {missing}"),
+            (false, false) => format!("{who} {verb} {off}, and {missing}"),
+        }
+    }
+
+    pub(crate) fn fix(&self) -> String {
+        match (self.off.as_slice(), self.missing.as_slice()) {
+            ([one], []) => format!("Turn {one} on on the Addons page"),
+            (_, []) => "Turn them on on the Addons page".to_owned(),
+            ([], [_]) => "Install it in the Addon Browser".to_owned(),
+            ([], _) => "Install them in the Addon Browser".to_owned(),
+            (off, missing) => format!(
+                "{} on the Addons page and install {} in the Addon Browser",
+                match off {
+                    [one] => format!("Turn {one} on"),
+                    _ => "Turn on the ones that are off".to_owned(),
+                },
+                match missing {
+                    [one] => one.as_str(),
+                    _ => "the rest",
+                }
+            ),
+        }
+    }
+}
+
 pub fn resolve(profile: &Profile, installed: &BTreeMap<String, AddonManifest>) -> Result<Plan> {
     let mut warnings = Vec::new();
     if profile.is_vanilla() {
@@ -80,27 +146,30 @@ pub fn resolve(profile: &Profile, installed: &BTreeMap<String, AddonManifest>) -
     }
     check_launcher(addons.values().copied(), &launcher)?;
     for m in addons.values() {
+        let mut lacking = Lacking::default();
         for r in &m.requires {
             match (addons.get(r.id.as_str()), installed.get(&r.id)) {
-                (None, Some(dep)) => {
-                    return Err(Error::Resolve(format!(
-                        "{} needs {}, which is off in profile {}. Turn {} on on the Addons page, or turn {} off",
-                        m.name, dep.name, profile.name, dep.name, m.name
-                    )));
-                }
-                (None, None) => {
-                    return Err(Error::Resolve(format!(
-                        "{} needs {}, which isn't installed. Install it in the Addon Browser, or turn {} off",
-                        m.name, r.id, m.name
-                    )));
-                }
-                (Some(dep), _) if !r.version.matches(&dep.version) => {
-                    return Err(Error::Resolve(format!(
-                        "{} needs {} {}, and {} is installed. Update {} in the Addon Browser, or turn {} off",
-                        m.name, dep.name, r.version, dep.version, dep.name, m.name
-                    )));
-                }
+                (None, Some(dep)) => lacking.off(&dep.name),
+                (None, None) => lacking.missing(&r.id),
                 (Some(_), _) => {}
+            }
+        }
+        if !lacking.is_empty() {
+            return Err(Error::Resolve(format!(
+                "{}. {}, or turn {} off",
+                lacking.headline(&m.name, "needs", &profile.name),
+                lacking.fix(),
+                m.name
+            )));
+        }
+        for r in &m.requires {
+            if let Some(dep) = addons.get(r.id.as_str())
+                && !crate::version::satisfies(&r.version, &dep.version)
+            {
+                return Err(Error::Resolve(format!(
+                    "{} needs {} {}, and {} is installed. Update {} in the Addon Browser, or turn {} off",
+                    m.name, dep.name, r.version, dep.version, dep.name, m.name
+                )));
             }
         }
         for c in m.conflicts.iter().filter(|c| c.touches.is_none()) {
@@ -122,7 +191,7 @@ pub fn resolve(profile: &Profile, installed: &BTreeMap<String, AddonManifest>) -
         .filter(|p| p.kind == crate::order::Kind::Below)
     {
         warnings.push(format!(
-            "{}: {}; the build loads it first anyway. Order for me on the Addons page puts it there in the list",
+            "{}: {}; the build loads it first anyway. Fix load order on the Addons page puts it there in the list",
             name(&p.addon),
             p.line(&name)
         ));
@@ -322,6 +391,93 @@ mod tests {
         assert!(
             missing.contains("Season 2019 needs a.y, which isn't installed"),
             "{missing}"
+        );
+    }
+
+    #[test]
+    fn requirement_errors_name_every_addon_that_is_off_or_not_installed() {
+        let named = |id: &str, name: &str, extra: &str| {
+            let (_, mut a) = m(id, extra);
+            a.name = name.into();
+            (id.to_owned(), a)
+        };
+        let career = |requires: &str| {
+            named(
+                "p.career",
+                "Progressive Career",
+                &format!(r#","requires":[{requires}]"#),
+            )
+        };
+        let seasons = [
+            named("s.2015", "SWOFTY 2015", ""),
+            named("s.2016", "SWOFTY 2016", ""),
+            named("s.2017", "SWOFTY 2017", ""),
+        ];
+        let with = |career: (String, AddonManifest)| {
+            let mut all = BTreeMap::from([m(CORE_ID, ""), career]);
+            all.extend(seasons.iter().cloned());
+            all
+        };
+        let three = r#"{"id":"s.2015"},{"id":"s.2016"},{"id":"s.2017"}"#;
+        let fail = |on: &[&str], installed: &BTreeMap<String, AddonManifest>| {
+            resolve(&profile(on), installed).unwrap_err().to_string()
+        };
+        let installed = with(career(three));
+        let err = fail(&["p.career"], &installed);
+        assert!(
+            err.ends_with(
+                "Progressive Career needs SWOFTY 2015, SWOFTY 2016 and SWOFTY 2017, which are off in profile \
+                 t. Turn them on on the Addons page, or turn Progressive Career off"
+            ),
+            "{err}"
+        );
+        let err = fail(&["p.career", "s.2016"], &installed);
+        assert!(
+            err.ends_with(
+                "Progressive Career needs SWOFTY 2015 and SWOFTY 2017, which are off in profile t. Turn them \
+                 on on the Addons page, or turn Progressive Career off"
+            ),
+            "{err}"
+        );
+        let err = fail(&["p.career", "s.2015", "s.2016"], &installed);
+        assert!(
+            err.ends_with(
+                "Progressive Career needs SWOFTY 2017, which is off in profile t. Turn SWOFTY 2017 on on the \
+                 Addons page, or turn Progressive Career off"
+            ),
+            "{err}"
+        );
+        assert!(resolve(&profile(&["p.career", "s.2015", "s.2016", "s.2017"]), &installed).is_ok());
+
+        let installed = with(career(
+            r#"{"id":"s.2015"},{"id":"x.one"},{"id":"s.2016"},{"id":"x.two"}"#,
+        ));
+        let err = fail(&["p.career"], &installed);
+        assert!(
+            err.ends_with(
+                "Progressive Career needs SWOFTY 2015 and SWOFTY 2016, which are off in profile t, and x.one \
+                 and x.two, which aren't installed. Turn on the ones that are off on the Addons page and \
+                 install the rest in the Addon Browser, or turn Progressive Career off"
+            ),
+            "{err}"
+        );
+        let err = fail(&["p.career", "s.2015", "s.2016"], &installed);
+        assert!(
+            err.ends_with(
+                "Progressive Career needs x.one and x.two, which aren't installed. Install them in the Addon \
+                 Browser, or turn Progressive Career off"
+            ),
+            "{err}"
+        );
+        let installed = with(career(r#"{"id":"s.2015"},{"id":"x.one"}"#));
+        let err = fail(&["p.career"], &installed);
+        assert!(
+            err.ends_with(
+                "Progressive Career needs SWOFTY 2015, which is off in profile t, and x.one, which isn't \
+                 installed. Turn SWOFTY 2015 on on the Addons page and install x.one in the Addon Browser, or \
+                 turn Progressive Career off"
+            ),
+            "{err}"
         );
     }
 

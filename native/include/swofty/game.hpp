@@ -12,8 +12,10 @@
 #include <swofty/game/game.hpp>
 #include <swofty/game/gamedb.hpp>
 #include <swofty/game/hud.hpp>
+#include <swofty/game/live.hpp>
 #include <swofty/game/render.hpp>
 #include <swofty/game/session.hpp>
 #include <swofty/game/teams.hpp>
 #include <swofty/game/tracks.hpp>
+#include <swofty/game/ui.hpp>
 #include <swofty/game/vm.hpp>

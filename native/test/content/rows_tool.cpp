@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     }
 
     content::Expansion plan(base);
-    content::expand(st, plan, {});
+    content::expand(st, plan, content::planning_ids());
 
     auto text = [&](const std::string &path) -> std::optional<std::string> {
         auto r = base(content::gvdb::fnv64(path));
@@ -160,8 +160,17 @@ int main(int argc, char **argv)
         allocated[reg + " " + id] = Value(r.id);
         return r.id;
     };
-    content::Expansion boot(base);
-    content::expand(st, boot, stat, adm.skip);
+    auto boot_ptr = std::make_unique<content::Expansion>(base);
+    content::expand(st, *boot_ptr, stat, adm.skip);
+    for (;;) {
+        content::Admission again = content::readmit(st.order(), boot_ptr->addon_fresh, adm, room);
+        if (again.skip.size() == adm.skip.size())
+            break;
+        adm = std::move(again);
+        boot_ptr = std::make_unique<content::Expansion>(base);
+        content::expand(st, *boot_ptr, stat, adm.skip);
+    }
+    content::Expansion &boot = *boot_ptr;
 
     std::map<uint64_t, std::pair<int, std::string>> db;
     for (auto &[k, r] : edits)

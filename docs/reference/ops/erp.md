@@ -54,6 +54,8 @@ These ops are trimmed from Classic Seasons, the R&D Tyres addon and the docs' li
 
 The build skips an operation whose `erp` archive isn't in the game folder and no earlier addon adds, and warns `<addon>: archive changes skipped; <path> is not a file in F1 25`. Check each `erp` path against the game folder, such as `2025_asset_groups/environment_package/tracks/...`.
 
+An operation on a resource that is missing from an archive another addon puts is skipped too, and warns `<addon>: change skipped; <resource> is not in <path>, which <provider> provides`. The same operation on a resource missing from the game's own archive fails the build.
+
 ## Operations
 
 ### replace-resource
@@ -87,6 +89,7 @@ The build skips an operation whose `erp` archive isn't in the game folder and no
 ```text
 2025_asset_groups/ui_package/screens/fe_loading.erp: add-resource eaid://ui_package/art/textures/loading/sponsor.tif.image takes its layout from a GfxSurfaceRes resource with 2 fragment(s) in the archive, and it has none
 2025_asset_groups/ui_package/screens/fe_loading.erp: eaid://ui_package/art/textures/loading/sponsor.tif.image already exists; put-resource replaces a resource
+2025_asset_groups/ui_package/screens/fe_loading.erp in the game folder already has eaid://ui_package/art/textures/loading/sponsor.tif.image, so something outside the launcher probably changed this file (a hand-installed mod or a leftover). Remove hand-installed mods, then Repair F1 25 in the EA app (Steam: Verify integrity of game files), then Play. (Addon authors: if the stock file has it, use put-resource.)
 ```
 
 ### Raw resources
@@ -166,11 +169,11 @@ A texture array, such as `overrides.team_logos.f1_2026.texarray.image`, is a `Gf
 }
 ```
 
-- Each slice of `source` that differs from the game's stock slice replaces that slice of the array already in `erp`. That array is the stock one, or the one earlier addons in the load order wrote.
+- Each slice of `source` that differs from the game's stock slice replaces that slice of the array already in `erp`. That array is the stock one, or the one earlier addons in the load order wrote. It keeps its slice count, so the slices earlier addons added past the game's count stay.
 - The game's stock array is the one in `erp`. When `erp` has none, it is the one in the first archive, by name, directly in `2025_asset_groups/<package>/`, where `<package>` follows `eaid://` in `resource`. The merged array is then added to `erp`.
 - An array with fewer slices than the game's, in the same format and slice size, merges the slices it has. Slices past the game's count are left out with a warning.
-- An array of another format or slice size, a resource that is not a texture array, or a resource the game has no stock array for replaces the whole resource, with a warning.
-- When the array in `erp` has another layout from an earlier addon, the slices merge over the game's array instead, with a warning.
+- An array of another format or slice size, a resource that is not a texture array, or a resource the game has no stock array for replaces the whole resource, with a warning. When an earlier addon grew the array in `erp` past the game's count, the op is refused instead, with a warning, and the array stays as it was.
+- When the array in `erp`, as an earlier addon left it, has another format or slice size than the game's, or is not a texture array, the op is refused with a warning that names that addon, and the array stays as it was. When that array holds fewer slices than the game's, the changed slices past its count are left out with a warning.
 - A `merge-slices` that changes no slice leaves `erp` as it is.
 
 The build prints one line per op:
@@ -205,6 +208,40 @@ The in-game loader patches only archives under `2025_asset_groups`. Every ERP op
 ```text
 erp: shader_package_2025/object_flag.nefx2.sm51.erp built into the game files; the in-game loader patches only archives under 2025_asset_groups
 ```
+
+## Two addons replacing one UI resource
+
+Two addons that each replace the same UI resource whole, with an `overlay` archive that carries it, a `replace-resource` or a `put-resource`, no longer leave the later one the winner. A template (`.ui`) or a scene (`.idf`) that two or more addons replace in full is merged node by node against the game's own copy, read through the launcher's baseline and never from a modified game folder:
+
+```text
+base    the game's resource, from the launcher's baseline
+ours    what the earlier addons left, already merged
+theirs  the next addon's replacement
+```
+
+The merge keeps every node an addon added and every change an addon made to a stock node, so an addon that adds six labels under `hud_mfd_dynamic.mfd.attacher.car_damage_panel` and an addon that adds a whole timing tower stay in one template. A node the two changed differently is a conflict, and the later addon's version is kept for that node only. A node one addon deleted stays deleted unless the other addon edited it; then that is a conflict too.
+
+Nodes are matched by name below their parent: UI nodes by their `name`, scene elements by their element name and scenes by their scene id. A scene's `nodeidlookup` is rebuilt from the merged elements. A list that has no such names (an `events` list entry without a `name`, say) is merged as a whole.
+
+The merge runs in load order, so the result is the same on every build, and it only runs when two or more addons replace the same UI resource whole. One addon replacing the resource twice (an addon that ships an early and a final template) keeps its last file and is not merged with itself. The build says so in its lines:
+
+```text
+ui: 2025_asset_groups/ui_package/flow_race.erp: eaid://ui_package/templates/hud_dynamic_templates.ui merged node by node against the game's own copy: Project Halo then Planked + Brake Check Damage Panel (0 added, 1 changed, 0 removed by Planked + Brake Check Damage Panel; 0 conflict(s))
+```
+
+The counts are what the later addon's file changed in the result of the earlier ones. Each node the two changed differently is a warning that names both addons and the node:
+
+```text
+ui: Project Halo and Other Panel both change hud_mfd_dynamic.mfd.attacher.car_damage_panel [props/visible] in eaid://ui_package/templates/hud_dynamic_templates.ui; Other Panel's version is kept there because it loads later
+```
+
+A resource that is merged without a conflict is not an override: it does not appear in `swofty conflicts`. With conflicts the later addon still shows as overriding the earlier one.
+
+On the runtime route an `overlay` archive that carries a resource other addons replace whole goes in resource by resource, so the merge can read it, and the build prints `erp: <addon>: its overlay archive goes in resource by resource; another addon replaces <resource> whole too, and the two are merged node by node`. A [`hud.element`](/reference/ops/hud) composition starts from the merged resource and puts its own nodes on top.
+
+Bridge addons that only exist to splice two addons' copies of a template together, such as "Project Halo + Planked + Brake Check Panel", are not needed: enable the two addons.
+
+An addon with nothing to merge against, such as a resource the game does not have, or a file that is not a valid `!pkg`, still replaces the earlier one whole.
 
 ## Mip files
 

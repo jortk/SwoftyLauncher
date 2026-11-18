@@ -551,7 +551,8 @@ struct Store::Impl {
     std::function<void(const std::string &)> log;
     Context ctx;
     bool registering = true;
-    uint64_t seq = 0, gen = 1;
+    uint64_t seq = 0;
+    std::atomic<uint64_t> gen{1};
     uint32_t next_handle = 1, next_token = 1;
     std::vector<Refusal> refusals;
     std::vector<Watcher> watchers;
@@ -567,12 +568,17 @@ struct Store::Impl {
     uint32_t forced_handle = 0;
     int forced_registering = -1;
 
-    void wait_for_load()
+    bool waits() const
     {
         if (!loading || tl_callback_depth || tl_computing)
-            return;
+            return false;
         auto flow = is_flow.load();
-        if (flow && flow()) {
+        return flow && flow();
+    }
+
+    void wait_for_load()
+    {
+        if (waits()) {
             std::unique_lock w(wait_mu);
             loaded.wait(w, [&] { return !loading.load(); });
         }
@@ -2528,6 +2534,16 @@ std::vector<Conflict> Store::conflicts()
         out.insert(out.end(), r.eval.conflicts.begin(), r.eval.conflicts.end());
     }
     return out;
+}
+
+uint64_t Store::generation() const
+{
+    return d->gen.load(std::memory_order_acquire);
+}
+
+bool Store::would_wait() const
+{
+    return d->waits();
 }
 
 std::size_t Store::layer_count(const std::string &addon, const std::string &registry) const

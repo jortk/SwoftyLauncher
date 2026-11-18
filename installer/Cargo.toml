@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 dirs = "7"
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
-rfd = "0.17"
+rfd = "0.18"
 swofty-core.workspace = true
 
 [target.'cfg(windows)'.dependencies]

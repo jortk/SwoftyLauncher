@@ -137,12 +137,18 @@ pub fn report(store: &Store, session: Option<&Game>) -> (Vec<String>, bool) {
         if found.is_empty() {
             row("run as admin", "not set".into());
         }
+        let ea = swofty_core::install::Source::detect(dir) == swofty_core::install::Source::EaApp;
         for l in &found {
+            let when = if ea {
+                "the EA app starts F1 25 without administrator rights, so modded sessions don't start"
+            } else {
+                "modded sessions start only when the launcher runs as administrator"
+            };
             row(
                 "run as admin",
                 format!(
-                    "{} is set to run as administrator {}: modded sessions start only when the launcher \
-                     runs as administrator; untick it on the exe's Properties > Compatibility tab",
+                    "{} is set to run as administrator {}: {when}; untick it on the exe's Properties > \
+                     Compatibility tab",
                     l.name,
                     l.scope()
                 ),

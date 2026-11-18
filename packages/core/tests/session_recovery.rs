@@ -133,6 +133,7 @@ impl Fixture {
     fn snapshot(&self) -> BTreeMap<String, String> {
         let mut out = BTreeMap::new();
         walk(&self.game, &self.game, &mut out);
+        out.retain(|k, _| !k.starts_with("swofty-cache"));
         out.insert(
             "<user.reg>".into(),
             sha256_bytes(&std::fs::read(&self.reg).unwrap()),
@@ -159,6 +160,7 @@ impl Fixture {
     fn snapshot_of(&self, game: &Path) -> BTreeMap<String, String> {
         let mut out = BTreeMap::new();
         walk(game, game, &mut out);
+        out.retain(|k, _| !k.starts_with("swofty-cache"));
         out.insert(
             "<user.reg>".into(),
             sha256_bytes(&std::fs::read(&self.reg).unwrap()),
@@ -265,7 +267,7 @@ fn a_session_rolled_back_when_the_game_exits_leaves_the_folder_byte_identical() 
     for _ in 0..2 {
         f.session(&game);
         f.play();
-        swofty_core::offline::restore_pending(&f.data).unwrap();
+        swofty_core::offline::restore_pending(&f.data, &f.game).unwrap();
         let inst = Installer::new(&f.data, &game);
         let done = inst.roll_back(false).unwrap();
         assert_eq!(done.len(), 1);
@@ -491,6 +493,36 @@ fn a_hand_copied_file_is_never_deleted_or_overwritten() {
 }
 
 #[test]
+fn third_party_dlls_in_the_game_folder_never_stop_a_session_and_stay_in_place() {
+    let f = Fixture::new("third-party-dlls");
+    for rel in [
+        "dxgi.dll",
+        "d3d12.dll",
+        "nvngx_dlss.dll",
+        "reshade-shaders/addon64.dll",
+    ] {
+        write(&f.game.join(rel), "a third-party dll");
+    }
+    let original = f.snapshot();
+    let game = f.game();
+    let wrapper = SessionLock::try_acquire(&f.data).unwrap().unwrap();
+    f.session(&game);
+    assert_eq!(f.read("dxgi.dll"), "a third-party dll");
+    drop(wrapper);
+
+    let lock = SessionLock::try_acquire(&f.data).unwrap().unwrap();
+    let r = recovery::recover(&lock, &f.data, &game, Scope::Sessions).unwrap();
+    assert!(r.problems.is_empty(), "{:?}", r.problems);
+    assert_eq!(f.snapshot(), original);
+    drop(lock);
+
+    let done = recovery::restore(&f.data, &game).unwrap();
+    assert_eq!(done.left, []);
+    assert!(done.set_aside.is_empty(), "{:?}", done.set_aside);
+    assert_eq!(f.snapshot(), original);
+}
+
+#[test]
 fn placed_paths_compare_like_the_game_folder() {
     let mut p = Placed::default();
     p.insert("Swofty\\Addons/core/x.dll", "ab".into(), false);
@@ -506,8 +538,9 @@ fn a_build_cancelled_mid_copy_leaves_the_game_folder_as_it_was() {
     let wrapper = SessionLock::try_acquire(&f.data).unwrap().unwrap();
     let seen = std::cell::RefCell::new(Vec::new());
     let progress = |done: usize, total: usize| {
+        let cached = seen.borrow().iter().any(|&(d, t)| d == t);
         seen.borrow_mut().push((done, total));
-        if done == 2 {
+        if done == 2 && cached {
             busy::request_cancel(&f.data).unwrap();
         }
     };
@@ -613,7 +646,7 @@ fn a_session_whose_game_folder_was_moved_is_rolled_back_where_its_files_are() {
 }
 
 #[test]
-fn a_moved_folder_whose_files_changed_keeps_the_undo_record() {
+fn a_moved_folder_whose_files_changed_rolls_back_only_what_is_ours() {
     let f = Fixture::new("moved-changed");
     let game = f.game();
     f.session(&game);
@@ -624,30 +657,34 @@ fn a_moved_folder_whose_files_changed_keeps_the_undo_record() {
     std::fs::remove_file(moved.dir.join(format!("{LAUNCHER}.bak"))).unwrap();
 
     let lock = SessionLock::try_acquire(&f.data).unwrap().unwrap();
-    let err = recovery::recover(&lock, &f.data, &moved, Scope::Sessions)
-        .unwrap_err()
-        .to_string();
+    let r = recovery::recover(&lock, &f.data, &moved, Scope::Sessions).unwrap();
+    assert_eq!(r.journals.len(), 1);
+    assert_eq!(
+        r.journals[0].drift,
+        [Drift::Stranded(GVDB.into())],
+        "{:?}",
+        r.lines()
+    );
+    assert!(Journal::open(&f.data).unwrap().is_empty());
+    assert_eq!(
+        std::fs::read_to_string(moved.dir.join(GVDB)).unwrap(),
+        "db-from-elsewhere"
+    );
+    assert_eq!(std::fs::read_to_string(moved.dir.join(UI)).unwrap(), "ui-v1");
+    assert!(!moved.dir.join("version.dll").exists());
     assert!(
-        err.contains(&format!(
-            "undo record is for F1 25 in {}, which is gone",
-            f.game.display()
-        )),
-        "{err}"
+        r.lines().iter().any(|l| l
+            == &format!("{GVDB} is not what the earlier session wrote in the old game folder nor its original; left in place")),
+        "{:?}",
+        r.lines()
     );
     assert!(
-        err.ends_with(&format!(
-            "Move the F1 25 folder back to {} and try again",
-            f.game.display()
-        )),
-        "{err}"
+        r.problems
+            .iter()
+            .any(|p| p.contains("doesn't hold the files it placed")),
+        "{:?}",
+        r.problems
     );
-    assert_eq!(Journal::open(&f.data).unwrap().len(), 1);
-    assert_eq!(std::fs::read_to_string(moved.dir.join(UI)).unwrap(), "ui-modded");
-
-    let offline = recovery::relocate_offline(&f.data, &moved.dir)
-        .unwrap_err()
-        .to_string();
-    assert!(offline.contains("doesn't hold the files it placed"), "{offline}");
     assert!(swofty_core::offline::journal_path(&f.data).exists());
     drop(lock);
     let restore = recovery::restore(&f.data, &moved).unwrap_err().to_string();
@@ -705,4 +742,55 @@ fn a_record_for_a_folder_that_is_gone_closes_on_a_copy_without_its_files() {
         "{:?}",
         r.problems
     );
+}
+
+/// A PC that stops mid-session can leave the offline play journal zero-filled.
+/// Play's recovery and Restore game folder both still put the folder back.
+#[test]
+fn a_zero_filled_offline_journal_never_stops_recovery_or_restore() {
+    for restore in [false, true] {
+        let f = Fixture::new(if restore {
+            "zeroed-restore"
+        } else {
+            "zeroed-recover"
+        });
+        let original = f.snapshot();
+        let game = f.game();
+        f.session(&game);
+        f.play();
+        let journal = swofty_core::offline::journal_path(&f.data);
+        let len = std::fs::metadata(&journal).unwrap().len() as usize;
+        std::fs::write(&journal, vec![0; len]).unwrap();
+
+        if restore {
+            let done = recovery::restore(&f.data, &game).unwrap();
+            assert!(done.left.is_empty(), "{:?}", done.left);
+            assert!(
+                done.notes
+                    .iter()
+                    .any(|n| n.starts_with("skipped 1 unfinished line(s)")),
+                "{:?}",
+                done.notes
+            );
+        } else {
+            let lock = SessionLock::try_acquire(&f.data).unwrap().unwrap();
+            let r = recovery::recover(&lock, &f.data, &game, Scope::Sessions).unwrap();
+            assert!(r.problems.is_empty(), "{:?}", r.problems);
+            assert!(r.offline);
+            assert!(
+                r.lines().iter().any(|l| l.starts_with("restored EAAntiCheat")),
+                "{:?}",
+                r.lines()
+            );
+        }
+        assert!(!journal.exists());
+        assert_eq!(
+            std::fs::read_to_string(f.game.join(LAUNCHER)).unwrap(),
+            "anticheat"
+        );
+        assert!(!f.game.join(format!("{LAUNCHER}.bak")).exists());
+        let now = f.snapshot();
+        assert_eq!(now.get(LAUNCHER), original.get(LAUNCHER));
+        assert_eq!(now.get(GVDB), original.get(GVDB));
+    }
 }

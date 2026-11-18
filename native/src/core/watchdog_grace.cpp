@@ -1,3 +1,4 @@
+#include "load_stall_logic.hpp"
 #include "runtime.hpp"
 #include "watchdog_grace_logic.hpp"
 
@@ -21,9 +22,13 @@
 //
 // At site_Ne_WatchdogKillPath, reached only when the time since the last tick (r14d, ms) exceeds the max delay,
 // the hook continues at site_Ne_WatchdogKillSkip, the branch the game takes while the delay has not run out, when
-// a flow is in Entering (career.cpp reports every flow transition) and the silence is under 180 s. A stall with no
-// flow in Entering, or one past 180 s, reaches the game's kill unchanged. A kill with the shutdown flag set (dil, the
-// object's +0x120) is never held.
+// a flow is in Entering, or entered Updating within the last 5 minutes (career.cpp reports every flow transition),
+// and the silence is under 180 s. A stall with no such flow, or one past 180 s, reaches the game's kill unchanged and
+// the reason is logged once. A kill with the shutdown flag set (dil, the object's +0x120) is never held. The flow
+// table is read under its lock for up to 50 ms, then from a lock-free mirror of the newest Entering and Updating times.
+//
+// A held kill also asks the load-stall watchdog for a report of every thread's stack (load_stall.cpp), which runs on
+// that watchdog's own thread.
 //
 // SWOFTY_BOOT_WATCHDOG_GRACE=0 turns it off.
 
@@ -37,38 +42,87 @@ uintptr_t kill_skip = 0;
 bool offered = false, settled = false;
 std::mutex lock;
 wg::Flows flows;
+std::atomic<uint64_t> mirror_entering{0}, mirror_updating{0};
 std::atomic<uint32_t> last_bucket{~0u};
+std::atomic<uint32_t> last_elapsed{0};
+std::atomic<uint32_t> declined{0};
 std::atomic<uint64_t> held{0};
+
+constexpr int LOCK_TRIES = 50;
+
+void decline(wg::Verdict v, uint32_t elapsed, const wg::Judgement &j, uint8_t rdi)
+{
+    uint32_t bit = 1u << unsigned(v);
+    if (declined.fetch_or(bit) & bit)
+        return;
+    last_bucket.store(~0u);
+    switch (v) {
+    case wg::Verdict::Shutdown:
+        swofty::log("[core] boot watchdog grace declined: the game's shutdown flag is set (rdi low byte 0x%02x), the "
+                    "frame tick was silent %u ms",
+                    rdi, elapsed);
+        break;
+    case wg::Verdict::CapReached:
+        swofty::log("[core] boot watchdog grace declined: the frame tick was silent %u ms, past the %u ms cap", elapsed,
+                    wg::kCapMs);
+        break;
+    case wg::Verdict::TooOld:
+        swofty::log("[core] boot watchdog grace declined: the frame tick was silent %u ms and the newest flow in %s has "
+                    "been there %llu ms (limit %llu ms)",
+                    elapsed, j.state == 1 ? "Entering" : "Updating", static_cast<unsigned long long>(j.age),
+                    static_cast<unsigned long long>(j.state == 1 ? wg::kEnteringMaxMs : wg::kUpdatingMaxMs));
+        break;
+    default:
+        swofty::log("[core] boot watchdog grace declined: the frame tick was silent %u ms and no flow is in Entering "
+                    "(limit %llu ms) or Updating (limit %llu ms)",
+                    elapsed, static_cast<unsigned long long>(wg::kEnteringMaxMs),
+                    static_cast<unsigned long long>(wg::kUpdatingMaxMs));
+        break;
+    }
+}
 
 void kill_path(SwoftyContext *c)
 {
-    if (static_cast<uint8_t>(c->rdi))
-        return;
     uint32_t elapsed = static_cast<uint32_t>(c->r14);
+    if (elapsed < last_elapsed.exchange(elapsed))
+        declined.store(0);
+    uint8_t rdi = static_cast<uint8_t>(c->rdi);
     uint64_t now = GetTickCount64();
-    wg::Entering where;
-    bool allowed = false;
-    if (lock.try_lock()) {
-        if (const wg::Entering *e = flows.allows(elapsed, now)) {
-            where = *e;
-            allowed = true;
-        }
-        lock.unlock();
+    if (rdi) {
+        decline(wg::Verdict::Shutdown, elapsed, {}, rdi);
+        return;
     }
-    if (!allowed) {
-        if (last_bucket.exchange(~0u) != ~0u)
-            swofty::log("[core] boot watchdog grace over: the frame tick was silent %u ms (cap %u ms, flows in Entering: %s), "
-                        "the game's watchdog proceeds",
-                        elapsed, wg::kCapMs, elapsed > wg::kCapMs ? "cap reached" : "none");
+    wg::Judgement j;
+    wg::Entering where;
+    bool locked = false;
+    for (int i = 0; i < LOCK_TRIES && !(locked = lock.try_lock()); i++)
+        Sleep(1);
+    if (locked) {
+        j = flows.judge(elapsed, now);
+        if (const wg::Entering *e = flows.newest(now))
+            where = *e;
+        lock.unlock();
+    } else {
+        swofty::log("[core] boot watchdog grace: the flow table stayed busy for %d ms, reading the lock-free snapshot",
+                    LOCK_TRIES);
+        wg::Latest l;
+        l.entering = mirror_entering.load();
+        l.updating = mirror_updating.load();
+        j = wg::judge(elapsed, now, l);
+        std::snprintf(where.name, sizeof where.name, "(snapshot)");
+    }
+    if (j.verdict != wg::Verdict::Hold) {
+        decline(j.verdict, elapsed, j, rdi);
         return;
     }
     c->rip = kill_skip;
     held++;
+    runtime::load_stall_signal(runtime::load_stall::GameWatchdog, elapsed);
     uint32_t b = wg::bucket(elapsed);
     if (last_bucket.exchange(b) != b)
-        swofty::log("[core] boot watchdog grace: the frame tick has been silent %u ms with flow \"%s\" in Entering; the "
+        swofty::log("[core] boot watchdog grace: the frame tick has been silent %u ms with flow \"%s\" in %s; the "
                     "game's watchdog kill is held (up to %u ms)",
-                    elapsed, where.name, wg::kCapMs);
+                    elapsed, where.name, j.state == 1 ? "Entering" : "Updating", wg::kCapMs);
 }
 
 }
@@ -81,6 +135,9 @@ void watchdog_flow(uint32_t hash, uint32_t to, const char *name)
         return;
     std::lock_guard<std::mutex> g(lock);
     flows.flow(hash, to, GetTickCount64(), name);
+    wg::Latest l = flows.latest();
+    mirror_entering.store(l.entering);
+    mirror_updating.store(l.updating);
 }
 
 std::vector<CoreMixins> watchdog_grace_mixins()
@@ -113,7 +170,7 @@ void watchdog_grace_commit()
     settled = true;
     swofty::log("[core] boot watchdog grace %s",
                 core_mixins_active(MIXIN)
-                    ? "armed: the game's watchdog kill is held for up to 180 s while a flow is in Entering"
+                    ? "armed: the game's watchdog kill is held for up to 180 s while a flow is in Entering or recently Updating"
                     : "did not install (see the [core] lines)");
 }
 

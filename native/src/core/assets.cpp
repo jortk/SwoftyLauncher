@@ -12,8 +12,10 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
+#include "asset_template_logic.hpp"
 #include "json.hpp"
 #include "perf.hpp"
 #include "runtime.hpp"
@@ -80,6 +82,7 @@ struct Plan {
     const Entry *e;
     uint64_t hash = 0, flags = 0, dep_flags = 0;
     std::string tmpl;
+    std::vector<std::pair<std::string, uint64_t>> tmpl_erps;
     std::vector<ErpPlan> erps;
     std::vector<uint64_t> deps;
     uint32_t group_name_bits = 0x80000000u;
@@ -998,6 +1001,14 @@ void apply(uint8_t *m, const char *when, const runtime::Overlay *ov)
                 if (Slot *t = mf.groups.find(fnv(cand))) {
                     p.tmpl = cand;
                     p.flags = (t->value >> 32) & 0xff000000ull;
+                    uint32_t tstart = uint32_t(t->value), tcount = uint32_t(t->value >> 32) & 0xffffff;
+                    if (uint64_t(tstart) + tcount <= mf.array_count(M_ERPS))
+                        for (uint32_t i = 0; i < tcount; i++) {
+                            uint64_t th = mf.array<uint64_t>(M_ERPS)[tstart + i];
+                            std::string tn = norm(mf.name_of(th));
+                            if (!tn.empty())
+                                p.tmpl_erps.push_back({tn, th});
+                        }
                     if (Slot *ts = mf.names.find(fnv(cand)))
                         p.group_name_bits = uint32_t(ts->value) & 0xff000000u;
                     if (Slot *td = mf.deps_map.mask() ? mf.deps_map.find(fnv(cand)) : nullptr)
@@ -1035,6 +1046,28 @@ void apply(uint8_t *m, const char *when, const runtime::Overlay *ov)
                 break;
             }
             p.erps.push_back(ep);
+        }
+        if (p.ok && !p.tmpl_erps.empty()) {
+            std::vector<std::string> names;
+            for (auto &te : p.tmpl_erps)
+                names.push_back(te.first);
+            for (auto &add : runtime::asset_template::shared_from_template(e.group, p.tmpl, names, e.erps)) {
+                ErpPlan ep;
+                ep.path = add;
+                for (auto &te : p.tmpl_erps)
+                    if (te.first == add)
+                        ep.hash = te.second;
+                ep.named = true;
+                if (!file_size_routed(ep.path, &ep.size)) {
+                    swofty::log("[assets] %s: its template %s lists %s, which is not on disk; not added", e.group.c_str(),
+                                p.tmpl.c_str(), ep.path.c_str());
+                    continue;
+                }
+                swofty::log("[assets] %s: added %s from its template %s (the stock car's shared archive, which the "
+                            "group does not list)",
+                            e.group.c_str(), ep.path.c_str(), p.tmpl.c_str());
+                p.erps.push_back(ep);
+            }
         }
         for (auto &d : e.deps) {
             uint64_t dh = fnv(d);

@@ -81,15 +81,14 @@ Give your special livery a row in `customisation.custom_se_liveries.se_liveries`
       "from": "unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery[_metadata_=toro_rosso_miami_26]",
       "set": {
         "_metadata_": "toro_rosso_rm_alphatauri_2026",
-        "customisation_item": "toro_rosso_rm_alphatauri_2026",
-        "statId": "5280"
+        "customisation_item": "toro_rosso_rm_alphatauri_2026"
       }
     }
   ]
 }
 ```
 
-The first op copies the stock Miami 2026 livery row, giving your livery a new label, id and archive. The second copies Miami's unlock row and points it at your livery. Choose a `statId` that no other unlock row uses.
+The first op copies the stock Miami 2026 livery row, giving your livery a new label, id and archive. The second copies Miami's unlock row and points it at your livery. Leave `statId` out: an unlock row's `statId` must be unique in its unlock list, and the launcher gives the copy a free one and keeps it from build to build ([Unlock items](/reference/ops/database#unlock-items)). Don't pick one by hand. The highest stock id plus one is the next game update's: Steam build 26566308 gave 5280 to its own `toro_rosso_barcelona_26` row, and a `statId` that a stock row holds now moves to a free id with a warning.
 
 `add-row` copies every key of the source row, so the copies need no `fields` list. See [Add a row](./database#_3-add-a-row).
 
@@ -141,9 +140,10 @@ swofty addons enable rmdesigns.alphatauri-orlen-livery
 swofty build
 ```
 
-Check the build output for the `warn` message and one line per owned item:
+Check the build output for the `warn` message, the unlock row's `statId` and one line per owned item:
 
 ```text
+rmdesigns.alphatauri-orlen-livery: add-row unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery_22 (from unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery[_metadata_=toro_rosso_miami_26]): statId 10000 (the source's is 5274)
 items: rmdesigns.alphatauri-orlen-livery unlock row toro_rosso_rm_alphatauri_2026 (se_livery 22) is reported as owned, key 0xf01d03c7
 ```
 

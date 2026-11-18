@@ -1,6 +1,5 @@
 #include "runtime.hpp"
 
-#include "netplay_room.hpp"
 #include "room_cover.hpp"
 #include "room_cover_logic.hpp"
 
@@ -17,6 +16,7 @@ namespace {
 
 std::mutex lock;
 Cover cover;
+Kind kind = Kind::none;
 Progress progress;
 std::string subtitle = "Starting your session";
 std::atomic<bool> armed{false};
@@ -145,10 +145,17 @@ bool setup()
         text = read_file(swofty_root() + L"direct_start.json", size_t(1) << 16);
     else if (value[0] == '@')
         text = read_file(wide(value.c_str() + 1), size_t(1) << 16);
-    if (!request_is_room(value, text))
+    Kind k = request_kind(value, text);
+    if (k == Kind::none)
         return false;
     std::lock_guard<std::mutex> g(lock);
-    cover.arm();
+    kind = k;
+    if (k == Kind::session) {
+        json::Value v;
+        bool tt = json::parse(text, v) && v["mode"].str() == "time_trial";
+        subtitle = tt ? "Starting a Time Trial" : "Starting a Grand Prix session";
+    }
+    cover.arm(k == Kind::session ? SESSION_CAP_MS : CAP_MS);
     armed.store(true);
     return true;
 }
@@ -165,17 +172,21 @@ void paint(hud::Frame &f, uint64_t now)
     std::lock_guard<std::mutex> g(lock);
     if (now - polled_at >= 100) {
         polled_at = now;
-        auto sig = netplay_room::cover_signal();
-        last = sig == netplay_room::CoverSignal::failed  ? Signal::failed
-               : sig == netplay_room::CoverSignal::shown ? Signal::shown
-                                                         : Signal::waiting;
+        if (kind == Kind::session) {
+            int sig = direct_start_cover_signal();
+            last = sig < 0 ? Signal::failed : sig > 0 ? Signal::shown : Signal::waiting;
+        } else {
+            int sig = session_host_cover_signal();
+            last = sig < 0 ? Signal::failed : sig > 0 ? Signal::shown : Signal::waiting;
+        }
     }
     Event ev = Event::none;
     float alpha = cover.frame(now, last, &ev);
+    const char *what = kind == Kind::session ? "test session" : "room launch";
     if (ev == Event::went_up)
-        swofty::log("[cover] room launch cover up (%.0fx%.0f)", double(f.width), double(f.height));
+        swofty::log("[cover] %s cover up (%.0fx%.0f)", what, double(f.width), double(f.height));
     else if (ev == Event::came_off)
-        swofty::log("[cover] room launch cover off: %s", why_name(cover.why()));
+        swofty::log("[cover] %s cover off: %s", what, why_name(cover.why()));
     if (!cover.drawing()) {
         armed.store(false);
         return;

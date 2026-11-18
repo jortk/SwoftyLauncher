@@ -6,11 +6,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
+use swofty_i18n::{tr, trf};
 
+use crate::notices::{Notification, Notify};
+use crate::scale::px;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Disableable, Icon, WindowExt, h_flex, v_flex};
+use gpui_kit::component::{Disableable, Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use serde::Deserialize;
@@ -19,6 +21,7 @@ use swofty_core::app_control::Block;
 use crate::pages::GUTTER;
 use crate::shell::{Page, Shell};
 use crate::theme::{Palette, scrollbar_x};
+use crate::ui::Card;
 
 mod art {
     include!(concat!(env!("OUT_DIR"), "/tools_art.rs"));
@@ -184,16 +187,16 @@ impl Shell {
             Action::Get(url) => Button::new(id("get"))
                 .primary()
                 .icon(IconName::ExternalLink)
-                .label("Get")
+                .label(tr("Get"))
                 .on_click(move |_, _, cx| cx.open_url(&url)),
             Action::Go(page) => Button::new(id("open"))
                 .primary()
-                .label("Open")
+                .label(tr("Open"))
                 .on_click(cx.listener(move |this, _, _, cx| this.go(page, cx))),
             Action::TurnOn(addon) => Button::new(id("on"))
                 .primary()
                 .icon(IconName::Power)
-                .label("Turn on")
+                .label(tr("Turn on"))
                 .on_click(
                     cx.listener(move |this, _, window, cx| this.set_addon_enabled(&addon, true, window, cx)),
                 ),
@@ -201,25 +204,25 @@ impl Shell {
                 let name = tool.name.clone();
                 Button::new(id("run"))
                     .primary()
-                    .label("Open")
+                    .label(tr("Open"))
                     .on_click(move |_, window, cx| {
                         let mut command = std::process::Command::new(&path);
                         if let Some(dir) = path.parent() {
                             command.current_dir(dir);
                         }
                         match command.spawn() {
-                            Ok(_) => window.push_notification(
-                                Notification::info(format!("{name} opens in your browser")),
+                            Ok(_) => window.notify(
+                                Notification::info(trf!("{name} opens in your browser", name = name)),
                                 cx,
                             ),
                             Err(e) => {
                                 crate::app_log::action("start a tool").file(&path).failed(&e);
-                                window.push_notification(
+                                window.notify(
                                     match Block::of(&path, &e) {
                                         Some(b) => Notification::error(b.text()).autohide(false),
                                         None => Notification::error(e.to_string()),
                                     }
-                                    .title(format!("Could not start {name}")),
+                                    .title(trf!("Could not start {name}", name = name)),
                                     cx,
                                 )
                             }
@@ -277,14 +280,10 @@ impl Shell {
             .more
             .clone()
             .map(|l| web_link(format!("tool-{index}-more"), l.label, l.url, p));
-        v_flex()
+        Card::new()
             .w(px(width))
             .flex_shrink_0()
             .rounded(px(14.))
-            .border_1()
-            .border_color(p.border)
-            .bg(p.surface)
-            .overflow_hidden()
             .child(Self::tool_art(tool, width - 2., art, p))
             .child(
                 v_flex()
@@ -306,7 +305,7 @@ impl Shell {
                                 div()
                                     .text_size(px(13.))
                                     .text_color(p.text_placeholder)
-                                    .child(format!("by {}", tool.maker)),
+                                    .child(trf!("by {maker}", maker = tool.maker)),
                             ),
                     )
                     .child(
@@ -479,7 +478,7 @@ impl Shell {
             .size_full()
             .child(self.header(
                 Page::Tools.label(),
-                "Tools that make or edit Swofty addons".to_owned(),
+                tr("Tools that make or edit Swofty addons").to_owned(),
                 arrows,
                 p,
             ))
@@ -488,7 +487,7 @@ impl Shell {
                     div()
                         .px(px(GUTTER))
                         .text_color(p.text_muted)
-                        .child("No tools listed"),
+                        .child(tr("No tools listed")),
                 )
             })
             .child(
@@ -510,9 +509,7 @@ impl Shell {
                             .items_stretch()
                             .overflow_x_scroll()
                             .track_scroll(&self.tools.scroll)
-                            .on_scroll_wheel(
-                                cx.listener(|this, _: &ScrollWheelEvent, _, cx| this.tools_wheel(cx)),
-                            )
+                            .on_scroll(cx.listener(|this, _: &ScrollEvent, _, cx| this.tools_wheel(cx)))
                             .px(px(GUTTER))
                             .pt(px(4.))
                             .pb(px(BAR))

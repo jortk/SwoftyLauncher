@@ -5,15 +5,17 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::notices::{Notification, Notify};
+use crate::scale::{Hit, px};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Disableable, Sizable, WindowExt, h_flex, v_flex};
+use gpui_kit::component::{Disableable, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 use crate::pages::label;
-use crate::shell::Shell;
+use crate::shell::{PlayState, Shell};
 use crate::theme::Palette;
+use swofty_i18n::tr;
 
 #[derive(Default)]
 pub struct Developer {
@@ -30,7 +32,21 @@ pub const ACTIONS: &[(&str, &str)] = &[
 ];
 
 pub fn dev_args(verb: &str, folder: &std::path::Path) -> Vec<std::ffi::OsString> {
-    vec!["dev".into(), verb.into(), folder.into()]
+    vec!["dev".into(), verb.into(), "--".into(), folder.into()]
+}
+
+/// Why Run, which presses Play, can't start now: `None` only when the Play button would play.
+fn run_blocked(state: &PlayState) -> Option<&'static str> {
+    match state {
+        PlayState::Ready | PlayState::Crashed(_) => None,
+        PlayState::Running | PlayState::Elsewhere(_) => Some(tr("Close F1 25 before running it again")),
+        PlayState::Preparing | PlayState::Launching => Some(tr("F1 25 is launching")),
+        PlayState::Restoring => Some(tr("Restoring the game files…")),
+        PlayState::Building => Some(tr("Wait for the build to finish")),
+        PlayState::NotInstalled => Some(tr("Install it with Steam or the EA app, or locate its folder")),
+        PlayState::Detecting => Some(tr("Detecting F1 25…")),
+        PlayState::Checking => Some(tr("Checking conflicts…")),
+    }
 }
 
 impl Shell {
@@ -39,8 +55,9 @@ impl Shell {
         config.developer = on;
         if let Err(e) = self.store.save_config(&config) {
             crate::app_log::action("save settings").failed(&e);
-            window.push_notification(Notification::error(e.to_string()), cx);
+            window.notify(Notification::error(e.to_string()), cx);
         }
+        self.developer_mode = config.developer;
         cx.notify();
     }
 
@@ -70,7 +87,7 @@ impl Shell {
             return;
         };
         let Some(cli) = crate::game::cli_path(&self.store) else {
-            window.push_notification(Notification::error("The swofty command isn't installed"), cx);
+            window.notify(Notification::error(tr("The swofty command isn't installed")), cx);
             return;
         };
         self.developer.running = Some(verb);
@@ -109,11 +126,12 @@ impl Shell {
     }
 
     pub(crate) fn developer_section(&mut self, p: Palette, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.store.config().developer {
+        if !self.developer_mode {
             return None;
         }
         let running = self.developer.running;
         let has_folder = self.developer.folder.is_some();
+        let blocked = run_blocked(&self.play_state()).or(self.mp_starting_label());
         let folder = self
             .developer
             .folder
@@ -123,9 +141,9 @@ impl Shell {
         let mut buttons = h_flex().gap(px(8.)).child(
             Button::new("dev-link")
                 .outline()
-                .small()
+                .tap_sm()
                 .label(if has_folder {
-                    "Link another folder…"
+                    tr("Link another folder…")
                 } else {
                     "Link a folder…"
                 })
@@ -136,7 +154,7 @@ impl Shell {
             buttons = buttons.child(
                 Button::new(SharedString::from(format!("dev-{verb}")))
                     .outline()
-                    .small()
+                    .tap_sm()
                     .label(if running == Some(*verb) {
                         format!("{title}…")
                     } else {
@@ -149,9 +167,10 @@ impl Shell {
         buttons = buttons.child(
             Button::new("dev-run")
                 .primary()
-                .small()
+                .tap_sm()
                 .label("Run")
-                .disabled(!has_folder || running.is_some())
+                .when_some(blocked, |b, why| b.tooltip(why))
+                .disabled(!has_folder || running.is_some() || blocked.is_some())
                 .on_click(cx.listener(|this, _, window, cx| this.play(window, cx))),
         );
         let output = self.developer.output.clone().map(|(text, ok)| {
@@ -191,17 +210,41 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
-    use super::{ACTIONS, dev_args};
+    use super::{ACTIONS, dev_args, run_blocked};
+    use crate::game::Owner;
+    use crate::shell::PlayState;
 
     #[test]
     fn actions_run_the_cli_dev_commands() {
         assert_eq!(
             dev_args("check", std::path::Path::new("/work/mod.esp")),
-            ["dev", "check", "/work/mod.esp"]
+            ["dev", "check", "--", "/work/mod.esp"]
+        );
+        assert_eq!(
+            dev_args("link", std::path::Path::new("-mods/x")),
+            ["dev", "link", "--", "-mods/x"]
         );
         assert_eq!(
             ACTIONS.iter().map(|a| a.0).collect::<Vec<_>>(),
             ["check", "test", "pack", "logs"]
         );
+    }
+
+    #[test]
+    fn run_waits_for_the_game_like_play_does() {
+        assert_eq!(run_blocked(&PlayState::Ready), None);
+        for state in [
+            PlayState::Running,
+            PlayState::Elsewhere(Owner::Unknown),
+            PlayState::Preparing,
+            PlayState::Launching,
+            PlayState::Restoring,
+            PlayState::Building,
+            PlayState::NotInstalled,
+            PlayState::Detecting,
+            PlayState::Checking,
+        ] {
+            assert!(run_blocked(&state).is_some());
+        }
     }
 }

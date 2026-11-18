@@ -1,0 +1,36 @@
+{
+  "id": "stream_encoder",
+  "name": "Stream Encoder",
+  "description": "An approximation of a compressed video stream: macroblock averaging and a smear towards the last frame that grow where the picture moves, banding in smooth gradients and chroma at half resolution.",
+  "params": [
+    { "id": "strength", "type": "float", "default": 0, "min": 0, "max": 1, "step": 0.01,
+      "label": "Strength", "doc": "How much of the encoder's damage is applied; 0 leaves the picture as it is." },
+    { "id": "blocking", "type": "float", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
+      "label": "Blocking", "doc": "How strongly the picture is averaged within macroblocks; it grows with the motion in each block." },
+    { "id": "block_size", "type": "enum", "values": ["8x8", "16x16"], "default": "8x8",
+      "label": "Block size", "doc": "The size of a macroblock in screen pixels." },
+    { "id": "banding", "type": "float", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
+      "label": "Banding", "doc": "How coarsely smooth gradients, such as sky, are quantised into visible steps." },
+    { "id": "smear", "type": "float", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
+      "label": "Motion smear", "doc": "How far moving areas blend towards the last frame." },
+    { "id": "motion_sensitivity", "type": "float", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
+      "label": "Motion sensitivity", "doc": "How little change between frames counts as motion for the blocking and the smear." },
+    { "id": "chroma", "type": "bool", "default": true,
+      "label": "Chroma subsampling", "doc": "Keeps colour at half the picture's resolution, as 4:2:0 video does." }
+  ],
+  "textures": [
+    { "name": "cur", "scale": 0.5, "format": "rgba16f", "mips": 5 },
+    { "name": "prev", "scale": 0.5, "format": "rgba16f", "persistent": true },
+    { "name": "dif", "scale": 0.5, "format": "rgba16f", "mips": 5 },
+    { "name": "mnext", "scale": 0.125, "format": "rgba16f" },
+    { "name": "mstate", "scale": 0.125, "format": "rgba16f", "persistent": true }
+  ],
+  "passes": [
+    { "name": "half", "shader": "stream_encoder.hlsl", "entry": "half_res", "output": "cur", "budget_ms": 0.15 },
+    { "name": "diff", "shader": "stream_encoder.hlsl", "entry": "diff", "inputs": ["cur", "prev"], "output": "dif", "budget_ms": 0.1 },
+    { "name": "keep", "shader": "stream_encoder.hlsl", "entry": "keep", "inputs": ["cur"], "output": "prev", "budget_ms": 0.05 },
+    { "name": "motion", "shader": "stream_encoder.hlsl", "entry": "motion", "inputs": ["dif", "mstate"], "output": "mnext", "budget_ms": 0.05 },
+    { "name": "motion-keep", "shader": "stream_encoder.hlsl", "entry": "motion_keep", "inputs": ["mnext"], "output": "mstate", "budget_ms": 0.05 },
+    { "name": "encode", "shader": "stream_encoder.hlsl", "entry": "encode", "inputs": ["cur", "mstate", "previous"], "budget_ms": 0.3 }
+  ]
+}

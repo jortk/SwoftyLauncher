@@ -64,6 +64,8 @@ swofty-launcher: saves: copied the Steam save (2 file(s), 961752 bytes, ...) int
 
 The launcher shows one dialog about the import when `profiles` isn't empty and `seen` is `false`, then writes `"seen": true`. `launcher_saves::notice_due` and `launcher_saves::mark_seen` are the two calls.
 
+The Steam save is found under the Steam install's `userdata`, not the game's library: a library on another drive holds `steamapps/common` and no `userdata`. The Steam folder comes from the library's owner in `libraryfolders.vdf`, the default folders, the registry (`SteamPath`, `SteamExe`, `InstallPath`), a running steam.exe, and last the usual Steam folders on every drive. The account is `ActiveUser`, then the `MostRecent` account in `loginusers.vdf`, then the others, and a folder with save files wins over an empty one. When no Steam save is found, the launcher logs every folder it tried and why it was rejected once per start, retries quietly, and profiles play on Steam's saves until an import finds one. The Saves page says so and offers `Play with your Steam saves`, `Import from Steam` and a folder picker.
+
 When F1 25 is running at that start, the launcher logs that the import waits and tries again at the next start. A profile created later, or one whose store is empty at Play, gets the same copy at its first Play. The Steam save is only read.
 
 ### Import and export
@@ -124,13 +126,27 @@ The session sets `SWOFTY_LAUNCHER_SAVES=off` for the game. To stay on Steam's sa
 
 ### The EA app copy
 
-The core's launcher saves serve Steam's remote storage only. The EA app copy keeps its own saves, and the loader log says so:
+The EA app copy's save device reads and writes plain files under `<title folder>\<save>\<file>`. With **Use launcher saves** on, the core points that device at `$DATA/saves/<profile>/ea`, so the profile save is `$DATA/saves/<profile>/ea/profile/`, and the copy's own `%LOCALAPPDATA%\F1 25\savegame\ea` folder is not opened. The first session copies the copy's profile save into an empty store.
 
 ```text
-[saves] launcher saves are off: launcher saves are not available on the EA copy yet; this session uses the EA copy's own saves
+[saves] launcher saves armed (profile main): the EA save device's title folder C:\users\steamuser\AppData\Local\F1 25\savegame\ea is replaced by Z:\...\saves\main\ea; saves are read and written there; the EA copy's own savegame folder is not opened
 ```
 
-The launcher's store keeps a second layout for the EA app copy, `$DATA/saves/<profile>/ea/profile/`, that stays off until the core can serve it.
+If the save device is not the expected one, the session ends with exit code 93 before the game loads a save, as on Steam.
+
+## Save diagnostics
+
+Every session logs where the game's saves come from, also with launcher saves off. Every profile load logs the source, the save file and each career slot the game read:
+
+```text
+[saves] launcher saves are off for profile main: the game reads Steam's saves natively
+[saves] profile load 1: read from Steam native; save file not observed (Steam reads it natively)
+[saves] profile load 1: manager 0 (vtable +0x5a1c3e0): 2 slot(s)
+[saves] profile load 1: manager 0 slot 0: gm_driver_career id=3 key=0000000000abcdef career=dc-000b0000 flags=0x00 setup=2 season=3 weekend=5 date=1761912000 name="Run"
+[saves] profile load 1: container swofty_registry: 912 bytes (no loaded game mode claims it)
+```
+
+Send Logs lists these lines in the `Saves` section of summary.txt.
 
 ## Career vault
 
@@ -291,6 +307,37 @@ $ swofty saves versions
 
 `swofty saves pin <snapshot>` adds the pin `pinned`; `unpin` removes only that pin. Pins from a backup, a restore or a missing career stay.
 
+### Addon careers on the Steam save
+
+A profile with **Use launcher saves** off keeps its careers in the Steam save. An F1 25 started from Steam without the launcher runs without the profile's addons and drops the career containers no loaded game mode claims (`gm_driver_career_progressive`) when it saves; Steam Cloud then uploads that save. The profile save is encrypted, so the launcher reads the signs in the vault instead of the containers.
+
+```rust
+// packages/core/src/vault/guard.rs
+let loss = vault.probable_loss();   // Option<Loss { snapshot, at, careers, .. }>
+```
+
+`probable_loss` returns the addon careers (`careers::is_addon`: the career lists addons, or its mode is not Driver Career or My Team) of the newest `after-session`, `before-session` or `restored` snapshot when all of these hold:
+
+- the career index stored with that snapshot lists them;
+- a `changed-outside` or `foreign-exit` snapshot is newer than every launcher snapshot or unchanged check;
+- the newest snapshot is smaller than that version;
+- the careers table does not already call them missing, and the player has not dismissed it for that version.
+
+The launcher checks at its start and when F1 25 closes outside it. The Saves page and the Addons page show the careers, the date of that version and **Restore**; the play bar shows the same line with **Restore** and **Open Career saves**. Restore is `vault::restore::restore` of that snapshot, which keeps the save it replaces as `before-restore`. A session the launcher starts afterwards clears the notice, and the career index decides from then on (`missing-since:` above).
+
+Every launcher session on the Steam save writes `before-session` and `after-session` snapshots to the Steam vault (`steam-<id3>`), whatever the profile's launcher saves setting:
+
+```text
+$ swofty saves versions
+20261101-231502-after-session  after Play, profile progressive, 0.9 MB, Steam Cloud: synced, 2 career(s)
+```
+
+With launcher saves off and an addon career in the index, the Saves page shows a warning, and **Use launcher saves** when the profile's launcher store is empty:
+
+```rust
+guard::steam_save_warning(vanilla, profile.launcher_saves, &careers::addon_careers(&index, Some("progressive")))
+```
+
 ### Steam Cloud status
 
 The status compares each file's SHA-1 with the `sha` Steam recorded in `userdata/<steamid3>/3059520/remotecache.vdf`:
@@ -316,6 +363,37 @@ When the save is also at least 24 KB smaller, the [Saves](/using/career-saves) p
 ```
 
 A save that got 24 KB smaller in a launcher session that left out an addon with `saves.affects` gets the same kind of notice. Size alone doesn't show that a career is gone: ordinary play moves the file by more than that, and the notice only says which version the vault kept.
+
+### A save that stalls at load
+
+A profile save last played with addon content that is off now (a career, livery or item from an addon the profile or Vanilla leaves out) can keep F1 25 on Loading... after Press any button: the spinner turns and team radio plays, and the main menu never comes. It does the same from Steam or the EA app without the launcher, through Verify and reinstalls, because the save is the cause.
+
+The save is encrypted, so the launcher learns such a save from its sessions. A session stalled on the save when the core logged a profile load and perf.log ends on `screen splash_transition` for 120 s or more (99 in 100 menu loads take under 82 s), with no addon known to stall the boot on. Two such sessions on the same save, or one of 15 minutes, make it a stalling save, keyed by the SHA-256 of `savegame@profile#NXDSMWW.BWW` from the session's `before-session` snapshot. A save that any session got past the boot screens with, or that the game wrote during the session, never counts. `$DATA/state/stalled-saves.json` keeps what was learned and moved:
+
+```json
+{
+  "saves": [
+    { "sha256": "9f1c…", "size": 932920, "sessions": ["20261104-023037", "20261104-023146"], "secs": 162, "profile": "colorgrading-testing", "found_at": 1793770000 }
+  ],
+  "moved": [
+    { "source": "launcher-colorgrading-testing", "sha256": "9f1c…", "kept": "20261104-023003-imported-profile", "restored": "20261101-123709-after-session", "at": 1793770000 }
+  ]
+}
+```
+
+At launcher start and before every Play, `save_stall::sweep` looks at every profile's launcher saves and the Steam or EA app save of the copy Play uses. A stalling save goes into the career vault pinned `stalled-at-load`, and the newest snapshot that isn't a stalling save goes back in its place: the folder's own vault first, then the Steam (or EA) vault for a launcher store. With no such snapshot, a launcher store or EA save is left empty, so F1 25 starts a new profile save; a Steam save stays, since Steam Cloud would download it again. A Steam save waits until Steam is closed, an EA save until the EA app is. Each move is one line:
+
+```text
+saves: the profile save in C:\Users\you\AppData\Local\Swofty\saves\colorgrading-testing\remote kept F1 25 on Loading... after Press any button; the career vault keeps it as snapshot 20261104-023003-imported-profile and the version from 2026-11-01 12:37 UTC (20261101-123709-after-session) is back in its place
+```
+
+A save moved out of a folder is not moved out of it again, so restoring it with `swofty saves restore <snapshot> --source <source>` once its addons are back sticks. Import, Copy careers to… and Export to Steam refuse a stalling save:
+
+```text
+swofty: the profile save in /home/you/.local/share/Steam/userdata/843502855/3059520/remote kept F1 25 on Loading... after Press any button, so the launcher does not copy it; the career vault keeps it to restore once the addons it was saved with are back
+```
+
+A session that read the profile save and then sat on the start screen for 120 s or more shows the known problem `stalled_save` (**F1 25 stayed on the loading screen after reading your save**) in the crash window.
 
 ### Back up and restore
 

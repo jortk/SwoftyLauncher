@@ -7,6 +7,8 @@ description: The blocks a launcher plugin builds a page from - stats, facts, tex
 
 A block is one piece of a page; a `blocks` body, a row's `detail`, a `card` and a `grid` each hold a list of them.
 
+From 1.9.55 a data-only [`chart`](./charts) block is also available. Check for the `view.chart` capability in `hello.params.capabilities` before using it.
+
 ## A dashboard in full
 
 *Launcher 1.0.10.* A team page with a hero, tiles, and two cards side by side:

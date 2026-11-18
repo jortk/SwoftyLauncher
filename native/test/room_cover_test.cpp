@@ -69,7 +69,7 @@ int main()
         c.frame(10, rc::Signal::waiting, &ev);
         expect(c.frame(10 + rc::CAP_MS - 1, rc::Signal::waiting, &ev) == 1 && ev == rc::Event::none, "the cap does not trip early");
         float a = c.frame(10 + rc::CAP_MS, rc::Signal::waiting, &ev);
-        expect(ev == rc::Event::came_off && c.why() == rc::Why::timeout && a == 1, "60 s after the first frame it comes off, reason timeout");
+        expect(ev == rc::Event::came_off && c.why() == rc::Why::timeout && a == 1, "150 s after the first frame it comes off, reason timeout");
         expect(c.frame(10 + rc::CAP_MS + rc::FADE_MS, rc::Signal::waiting, &ev) == 0 && !c.drawing(), "after a fade");
     }
     {
@@ -144,6 +144,19 @@ int main()
     expect(rc::request_is_room("@x.json", "{\"target\":\"room\"}"), "an @file value reads the file's target");
     expect(!rc::request_is_room("", ""), "no request is not");
     expect(!rc::request_is_room("", "not json"), "an unparsable file is not");
+    expect(rc::request_kind("session", "") == rc::Kind::session, "SWOFTY_DIRECT_START=session is a session start");
+    expect(rc::request_kind("", "{\"target\":\"session\",\"mode\":\"grand_prix\"}") == rc::Kind::session,
+           "direct_start.json with target session is a session start");
+    expect(rc::request_kind("", "{\"target\":\"menu\"}") == rc::Kind::none, "an unknown target is no cover");
+    {
+        rc::Cover c;
+        c.arm(rc::SESSION_CAP_MS);
+        c.frame(10, rc::Signal::waiting, &ev);
+        expect(c.frame(10 + rc::CAP_MS, rc::Signal::waiting, &ev) == 1 && ev == rc::Event::none,
+               "a session's cover outlasts the room cap");
+        float a = c.frame(10 + rc::SESSION_CAP_MS, rc::Signal::waiting, &ev);
+        expect(ev == rc::Event::came_off && c.why() == rc::Why::timeout && a == 1, "and comes off at its own cap");
+    }
     std::printf(failed ? "room cover test: FAILED\n" : "room cover test: ALL PASSED\n");
     return failed ? 1 : 0;
 }

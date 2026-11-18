@@ -15,8 +15,6 @@ Run your build commands from the repository root. For current progress and what'
 | `native/` | In-game loader |
 | `addons/builtins` | The built-in addons compiled into the launcher |
 | `addons/swoftymod` | Built-in addon |
-| `addons/custom-grid-size` | Custom Grid Size addon |
-| `addons/rnd-tyres-thermal` | R&D: Tyres & Thermal Management addon (source only) |
 | `templates/addon` | Sample data addon with an engine plugin (MIT) |
 | `templates/shader-pack` | Sample shader pack with three looks (MIT) |
 | `templates/launcher-addon` | Sample launcher plugin (MIT) |
@@ -39,9 +37,32 @@ cargo fmt --all --check
 cargo build -p swofty-launcher
 ```
 
+## Release downloads
+
+`.github/workflows/release.yml` publishes the GitHub release, then runs `tools/release/cdn-publish.sh`, which needs the repository secrets `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT` and `R2_BUCKET` and skips with a warning when they are missing. It uploads the archives and `SHA256SUMS` to `launcher/<tag>/` in the `swoftylauncher` bucket, downloads each back from cdn.swofty.net to check its SHA-256, copies the installers to `launcher/latest/`, and writes `launcher/latest.json` last:
+
+```json
+{
+  "schema": 1,
+  "version": "1.8.29",
+  "tag": "v1.8.29",
+  "published_at": "2026-11-08T09:16:53Z",
+  "notes_url": "https://github.com/Swofty-Developments/SwoftyLauncher/releases/tag/v1.8.29",
+  "assets": [
+    { "name": "swofty-launcher-v1.8.29-linux-x86_64.tar.gz", "url": "https://cdn.swofty.net/launcher/v1.8.29/swofty-launcher-v1.8.29-linux-x86_64.tar.gz", "size": 86573884, "sha256": "2594…" }
+  ]
+}
+```
+
+Versioned files are immutable; `latest.json` and `launcher/latest/` are cached for a minute and five minutes. A pre-release tag uploads its files and leaves `latest.json` alone. `cargo test -p swofty-core --lib live_cdn -- --ignored` fetches the live manifest and downloads and verifies the asset for this platform.
+
 ## Test updates
 
-In a debug build, `SWOFTY_TEST_GITHUB=http://127.0.0.1:<port>` sends the launcher's and `swofty update`'s GitHub requests to a local server instead: `https://github.com/<path>` and `https://api.github.com/<path>` both become `<server>/<path>`. Release builds ignore it. Combine it with `SWOFTY_UPDATE_PRETEND_VERSION` and a `SWOFTY_DATA_DIR` of your own to run an update end to end.
+In a debug build, `SWOFTY_TEST_GITHUB=http://127.0.0.1:<port>` sends the launcher's and `swofty update`'s GitHub requests to a local server instead: `https://github.com/<path>` and `https://api.github.com/<path>` both become `<server>/<path>`. `https://cdn.swofty.net/<path>` becomes `<server>/cdn/<path>`, so a server with no `/cdn/launcher/latest.json` makes the launcher use its GitHub routes. Release builds ignore it. Combine it with `SWOFTY_UPDATE_PRETEND_VERSION` and a `SWOFTY_DATA_DIR` of your own to run an update end to end.
+
+## Isolate Steam discovery
+
+For tests or sandboxed runs, set `SWOFTY_STEAM_ROOT_ONLY` to a Steam root to restrict Steam and save discovery to that folder. Unlike `SWOFTY_STEAM_ROOT`, this disables fallback to registered installations, default locations and drive scans. A missing or invalid root produces no Steam roots; it does not fall back to the host.
 
 ## Test with game files
 

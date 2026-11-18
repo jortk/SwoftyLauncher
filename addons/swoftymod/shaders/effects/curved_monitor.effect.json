@@ -1,0 +1,24 @@
+{
+  "id": "curved_monitor",
+  "name": "Curved Monitor",
+  "description": "Redraws the picture so it looks flat to a viewer sitting in front of a curved monitor. The monitor is a cylinder of the given radius, as wide as its height times the picture's aspect ratio.",
+  "params": [
+    { "id": "monitor_curvature", "type": "float", "default": 1500, "min": 300, "max": 6000, "step": 10,
+      "label": "Curvature radius (mm)", "doc": "The radius of the monitor's curve in millimetres; a 1500R monitor is 1500." },
+    { "id": "view_distance", "type": "float", "default": 70, "min": 20, "max": 200, "step": 1,
+      "label": "Viewing distance (cm)", "doc": "How far the viewer's eyes are from the middle of the screen." },
+    { "id": "monitor_height", "type": "float", "default": 34, "min": 10, "max": 80, "step": 0.5,
+      "label": "Screen height (cm)", "doc": "The height of the visible screen; the width follows from the picture's aspect ratio." },
+    { "id": "border_zoom", "type": "float", "default": 1, "min": 0.5, "max": 1.5, "step": 0.01,
+      "label": "Border zoom", "doc": "Zooms the corrected picture out below 1 and in above 1, to show or hide the borders." },
+    { "id": "mirror_border", "type": "bool", "default": true,
+      "label": "Mirror border", "doc": "Fills the border with a mirrored copy of the picture instead of a colour." },
+    { "id": "border_color", "type": "color4", "default": [0.027, 0.027, 0.027, 0.96], "min": 0, "max": 1,
+      "label": "Border colour", "doc": "The colour and opacity of the border." },
+    { "id": "background_dim", "type": "float", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
+      "label": "Background dim", "doc": "How much the border is darkened." }
+  ],
+  "passes": [
+    { "name": "curved_monitor", "shader": "curved_monitor.hlsl", "entry": "effect" }
+  ]
+}

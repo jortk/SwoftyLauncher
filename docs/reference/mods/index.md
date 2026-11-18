@@ -64,13 +64,13 @@ A single `.erp` file isn't a mod on its own: put it at its game path, such as `F
 
 ## How mods load
 
-Since importer 0.7.0, each mod converts once into a standalone addon, `mod.<mod id>`, in `$DATA/addons/`:
+Since importer 0.7.0, each mod converts once into a standalone addon in `$DATA/addons/`. The importer asks for `mod.<mod id>`, and the launcher installs it as `<author>.<mod id>` for a track whose package names an author, else as `imported-mod.<mod id>` ([The addon's id](./tracks#the-addon-s-id)):
 
 ```text
 import    unpack the file, find the content root, store it in the library
           $DATA/addon-data/teamsimplified.mods/library/<mod id>/
 compare   each file against the clean game files of the installed build
-convert   write swofty.json and the ops/ files into a new addon, mod.<mod id>
+convert   write swofty.json and the ops/ files into a new addon
 install   install the addon, turn it on in the active profile, then delete the library copy
 build     the addon's ops apply at its place in the load order, like any addon's
 ```

@@ -59,7 +59,7 @@ struct Vehicle {                                   // one entrants.vehicles row
     Class performance_class = Class::f1;           // performance_class
     int performance_tier = 0;                      // performance_tier
     float tyre_wear_scale = 1.0f;                  // tyre_wear_scale
-    StatId stat_id = StatId::automatic;            // vehicle ids run to 1,023
+    StatId stat_id = StatId::automatic;            // vehicle ids run to 16,382
 };
 
 struct WingDamage {                                // F1WingDamage, read on every front wing impact
@@ -401,7 +401,7 @@ SWOFTY_REGISTER
 </Split>
 
 ```text
-[registry] stat ids: vehicle swofty.classic-seasons-2017/ferrari -> 515 (pool to 1023)
+[registry] stat ids: vehicle swofty.classic-seasons-2017/ferrari -> 515 (pool to 16382)
 [registry] vehicle.package swofty.classic-seasons-2017/cs_2017_ferrari: setup presets from game/f1_2025 (1 row, 421 keys)
 [registry] vehicle.handling swofty.classic-seasons-2017/ferrari: selector from someone.realism-pack skipped /f1_aero
            (protected by swofty.classic-seasons-2017; "Also change year packs" is off)
@@ -497,7 +497,7 @@ cars::reset_upgrades(car);                                        // Car_Reset_L
 - **Handling records are stored, not applied.** The 1.6.0 core keeps `vehicle.handling` records and layers and logs `[registry] vehicle.handling: N record(s); this core applies nothing from it`. The game parses a handling file once, then reads each car's parts from it when the car is built, at every session load, and again when it rebuilds a car; the core that applies layers at that read ships later.
 - **Damage models and parts records** (`vehicle.damage_model`, `vehicle.parts`) are described in the design and have no registry in the 1.6.0 headers.
 - **Live physics values are XOR-obfuscated.** `car.vtf.read` and `cars::live` hand you the value in clear, and the core encodes your writes.
-- **`cars::live`: experimental, untested in game.** `cars()`, `is_ai()` and `get`/`set`/`scale` on 29 fields (steering lock, clutch torque, differential, turbo boost, fuel mass, rev limiter, final drive and gear ratios, front wing and suspension damage) go through the core's `SwoftyCoreCarOps`, on the KB build only (see [Changing a car live](/std/systems/car-physics#changing-a-car-live)). `car.built` and `car.reset` fire for every car the game builds or re-reads, on the next frame. On any other build of the game the core's `same_build()` check turns `cars::live` off until the KB is re-derived for that build. The car's vehicle, team and driver ship later.
+- **`cars::live`: experimental, untested in game.** `cars()`, `is_ai()` and `get`/`set`/`scale` on 29 fields (steering lock, clutch torque, differential, turbo boost, fuel mass, rev limiter, final drive and gear ratios, front wing and suspension damage) go through the core's `SwoftyCoreCarOps`, on Steam 1.0.141, Steam 1.0.145.2472 and the EA app's 1.0.145 (see [Changing a car live](/std/systems/car-physics#changing-a-car-live)). `car.built` and `car.reset` fire for every car the game builds or re-reads, on the next frame. On any other build of the game `cars::live` is off. The car's vehicle, team and driver ship later.
 - **Unknown:** who sets the per-car damage switches (CarLive +0x130), the tyre temperature model, and compound switching.
 - **Setup presets are side data,** found by package folder. The core writes the row with the package. A missing row grounds the AI's setups, and a `_metadata_`-only row crashes session load.
 - **AI data** is found by `ai_package_folder/asset_filename`. `AiSlot` maps an added car onto a stock slot.

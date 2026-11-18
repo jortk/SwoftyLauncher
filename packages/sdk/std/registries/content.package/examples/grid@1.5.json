@@ -1,0 +1,47 @@
+{
+  "content.package": {
+    "f1_1990": {
+      "entrant_list": "f1_1990",
+      "season": 1990,
+      "rules": {
+        "grid": {
+          "qualifying": "best_of",
+          "rows": null,
+          "rule_107": false
+        }
+      }
+    },
+    "f1_2000": {
+      "entrant_list": "f1_2000",
+      "season": 2000,
+      "rules": {
+        "grid": {
+          "qualifying": "best_lap",
+          "rule_107": true
+        }
+      }
+    },
+    "f1_2005": {
+      "entrant_list": "f1_2005",
+      "season": 2005,
+      "rules": {
+        "grid": {
+          "qualifying": "aggregate"
+        }
+      }
+    },
+    "f1_1955": {
+      "entrant_list": "f1_1955",
+      "season": 1955,
+      "rules": {
+        "grid": {
+          "qualifying": "best_of",
+          "rows": [
+            3,
+            2
+          ]
+        }
+      }
+    }
+  }
+}

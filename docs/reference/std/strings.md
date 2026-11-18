@@ -106,7 +106,7 @@ lg::set("lng_my_addon_label", "Works too");   // a key the game's tables lack
 Progressive Career sets a season's race weekend titles, one override per key and language, from its `data/titles.json`:
 
 ```cpp
-// addons/progressive/native/src/season.cpp, trimmed
+// Progressive Career's native/src/season.cpp, trimmed
 for (auto &t : progressive::titles::for_year(g_titles, year))
     if (swofty::lang::set(t.key, t.text, t.language) == swofty::lang::Result::ok)
         ++set;

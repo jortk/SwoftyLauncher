@@ -83,12 +83,14 @@ static tk::Read fixture_read(const Fixture &f)
 struct Case {
     const char *name, *code, *from, *slot;
     std::vector<std::string> ui_lists;
+    std::vector<std::string> sprint;
 };
 
 static const Case CASES[] = {{"okayama", "okayama", "melbourne", "melbourne", {}},
                              {"bahrain24", "bahrain24", "bahrain", "", {}},
                              {"delhi", "delhi", "zandvoort", "", {}},
-                             {"pictures", "pictures", "bahrain", "", {"fe_world.tracks_spline", "tracks.flags_circle"}}};
+                             {"pictures", "pictures", "bahrain", "", {"fe_world.tracks_spline", "tracks.flags_circle"}},
+                             {"delhi_sprint", "delhi", "zandvoort", "", {}, {"f1", "f1_2026"}}};
 
 static int make_fixture(const std::string &gamedb, const std::string &out)
 {
@@ -146,7 +148,7 @@ static void parity_tests(const Fixture &f, const std::string &dir)
 {
     for (auto &c : CASES) {
         tk::Db db(fixture_read(f));
-        tk::Lowered l = tk::lower_track(db, tk::builtin_tables(), {c.code, c.code, c.from, c.slot, -1, true, c.ui_lists});
+        tk::Lowered l = tk::lower_track(db, tk::builtin_tables(), {c.code, c.code, c.from, c.slot, -1, true, c.ui_lists, c.sprint});
         check(l.error.empty(), std::string(c.name) + ": lowers over the fixture (" + l.error + ")");
         bool found = false;
         auto want = expected_of(dir + "/fixture/expected/" + c.name + ".json", found);
@@ -195,6 +197,37 @@ static std::optional<std::string> written(const tk::Db &db, const std::string &s
         if (w.path.size() >= suffix.size() && w.path.compare(w.path.size() - suffix.size(), suffix.size(), suffix) == 0)
             return w.text;
     return std::nullopt;
+}
+
+static bool holds(const std::vector<std::string> &v, const std::string &s)
+{
+    return std::find(v.begin(), v.end(), s) != v.end();
+}
+
+static void weekend_format_tests(const Fixture &f)
+{
+    const tk::Tables &t = tk::builtin_tables();
+    {
+        tk::Db db(fixture_read(f));
+        tk::Lowered l = tk::lower_track(db, t, {"mod.x/delhi", "delhi", "zandvoort", "", -1, true});
+        check(l.error.empty(), "delhi lowers on zandvoort (" + l.error + ")");
+        std::size_t sprint = 0, normal = 0;
+        for (auto &w : db.writes())
+            if (w.path.find("TrackAuthenticWeekendData") != std::string::npos && w.path.ends_with(".weekend_format"))
+                (w.text == "sprint" ? sprint : normal)++;
+        check(sprint == 0 && normal > 0, "a track added on a sprint base runs normal weekends (" + std::to_string(sprint) +
+                                             " sprint, " + std::to_string(normal) + " default)");
+        check(!holds(l.warnings, "sprint f1_2026: delhi has no weekend format in that data set, so it takes its parent data set's"),
+              "no sprint warning without a sprint list");
+    }
+    {
+        tk::Db db(fixture_read(f));
+        tk::Lowered l = tk::lower_track(db, t, {"mod.x/delhi", "delhi", "zandvoort", "", -1, true, {}, {"f1", "f1_2025"}});
+        check(l.error.empty(), "delhi lowers with a sprint list (" + l.error + ")");
+        check(holds(l.lines, "weekend format: delhi runs sprint weekends in f1"), "the sprint data sets are logged");
+        check(holds(l.warnings, "sprint f1_2025: delhi has no weekend format in that data set, so it takes its parent data set's"),
+              "a sprint data set without a weekend format block is a warning");
+    }
 }
 
 static void lowering_tests(const Fixture &f)
@@ -517,6 +550,7 @@ int main(int argc, char **argv)
     check(f.size() > 1000, std::to_string(f.size()) + " fixture record(s)");
     lowering_tests(f);
     parity_tests(f, dir);
+    weekend_format_tests(f);
     seed_tests(f, regs);
     venue_seed_tests(regs);
     boot_order_tests(f, regs);

@@ -108,6 +108,36 @@ inline Match matches(const swofty::cars::Profile &p, const std::string &session_
     return Match::yes;
 }
 
+struct Memo {
+    struct Key {
+        uint64_t store = 0, epoch = 0, tick = 0;
+        std::string session;
+        bool ai = false;
+        bool operator==(const Key &o) const
+        {
+            return store == o.store && epoch == o.epoch && tick == o.tick && ai == o.ai && session == o.session;
+        }
+    };
+    static constexpr uint32_t CARS = car_live::MAX_CARS;
+    Key keys[CARS];
+    bool have[CARS] = {};
+
+    bool fresh(uint32_t index, const Key &k) const { return index < CARS && have[index] && keys[index] == k; }
+    void note(uint32_t index, const Key &k)
+    {
+        if (index < CARS) {
+            keys[index] = k;
+            have[index] = true;
+        }
+    }
+    void forget(uint32_t index)
+    {
+        if (index < CARS)
+            have[index] = false;
+    }
+    void clear() { std::fill(std::begin(have), std::end(have), false); }
+};
+
 struct Report {
     size_t layers = 0, matched = 0;
     std::vector<std::string> needs_identity, refused;

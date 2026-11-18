@@ -299,7 +299,10 @@ fn stock_dialogs_keep_their_text() {
     }
     assert_eq!(ours_only, 4);
     let keys: Vec<&str> = built.strings.iter().map(|(k, _)| k.as_str()).collect();
-    assert_eq!(keys, [POPUP_TITLE, POPUP_BODY]);
+    assert_eq!(
+        keys,
+        [POPUP_TITLE, POPUP_BODY, swofty_core::ui::patch::FRIENDS_TAB_LABEL]
+    );
     assert!(built.strings.iter().all(|(_, v)| !v.is_empty()));
     std::fs::remove_dir_all(&out).ok();
 }

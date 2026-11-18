@@ -109,11 +109,11 @@ pub fn add_track(root: &mut Element, map: &ErsMap) -> Result<bool> {
         .ok_or_else(|| Error::Map("an ERS TrackSettings entry has no fields".into()))?;
     let entry = &mut ers.children[at];
     for (key, value) in map.values {
-        let order = FIELDS
-            .iter()
-            .position(|f| f == key)
-            .filter(|&i| i > 0)
-            .ok_or_else(|| Error::Map(format!("unknown ers key {key}")))?;
+        // A key this build does not know (a newer track's file, such as DeployLimitMGUK) is left out rather than
+        // refusing the whole build.
+        let Some(order) = FIELDS.iter().position(|f| f == key).filter(|&i| i > 0) else {
+            continue;
+        };
         let value = format_value(value)?;
         if let Some(f) = entry.child_mut(key.as_bytes()) {
             f.set_attr(b"value", value.as_bytes());
@@ -177,7 +177,14 @@ pub fn edit_vtf(res: &Resource, maps: &[ErsMap]) -> Result<Option<Resource>> {
 
 /// Whether `rel` is a team archive of a vehicle package, whose handling files take the tracks' entries.
 pub fn is_car_archive(rel: &str) -> bool {
+    let rel = rel.to_ascii_lowercase();
     rel.starts_with("2025_asset_groups/") && rel.contains("_vehicle_package/teams/") && rel.ends_with(".erp")
+}
+
+pub fn in_teams(rel: &str) -> bool {
+    rel.len() >= TEAMS.len()
+        && rel.is_char_boundary(TEAMS.len())
+        && rel[..TEAMS.len()].eq_ignore_ascii_case(TEAMS)
 }
 
 /// Writes to `out` a copy of the archive at `src` with the tracks' entries in its handling files, and returns how
@@ -390,6 +397,39 @@ mod tests {
         );
         assert!(add_track(&mut root, &m).unwrap());
         assert_eq!(root.children[0].children.len(), 2);
+    }
+
+    #[test]
+    fn a_key_this_build_does_not_know_is_left_out() {
+        let mut root = el(
+            "VTF",
+            &[],
+            vec![el(
+                "EnergyRecoverySystem",
+                &[("numTrackSettingsTypes", "1")],
+                vec![el(
+                    "TrackSettings",
+                    &[("name", "0")],
+                    vec![leaf("Track", "bahrain"), leaf("MediumDeployFactor", "0.8")],
+                )],
+            )],
+        );
+        let values = BTreeMap::from([
+            ("DeployLimitMGUK".to_owned(), serde_json::json!(4000000)),
+            ("MediumDeployFactor".to_owned(), serde_json::json!(0.9)),
+        ]);
+        let m = ErsMap {
+            code: "qiddiya",
+            base: "bahrain",
+            values: &values,
+        };
+        assert!(add_track(&mut root, &m).unwrap());
+        let new = &root.children[0].children[1];
+        assert!(new.child(b"DeployLimitMGUK").is_none());
+        assert_eq!(
+            new.child(b"MediumDeployFactor").unwrap().attr(b"value"),
+            Some(&b"0.9"[..])
+        );
     }
 
     #[test]

@@ -1,0 +1,38 @@
+{
+  "sponsor": {
+    "honda": {
+      "template": "game/avolo",
+      "name": {
+        "literal": "Honda"
+      },
+      "logo": "sponsors/honda/logo.png",
+      "designs": [
+        {
+          "key": "p",
+          "image": "sponsors/honda/p.png"
+        },
+        {
+          "key": "n",
+          "image": "sponsors/honda/n.png"
+        }
+      ],
+      "career": {
+        "available_from_start": true,
+        "discovery": null
+      },
+      "my_team": {
+        "engines": [
+          "Honda",
+          "Honda_2026"
+        ],
+        "fixed": [
+          {
+            "area": "left_nose",
+            "design": "n",
+            "locked": false
+          }
+        ]
+      }
+    }
+  }
+}

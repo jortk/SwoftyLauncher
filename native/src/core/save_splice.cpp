@@ -17,6 +17,8 @@
 #include <vector>
 
 #include "career_saves_logic.hpp"
+#include "save_diag_logic.hpp"
+#include "save_heap_logic.hpp"
 #include "layout.hpp"
 #include "save_splice_logic.hpp"
 
@@ -109,6 +111,7 @@ namespace cs = runtime::career_saves;
 std::vector<cs::SlotRead> slot_reads;
 struct Manager {
     uintptr_t iface = 0, vtable = 0;
+    size_t count = 0;
 };
 std::vector<Manager> managers;
 bool in_root_load = false, slots_clean = true;
@@ -204,6 +207,34 @@ std::string name_of(uint64_t hash)
     return s && mem::c_string(s, out, sp::NAME_LIMIT + 1) ? out : std::string();
 }
 
+void log_load(const std::vector<cs::SlotRead> &reads, const std::vector<Manager> &seen, bool ok)
+{
+    unsigned n;
+    {
+        std::lock_guard<std::mutex> g(lock);
+        n = loads;
+    }
+    std::string file = runtime::save_sandbox_file();
+    swofty::log("[saves] profile load %u: %s from %s; %s", n, ok ? "read" : "FAILED to read", runtime::save_sandbox_source().c_str(),
+                file.empty() ? "save file not observed (Steam reads it natively)" : file.c_str());
+    if (!slots_orig) {
+        swofty::log("[saves] profile load %u: career slots are not read on this build", n);
+        return;
+    }
+    uintptr_t image = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+    size_t at = 0;
+    for (size_t m = 0; m < seen.size(); m++) {
+        swofty::log("[saves] %s", runtime::save_diag::manager_line(n, m, seen[m].count, seen[m].vtable - image).c_str());
+        for (size_t i = 0; i < seen[m].count && at < reads.size(); i++, at++)
+            swofty::log("[saves] %s",
+                        runtime::save_diag::slot_line(n, m, i, reads[at],
+                                                      runtime::career_saves_id_for_slot(cs::slot_key(reads[at].id, reads[at].guid)))
+                            .c_str());
+    }
+    if (seen.empty())
+        swofty::log("[saves] profile load %u: no save slot manager was read (no career containers in this save)", n);
+}
+
 int *deserialise_entry(void *self, int *result, void *bag, uint8_t reset_on_error, uint64_t groups)
 {
     bool root = is_root(reinterpret_cast<uintptr_t>(self));
@@ -220,14 +251,17 @@ int *deserialise_entry(void *self, int *result, void *bag, uint8_t reset_on_erro
     if (root) {
         std::vector<cs::SlotRead> reads;
         bool report;
+        std::vector<Manager> seen;
         {
             std::lock_guard<std::mutex> g(lock);
             in_root_load = false;
+            seen = managers;
             report = slots_orig && slots_clean && r && *r == 0;
             reads.swap(slot_reads);
         }
         if (report)
             runtime::career_saves_listed(reads, true, true);
+        log_load(reads, seen, r && *r == 0);
         runtime::direct_start_profile_loaded(r && *r == 0);
         // W4: the swofty_registry body this load kept, for the career snapshots.
         std::vector<uint8_t> entry;
@@ -238,6 +272,8 @@ int *deserialise_entry(void *self, int *result, void *bag, uint8_t reset_on_erro
                 swofty::log("[saves] profile load %u: kept %zu save container(s) no loaded game mode claims (%llu "
                             "bytes); the next profile save writes them back",
                             loads, store.size(), (unsigned long long)store.total());
+            for (auto &k : store.kept())
+                swofty::log("[saves] %s", runtime::save_diag::kept_line(loads, k.name, k.body.size()).c_str());
             for (auto &k : store.kept())
                 if (k.name == sp::ENTRY_NAME)
                     entry = k.body, has_entry = true;
@@ -297,9 +333,9 @@ int slots_entry(void *iface, void *bag, void *ctx)
     std::lock_guard<std::mutex> g(lock);
     if (in_root_load) {
         if (clean) {
+            managers.push_back({base, vt, reads.size()});
             for (auto &r : reads)
                 slot_reads.push_back(std::move(r));
-            managers.push_back({base, vt});
         } else
             slots_clean = false;
     }
@@ -420,6 +456,16 @@ void count_entry(SwoftyContext *c)
                     store.size() - picked.size());
     if (picked.empty())
         return;
+    static bool pool_logged = false;
+    if (!pool_logged) {
+        pool_logged = true;
+        uint64_t heap_bytes = 0;
+        bool raised = runtime::save_heap_raised(heap_bytes);
+        uint64_t bytes = 0;
+        for (size_t i : picked)
+            bytes += store.kept()[i].body.size();
+        swofty::log("%s", runtime::save_heap::session_line(heap_bytes, raised, picked.size(), bytes).c_str());
+    }
     *reinterpret_cast<uint64_t *>(c->rsp + FRAME_COUNT) =
         owed.bump(reinterpret_cast<const void *>(c->r12), count, std::move(picked));
 }

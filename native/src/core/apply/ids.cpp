@@ -2,15 +2,25 @@
 
 #include <swofty/json.hpp>
 
+#include <algorithm>
+
 namespace swofty_core::apply::ids {
 
 using swofty::json::Value;
+
+namespace {
+bool career_holds(const std::string &registry)
+{
+    return registry != "vehicle.package";
+}
+}
 
 bool Store::load(const std::string &text, std::string *why)
 {
     std::lock_guard g(mu_);
     ids_.clear();
     careers_.clear();
+    deduped_ = 0;
     dirty_ = false;
     swofty::json::Error e;
     Value doc = swofty::json::parse(text, &e);
@@ -38,10 +48,35 @@ bool Store::load(const std::string &text, std::string *why)
         for (auto &[career, regs] : *cs)
             if (auto o = regs.if_object())
                 for (auto &[reg, recs] : *o)
-                    if (auto r = recs.if_object())
+                    if (auto r = recs.if_object(); r && career_holds(reg))
                         for (auto &[rec, id] : *r)
                             if (id.is_int())
                                 careers_[career][reg][rec] = id.as_int();
+    for (auto &[reg, recs] : ids_) {
+        std::map<int64_t, std::string> owner;
+        std::vector<std::string> lose;
+        for (auto &[rec, en] : recs) {
+            auto [at, fresh] = owner.emplace(en.id, rec);
+            if (fresh)
+                continue;
+            bool mine = false, theirs = false;
+            for (auto &[career, map] : careers_)
+                if (auto c = map.find(reg); c != map.end()) {
+                    auto a = c->second.find(rec), b = c->second.find(at->second);
+                    mine = mine || (a != c->second.end() && a->second == en.id);
+                    theirs = theirs || (b != c->second.end() && b->second == en.id);
+                }
+            if (mine && !theirs) {
+                lose.push_back(at->second);
+                at->second = rec;
+            } else
+                lose.push_back(rec);
+        }
+        for (auto &rec : lose)
+            recs.erase(rec);
+        deduped_ += lose.size();
+        dirty_ = dirty_ || !lose.empty();
+    }
     return true;
 }
 
@@ -88,11 +123,106 @@ void Store::clear()
     live_.clear();
     db_.clear();
     dirty_ = false;
+    lent_ = false;
+}
+
+bool Store::lend_json(const std::string &text, std::vector<std::string> *lines, std::string *why)
+{
+    swofty::json::Error e;
+    Value doc = swofty::json::parse(text, &e);
+    if (!e.ok() || !doc.is_object()) {
+        if (why)
+            *why = e.ok() ? "not a JSON object" : e.message;
+        return false;
+    }
+    Lent lent;
+    if (auto regs = doc["ids"].if_object())
+        for (auto &[reg, recs] : *regs)
+            if (auto o = recs.if_object())
+                for (auto &[rec, id] : *o)
+                    if (id.is_int() && id.as_int() >= 0)
+                        lent[reg][rec] = id.as_int();
+    std::vector<std::string> got = lend(lent);
+    if (lines)
+        *lines = std::move(got);
+    return true;
+}
+
+std::vector<std::string> Store::lend(const Lent &lent)
+{
+    std::lock_guard g(mu_);
+    std::vector<std::string> out;
+    std::size_t applied = 0;
+    for (auto &[reg, recs] : lent) {
+        auto &mine = ids_[reg];
+        std::map<int64_t, std::string> claimed;
+        std::vector<std::string> displaced;
+        for (auto &[rec, id] : recs) {
+            auto [at, fresh] = claimed.emplace(id, rec);
+            if (!fresh) {
+                out.push_back("[registry] stat ids: " + reg + " " + rec + " not lent: the host gives " + at->second +
+                              " the same stat id " + std::to_string(id));
+                continue;
+            }
+            std::string who;
+            for (auto &[career, map] : careers_) {
+                auto it = map.find(reg);
+                if (it == map.end())
+                    continue;
+                for (auto &[r, v] : it->second)
+                    if (v == id && r != rec)
+                        who = career + " uses " + std::to_string(id) + " for " + r;
+            }
+            if (!who.empty()) {
+                out.push_back("[registry] stat ids: " + reg + " " + rec + " not lent (host's " + std::to_string(id) +
+                              "): " + who + " here, so this record keeps its own id");
+                claimed.erase(id);
+                continue;
+            }
+            for (auto &[other, en] : mine)
+                if (other != rec && en.id == id && !en.lent)
+                    displaced.push_back(other);
+            auto e = mine.find(rec);
+            int64_t was = e == mine.end() ? -1 : e->second.id;
+            mine[rec] = Entry{id, e == mine.end() ? std::string() : e->second.since, -1, true};
+            applied++;
+            out.push_back("[registry] stat ids: " + reg + " " + rec + " -> " + std::to_string(id) +
+                          " (lent by the host for this session" +
+                          (was >= 0 && was != id ? "; this install keeps " + std::to_string(was) : std::string()) +
+                          ")");
+        }
+        for (auto &rec : displaced) {
+            auto it = mine.find(rec);
+            if (it == mine.end() || it->second.lent)
+                continue;
+            int64_t was = it->second.id;
+            mine.erase(it);
+            int64_t to = next_free_locked(reg, rec);
+            if (to >= 0)
+                mine[rec] = Entry{to, std::string(), -1, false};
+            out.push_back("[registry] stat ids: " + reg + " " + rec + " moved off " + std::to_string(was) +
+                          ", which the host's record needs, " +
+                          (to >= 0 ? "to " + std::to_string(to) : std::string("and gets an id when it registers")));
+        }
+    }
+    lent_ = lent_ || applied > 0;
+    return out;
+}
+
+bool Store::lent() const
+{
+    std::lock_guard g(mu_);
+    return lent_;
 }
 
 void Store::define_pool(const std::string &registry, Pool pool)
 {
     std::lock_guard g(mu_);
+    std::vector<std::pair<int64_t, int64_t>> within;
+    for (auto &[lo, hi] : pool.ranges)
+        if (lo <= std::min(hi, pool.cap))
+            within.push_back({lo, std::min(hi, pool.cap)});
+    pool.ranges = std::move(within);
     pools_[registry] = std::move(pool);
 }
 
@@ -212,6 +342,8 @@ std::string Store::pool_text_locked(const std::string &registry) const
     auto it = pools_.find(registry);
     if (it == pools_.end())
         return "no pool";
+    if (it->second.ranges.empty())
+        return "pool (no id above the highest the game database holds)";
     std::string s = "pool ";
     bool first = true;
     for (auto &[lo, hi] : it->second.ranges) {
@@ -245,8 +377,16 @@ Result Store::get(const std::string &registry, const std::string &record) const
     auto e = it->second.find(record);
     if (e == it->second.end())
         return r;
+    auto pit = pools_.find(registry);
+    if (pit != pools_.end() && e->second.id > pit->second.cap && !e->second.lent)
+        return r;
     r.id = e->second.id;
     r.how = "kept";
+    if (e->second.lent) {
+        r.line = "[registry] stat ids: " + registry + " " + record + " -> " + std::to_string(r.id) +
+                 " (lent by the host for this session)";
+        return r;
+    }
     r.line = "[registry] stat ids: " + registry + " " + record + " -> " + std::to_string(r.id) + " (kept from ids.json" +
              (e->second.since.empty() ? std::string(")") : ", since " + e->second.since + ")");
     return r;
@@ -285,7 +425,8 @@ Result Store::allocate(const std::string &registry, const std::string &record, c
     if (r.id < 0) {
         r.how = "full";
         r.line = "[registry] stat ids: " + registry + " " + record + " refused: the " + pool_text_locked(registry) +
-                 " is full (every id is held by a record or used by a career)";
+                 (pit->second.ranges.empty() ? " leaves no id to give"
+                                             : " is full (every id is held by a record or used by a career)");
         return r;
     }
     ids_[registry][record] = Entry{r.id, today};
@@ -305,6 +446,11 @@ Result Store::pin(const std::string &registry, const std::string &record, int64_
     r.how = "explicit";
     auto &recs = ids_[registry];
     auto e = recs.find(record);
+    if (e != recs.end() && e->second.lent) {
+        r.id = e->second.id;
+        r.how = "kept";
+        return r;
+    }
     bool was_moved = e != recs.end() && e->second.pin == id && e->second.id != id;
     std::string row;
     if (label.empty() && was_moved) {
@@ -354,6 +500,8 @@ Result Store::recheck(const std::string &registry, const std::string &record, co
         return r;
     r.id = e->second.id;
     r.how = "kept";
+    if (e->second.lent)
+        return r;
     std::string row;
     if (!db_locked(registry, r.id, label, &row))
         return r;
@@ -374,7 +522,7 @@ CareerMap Store::map_for_career(const std::string &career)
     CareerMap m;
     for (auto &[reg, recs] : ids_)
         for (auto &[rec, en] : recs)
-            if (live_locked(reg, rec))
+            if (career_holds(reg) && live_locked(reg, rec))
                 m[reg][rec] = en.id;
     if (!career.empty() && careers_[career] != m) {
         careers_[career] = m;
@@ -389,6 +537,8 @@ std::vector<Clash> Store::adopt(const std::string &career, const CareerMap &map,
     std::vector<Clash> out;
     for (auto &[reg, recs] : map)
         for (auto &[rec, id] : recs) {
+            if (!career_holds(reg))
+                continue;
             auto &mine = ids_[reg];
             auto e = mine.find(rec);
             if (e != mine.end() && e->second.id == id)
@@ -416,7 +566,9 @@ std::vector<Clash> Store::adopt(const std::string &career, const CareerMap &map,
             dirty_ = true;
         }
     if (!career.empty() && out.empty()) {
-        careers_[career] = map;
+        CareerMap held = map;
+        held.erase("vehicle.package");
+        careers_[career] = held;
         dirty_ = true;
     }
     return out;
@@ -431,13 +583,19 @@ void Store::forget_career(const std::string &career)
 bool Store::dirty() const
 {
     std::lock_guard g(mu_);
-    return dirty_;
+    return dirty_ && !lent_;
 }
 
 void Store::saved()
 {
     std::lock_guard g(mu_);
     dirty_ = false;
+}
+
+std::size_t Store::deduped() const
+{
+    std::lock_guard g(mu_);
+    return deduped_;
 }
 
 std::size_t Store::size() const
@@ -447,6 +605,18 @@ std::size_t Store::size() const
     for (auto &[reg, recs] : ids_)
         n += recs.size();
     return n;
+}
+
+std::vector<int64_t> Store::ids_of(const std::string &registry) const
+{
+    std::lock_guard<std::mutex> g(mu_);
+    std::vector<int64_t> out;
+    auto it = ids_.find(registry);
+    if (it != ids_.end())
+        for (auto &[record, entry] : it->second)
+            if (entry.id >= 0)
+                out.push_back(entry.id);
+    return out;
 }
 
 Store &store()

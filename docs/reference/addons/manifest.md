@@ -15,13 +15,14 @@ This manifest uses every field. Only `schema_version`, `id`, `name`, `version` a
 {
   // Identity
   "schema_version": 1,                               // always 1
-  "id": "yourname.my-addon",                         // lowercase, dotted, at least two parts
+  "id": "yourname.my-addon",                         // <namespace>.<name>, lowercase
   "name": "My Addon",                                // display name
   "version": "1.0.0",                                // semver
   "author": "Your Name",                             // display author
   "description": "One line, shown on the Tools page.",
   "license": "MIT",                                  // SPDX identifier
   "homepage": "https://example.com/my-addon",
+  "repository": "https://github.com/author/my-addon",
   "icon": "icon.png",                                // a path inside the addon
   "kind": ["database", "erp", "text", "ui", "files", "native"],   // what it touches
   "category": "career",                              // what it is for
@@ -32,7 +33,8 @@ This manifest uses every field. Only `schema_version`, `id`, `name`, `version` a
     "game": "f1_25",                                 // the only value
     "game_builds": [">=25251167"],                   // empty: every build
     "launcher": ">=1.5.13",                          // the launcher versions it installs and builds on
-    "seasons": ["f1_2026"]
+    "seasons": ["f1_2026"],
+    "platforms": ["steam", "ea"]                     // the game copies you tested on; empty: Not tested
   },
   "requires": [{ "id": "swofty.core", "version": ">=0.1.0" }],
   "conflicts": [{ "id": "*", "touches": "db:entrants.entrant_lists.entrant_list_34.*" }],
@@ -110,18 +112,21 @@ swofty: invalid manifest: yourname.my-addon: option ai_offset: a slider has at m
 "description": "One-line summary.",
 "license": "MIT",
 "homepage": "https://example.com/my-addon",
+"repository": "https://github.com/author/my-addon",
 "icon": "icons/my-addon.svg",
 "kind": ["database", "erp"]
 ```
 
 - **`schema_version`** (integer): `1`.
-- **`id`** (string): a lowercase dotted id with at least two parts, each part `[a-z0-9_-]`, such as `author.my-addon`. The `swofty.` prefix is reserved. The `dbedit.` prefix is kept for addons the DB Editor saves, and the launcher refuses to install any other addon with it.
+- **`id`** (string): a lowercase dotted id with at least two parts, each part `[a-z0-9_-]`, such as `author.my-addon`. The first part is the namespace. The `swofty.` prefix is reserved. The `dbedit.` prefix is kept for addons the DB Editor saves, and the launcher refuses to install any other addon with it. The `imported-mod.` prefix is kept for imports ([The addon's id](/reference/mods/tracks#the-addon-s-id)), and the launcher refuses an Addon Browser download with it.
+  - On [publish.f1.swofty.net](./publishing#publish), a new addon's namespace must be yours: your Discord username (lowercase, without `.` and other characters outside `a-z0-9_-`), or a team or brand name you claim by publishing the first addon in it, up to 3 besides your username. Nobody else can publish new addons in a namespace you own. `swofty`, `mod`, `local`, `core`, `std` and `dbedit` take no new addons. Addons published before namespaces keep their ids, and new versions of them publish as before.
 - **`name`** (string): the display name.
 - **`version`** (string): semver, such as `1.0.0`.
 - **`author`** (string): the display author.
 - **`description`** (string, optional): a one-line summary, shown on the Tools page.
 - **`license`** (string, optional): an SPDX identifier, such as `MIT`.
 - **`homepage`** (string, optional): a URL.
+- **`repository`** (string, optional): the `https://` URL of your addon's source code. The **Addons** page links to it under **Source code**, and shows **Not listed** for an installed addon without one. A launcher before 1.8.19 rejects this field; set `"compat": { "launcher": ">=1.8.19" }` when you use it.
 - **`icon`** (string, optional): a path inside your addon, shown on the Tools page and your addon's sidebar pages. Use an `.svg` for a one-colour glyph in the launcher's icon style, or a square `.png`, `.jpg` or `.webp` to show the image as it is.
 - **`kind`** (string array): what the addon touches.
 
@@ -186,9 +191,18 @@ A launcher before 1.3.0 rejects `category` and `origin`; set `"compat": { "launc
   "game": "f1_25",                 // f1_25; any other value is rejected
   "game_builds": [">=25251167"],   // semver ranges matched against the build id as <id>.0.0; empty accepts every build
   "launcher": ">=0.1.0",           // optional: a semver range the launcher must satisfy
-  "seasons": ["f1_2026"]           // season tags
+  "seasons": ["f1_2026"],          // season tags
+  "platforms": ["steam", "ea"]     // optional: the game copies the addon was tested on
 }
 ```
+
+`compat.platforms` (string array, optional) lists the game copies you tested the addon on: `"steam"` for the Steam copy and `"ea"` for the EA app copy. The [Addon Browser](/using/addon-browser#find-an-addon) tags the addon with each platform listed, and tags an addon with none, or without the field, **Not tested**. Any other value is rejected:
+
+```text
+swofty: invalid manifest: yourname.my-addon: compat.platforms "gog" is not one of "steam", "ea"
+```
+
+The list never stops an install or a build. A launcher before 1.8.36 rejects the field; set `"compat": { "launcher": ">=1.8.36" }` when you use it.
 
 On a launcher outside `compat.launcher`, installing the addon fails, and so does building a profile that enables it:
 
@@ -222,7 +236,7 @@ Only a range the launcher is above counts as a cap: every comparator the launche
 "load_after": ["swofty.track.*"]
 ```
 
-- **`requires`** (`[{ id, version }]`): the addons that must be installed. `version` is a semver range and defaults to `*`.
+- **`requires`** (`[{ id, version }]`): the addons that must be installed. `version` is a semver range and defaults to `*`. `*` and an empty range accept every version, pre-releases included. For any other range a pre-release counts as its base version, so `>=1.0.0` accepts `1.1.0-beta` and `<1.1.0` rejects it. An `=` pin is exact: `=1.0.0` rejects `1.0.0-beta`.
 - **`conflicts`** (`[{ id, touches? }]`): the addons that must not be enabled together. Use `touches` to narrow the conflict to a shared target; `id` may be `*`.
 - **`load_after`** (string array): addon ids or `*` patterns to build before your addon.
 
@@ -270,11 +284,13 @@ Careers that use its drivers won't load without it.
     "values": ["titlesponsor", { "value": "tier01", "label": "Tier 1 sponsor" }, "replica"], "binds": "db" },
   { "id": "debug_overlay", "type": "toggle", "label": "Debug overlay", "default": false, "binds": "native",
     "description": "Shown under the label.",
-    "hidden": true }                 // kept off the ADDON SETTINGS page in game; launcher 1.5.13 or later
+    "hidden": true },                // kept off the ADDON SETTINGS page in game; launcher 1.5.13 or later
+  { "id": "istanbul_park", "type": "toggle", "label": "Istanbul Park round", "default": true, "binds": "db",
+    "needs": ["track.istanbul_park", { "id": "swofty.std", "version": ">=1.8.0" }] }   // launcher 1.9.34 or later
 ]
 ```
 
-- **`id`** (string): `[a-z][a-z0-9_]*`, at most 40 characters, unique within your addon.
+- **`id`** (string): `[a-z][a-z0-9_]*`, at most 40 characters, unique within your addon. `addon` is taken by the `addon` key of an op's `when`.
 - **`type`** (string): `toggle`, `slider` or `choice`.
 - **`label`** (string, optional): shown to players. Defaults to `id`.
 - **`description`** (string, optional): shown under the label.
@@ -283,11 +299,14 @@ Careers that use its drivers won't load without it.
 - **`values`** (array): 1 to 16 values for a choice, each a string, or `{ "value", "label" }` to show a different name. Values are non-empty and each is listed once. A toggle and a slider take no `values`.
 - **`binds`** (string): where the value goes.
 - **`hidden`** (boolean, optional): `true` keeps the option off your addon's page in ADDON SETTINGS in game, such as a developer option or a per-career setting. The launcher's **Addons** page still lists it, and [`career_setup`](#career-setup) and [`hub_tab`](#hub-tab) may list it. Defaults to `false`. A launcher before 1.5.13 rejects the field.
+- **`needs`** (array, optional, toggles only): addons that must be on for the toggle to be on, each an addon id or `{ "id", "version" }`. While one is off, the **Addons** page shows the toggle off and locked and names the addon, the build reads it as off, and ADDON SETTINGS in game leaves it out. The profile keeps the player's value for when the addon is back on. [Content that needs another addon](./settings#content-that-needs-another-addon) has a full example. A launcher before 1.9.34 rejects the field.
 
 | `binds` | Read by | A change applies |
 |---|---|---|
 | `native` | the [engine plugin](./native-plugins#settings), while the game runs | at once |
 | `db` | the build, through <span v-pre>`{{id}}`</span> and `when` in op files | after a rebuild |
+
+An op's `when` can also name addons: `"when": { "addon": "track.istanbul_park" }` keeps the op only while that addon is on, and a `when` at the top of an op file applies to the whole file. See [Database operations](/reference/ops/database#settings).
 
 ### career_setup
 
@@ -449,6 +468,7 @@ Some operation types are still in development. Check [Current status](/design/#c
 | `overlay` | [Overlay](/reference/std/overlay) | Draws over the game | 1.3.7 or later |
 | `shaders` | [Shader packs](./shader-packs) | Changes the picture | 1.4.0 or later |
 | `postfx` | [Post-process passes](./postfx) | Changes the picture | 1.5.4 or later |
+| `telemetry` | [Telemetry](/reference/std/telemetry) | Reads live race data | 1.8.19 or later |
 
 An earlier launcher rejects the manifest.
 

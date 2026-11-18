@@ -1,0 +1,9 @@
+{
+  "era.box": {
+    "preview": {
+      "$comment": "only is grand_prix or time_trial",
+      "package": "mod.example/preview",
+      "only": "qualifying"
+    }
+  }
+}

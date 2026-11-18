@@ -71,7 +71,7 @@ SWOFTY_ADDON()
 The notification is the one the game uses for DRS enabled, a fastest lap or a penalty. The game's UI draws it in the game's style, so it follows the HUD's layout, scale and language settings, and needs no [overlay](./overlay) drawing.
 
 - **Header:** `swofty/hud.hpp`, namespace `swofty::hud`
-- **Table:** `SwoftyHud` version 1, from the core's `SwoftyCoreHud` export, not a `SwoftyApi` member; API version 8, feature-detected
+- **Table:** `SwoftyHud` versions 1 and 2, from the core's `SwoftyCoreHud` export, not a `SwoftyApi` member; API version 8, feature-detected
 - **Feature:** `popup`, stable
 - **Thread:** `toast` and `set` from any thread; the core posts them on the flow thread
 
@@ -132,7 +132,8 @@ hud::set("ui_menu_data.lap_number_visible", false);              // invalid: not
 
 - Only leaves under `ui_menu_data.hud_*` and `view_model_data.hud*` (`view_model_data.hud.` or `view_model_data.hud_`) are accepted; anything else returns `invalid`. A leading `#` is dropped. A path with a space, `[` or `]`, or a trailing `.`, returns `invalid`.
 - It returns `ok` once queued, and `unavailable` as for `toast`.
-- A later write to the same path replaces a queued one. The queue holds at most 64 writes; past that the oldest drops.
+- A later write to the same path replaces a queued one. The queue holds at most 512 writes (it held 64 before); past that the oldest drops and `stats().dropped` counts it. For more than a few leaves use [HUD leaves](./hud-leaves), which never drops.
+- A path registered through the leaf table keeps its type: a `set` of another type is refused.
 - The game also writes many of these leaves, so a value can be overwritten by the game's own update. Write it again when it matters.
 
 ```text
@@ -146,7 +147,7 @@ The core logs the first 16 applied writes and every failed one.
 Progressive Career publishes two view-model bools its Team HQ tab reads:
 
 ```cpp
-// addons/progressive/native/src/season.cpp, trimmed
+// Progressive Career's native/src/season.cpp, trimmed
 constexpr const char *kVmCareer = "view_model_data.hud_progressive_career";
 constexpr const char *kVmRnd = "view_model_data.hud_progressive_rnd";
 
@@ -167,6 +168,10 @@ Leaves the race HUD reads from `ui_menu_data`:
 "ui_menu_data.hud_lap_number_visible"       // bool: false shows the description instead of the lap number
 "ui_menu_data.hud_total_lap_count_visible"  // bool: the lap total
 ```
+
+## More than a few leaves
+
+The table has a second layer, version 2: typed leaves registered once, change detection in the core, groups applied whole, a rebuild counter and stats. Use it through [HUD leaves](./hud-leaves). Around it: [HUD formatting](./hud-format), [smoothing helpers](./ease), [HUD frame](./hud-frame), the [CSV recorder](./diag-csv), the [options struct](./settings-struct), the [timing tower](./timing) and the [test fakes](./hud-fakes).
 
 ## How it works
 

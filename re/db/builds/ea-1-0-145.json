@@ -1,0 +1,1700 @@
+{
+ "schema": 1,
+ "build": {
+  "exe": "F1_25.exe",
+  "sha256": "8361a266d7aa1f43bdb35da89ccfe66010901e43dddd44b6d5cb8c9f090a99f7",
+  "size": 355003776,
+  "pe_timestamp": 1794315435,
+  "image_base": "0x140000000",
+  "distribution": "EA App",
+  "packed": true
+ },
+ "note": "EA App build 1.0.145.2472. Packed like the earlier EA build: the first executable section holds the plaintext engine code at runtime, the large RWX section holds the protector-managed code. The PE section names are shuffled again; order and sizes match the previous EA build one to one.",
+ "sections": {
+  ".xtls": ".arch",
+  ".data1": ".xtls"
+ },
+ "overrides": {
+  "Car_Register_DetachablePart_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? E9 55 43 33 00 98 1E 41 BA 8C CC",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Car_Systems_Reset_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? 0F 8B A5 8C 06 04 4A 46 52 96 20",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Career_GameValue_GetUpgradesFailedDuringTimeAdvance": {
+   "pattern": "48 83 EC 28 48 8D 15 ?? ?? ?? ?? E8 ?? ?? ?? ?? 89 C0 C4 E1 FA 2A C0 48 83 C4 28 C3 CC CC CC CC 48 83 EC 28 48 8D 15 ?? ?? ?? 04 E8 E0 DC 03 00 89 C0 C4 E1 FA 2A C0 48 83 C4 28 C3 CC CC CC CC 48 83 EC 28 48 8D 15 ?? ?? ?? 04 E8 C0 DC 03 00 89 C0 C4 E1",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Career_Get_CareerLengthDays_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? 29 25 6B B8 66 B5 66 D0 67 E4 E9",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Career_MyTeamSetupVM_RefreshSelection": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 B8 28 13 00 00 E8 ?? ?? ?? 02 48 29 C4",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Career_Set_EntrantData_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? E9 95 90 E4 FF 7D 12 67 71 E5 AA",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Career_SetupBanks_Write": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 83 EC ?? 48 89 D6 48 8B 3A",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "FeTile_CareerDlcItem_Populate": {
+   "pattern": "03 8B 42 04 89 05 ?? ?? ?? ?? ?? ?? F2 E8 ?? ?? ?? ?? 48 89 F0 48 83 C4 20 5E C3 CC CC CC CC CC 56 57 53 48 83 EC 50",
+   "note": "The base pattern holds displacements or constants that moved on 1.0.145. They are wildcarded; the match is the same code as on the KB build."
+  },
+  "FeTile_ItemBase_Slot78_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? 95 C2 F7 A4 B1 57 CC E9 BC EB D9",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Game_CreateSessionDlcSelectTab_BuildTiles": {
+   "pattern": "48 8D BE 30 06 00 00 80 BE 70 07 00 00 00 74 0F 48 89 F9 E8 ?? ?? ?? ?? C6 86 70 07 00 00 00 48 8B 46 10 48 8D 50 08 48 85 C0 4C 8D 35 ?? ?? ?? ?? 49 0F 44 D6 4C 8D 05 ?? ?? ?? 03 48 89 F9 E8 ?? ?? ?? ?? 48 8D 9E 50 06 00 00 48 89 F9 E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 48 89 4C 24 20 4C 8D 05 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 89 D9 48 89 C2 E8 ?? ?? ?? ?? 48 8D 9E D0 06 00 00 48 89 F9 E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 48 89 4C 24 20 4C 8D 05 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 89 D9 48 89 C2 E8 ?? ?? ?? ?? C6 44 24 30 00 48 8B 46 10 48 8D 50 08 48 85 C0 49 0F 44 D6 48 8B 0D ?? ?? ?? 05 C7 44 24 20 01 00 00 00 4C 8D 05 ?? ?? ?? 03 4C 8D 4C 24 30 E8 ?? ?? F3 FE 48",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Game_CreateSessionDlcSelectTab_FillTile": {
+   "pattern": "48 8D BE 30 06 00 00 80 BE 70 07 00 00 00 74 0F 48 89 F9 E8 ?? ?? ?? ?? C6 86 70 07 00 00 00 48 8B 46 10 48 8D 50 08 48 85 C0 4C 8D 35 ?? ?? ?? ?? 49 0F 44 D6 4C 8D 05 ?? ?? ?? 03 48 89 F9 E8 ?? ?? ?? ?? 48 8D 9E 50 06 00 00 48 89 F9 E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 48 89 4C 24 20 4C 8D 05 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 89 D9 48 89 C2 E8 ?? ?? ?? ?? 48 8D 9E D0 06 00 00 48 89 F9 E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 48 89 4C 24 20 4C 8D 05 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 89 D9 48 89 C2 E8 ?? ?? ?? ?? C6 44 24 30 00 48 8B 46 10 48 8D 50 08 48 85 C0 49 0F 44 D6 48 8B 0D ?? ?? ?? 05 C7 44 24 20 01 00 00 00 4C 8D 05 ?? ?? ?? 03 4C 8D 4C 24 30 E8 ?? ?? F3 FE 48",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Game_F1os_F1CGTask_Update": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 81 EC 48 03 00 00 C5 F8 29 B4 24 30 03 00 00 48 89 CE 48 81 C1 98 00 00 00 4C 8B",
+   "note": "The function is at 0x2798ea0 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Game_FanZoneSeasonResults_Exit": {
+   "pattern": "41 56 56 57 53 48 81 EC A8 01 00 00 C5 F8 29 B4 24 90 01 00 00 48 8B 71",
+   "note": "The function is at 0x2386dc0 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Game_Handle_GarageCrewEvent_Thunk": {
+   "pattern": "E9 ?? ?? ?? 07 CC D1 FD CC B7 A3 F2 19 46 C7 B6",
+   "note": "A protector thunk; the pattern is its EA bytes and the match address is the hint, found from the unique string the real function uses at the same offset as on Steam.",
+   "section": ".arch"
+  },
+  "Game_Handle_SpecGarageCrewEvent_Thunk": {
+   "pattern": "E9 ?? ?? ?? 0B 23 2F E9 ?? ?? ?? ?? 5B 6E 58 FE",
+   "note": "A protector thunk; the pattern is its EA bytes and the match address is the hint, found from the unique string the real function uses at the same offset as on Steam.",
+   "section": ".arch"
+  },
+  "Game_Input_OnControlSchemeAdded": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 83 EC 58 4C 89 C6 48 89 D3 49 89 CD 49 8B 90",
+   "note": "The function is at 0x2a576b0 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Game_NetworkReady_OnPauseSendSuperReady": {
+   "pattern": "56 48 83 EC 60 41 8B 40 10 83 E0 FE 83 F8 02 0F 85 ?? ?? ?? ?? 48 89 CE C5 FB 10 41 68 C5 F9 2E ?? ?? ?? ?? 02 0F 82 ?? ?? ?? ?? C6",
+   "note": "The function is at 0x321ce60 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Game_NetworkReady_OnUnpauseSendSuperReady": {
+   "pattern": "56 48 83 EC 60 41 8B 40 10 83 E0 FE 83 F8 02 0F 85 ?? ?? ?? ?? 48 89 CE C5 FB 10 41 68 C5 F9 2E ?? ?? ?? ?? 02 0F 82 ?? ?? ?? ?? C4",
+   "note": "The function is at 0x321cfc0 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Game_SaveMgr_RequestProfileSave_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? 0F 81 9A 76 CE 01 E2 E9 5C 91 F3",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Game_SeasonLength_ApplyPreset": {
+   "pattern": "E9 ?? ?? ?? ?? 89 39 38 CC 69 53 0F 80 E1 9F 38",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Game_SeasonLength_PushCalendarEntry": {
+   "pattern": "E9 ?? ?? ?? ?? 4D 0B 3D F8 37 08 2F 0A 0F 80 7D",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Game_Set_VehicleController_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? DF 32 E9 07 EE BD 00 E9 4C C0 56",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Game_Store_UnsubscribeMessages": {
+   "pattern": "41 57 41 56 41 54 56 57 53 48 81 EC 08 02 00 00 48 89 CE 48 8B 81 ?? ?? 00 00",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Game_TileList_PushChildSelection_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? C9 1D A9 0F 87 78 62 8D 01 3B 0F",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Ne_Container_AbortNoReturn_1435d82f0": {
+   "pattern": "FF 50 08 48 8B 4C 24 48 48 8B 01 49 89 06 4C 89 31 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? CC",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 18,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 17
+   }
+  },
+  "Ne_Crt_AbortNoReturn_B": {
+   "pattern": "49 C7 45 10 00 00 00 00 48 8B 4C 24 38 48 8B 01 49 89 06 4C 89 31 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? CC",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 23,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 22
+   }
+  },
+  "Ne_Crt_FastFailTerminate": {
+   "pattern": "48 83 EC 28 B9 17 00 00 00 FF 15 ?? ?? ?? ?? 85 C0 74",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Ne_Crt_FatalNoReturn": {
+   "pattern": "48 83 EC 28 E8 ?? ?? ?? ?? CC CC CC CC CC CC CC E9 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? E9 ?? ?? ?? 00",
+   "note": "The function is located through its callers, which map one to one from the Steam 1.0.145 build; the pattern is the Steam bytes with the ones that differ wildcarded."
+  },
+  "Ne_Crt_InvalidParameterAbortStub_140e0fd20": {
+   "pattern": "48 83 EC 28 E8 ?? ?? ?? ?? CC CC CC CC CC CC CC E9 ?? ?? ?? 08 0F",
+   "note": "The function is located through its callers, which map one to one from the Steam 1.0.145 build; the pattern is the Steam bytes with the ones that differ wildcarded."
+  },
+  "Ne_Crt_Memcpy": {
+   "pattern": "48 8B C1 4C 8D 15 ?? ?? ?? ?? 49 83 F8 0F 0F 87 ?? ?? ?? ?? 66 66 66 66 0F 1F 84 00 00 00 00 00 47 8B 8C 82 ?? ?? ?? 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image."
+  },
+  "Ne_Crt_ThrowOverflow_B": {
+   "pattern": "45 31 FF E9 ?? ?? ?? ?? E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? CC",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 9,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 8
+   }
+  },
+  "Ne_Crt_ThrowOverflow_C": {
+   "pattern": "E8 ?? ?? ?? ?? CC CC CC CC CC CC 41 57 41 56 41 54 56 57 53 48 83 EC 28 48 89 CE 48 8B 41 08",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 1,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 0
+   }
+  },
+  "Ne_Detach_ChildNode": {
+   "pattern": "E9 ?? ?? ?? ?? 5D AF F2 87 98 0F 0F 8B EB 48 9C",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Ne_FlatHashMap_FindSlotU64_A": {
+   "pattern": "E8 ?? ?? ?? ?? 48 FF 86 ?? 3C 00 00 48 89 D9 E8",
+   "note": "The base pattern holds displacements or constants that moved on 1.0.145. They are wildcarded; the match is the same code as on the KB build."
+  },
+  "Ne_FlatHashMap_FindSlotU64_B": {
+   "pattern": "E8 ?? ?? ?? ?? 48 FF 86 ?? 41 00 00 48 89 D9 E8",
+   "note": "The base pattern holds displacements or constants that moved on 1.0.145. They are wildcarded; the match is the same code as on the KB build."
+  },
+  "Ne_FlatHashMap_FindSlotU64_C": {
+   "pattern": "E8 ?? ?? ?? ?? 48 FF 86 ?? 4A 00 00 48 89 D9 E8",
+   "note": "The base pattern holds displacements or constants that moved on 1.0.145. They are wildcarded; the match is the same code as on the KB build."
+  },
+  "Ne_Format_HresultUnknownFacility": {
+   "pattern": "48 89 5C 24 20 55 56 57 41 56 41 57 48 8D 6C 24 C9 48 81 EC C0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 27 66 0F 6F 0D ?? ?? ?? 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image."
+  },
+  "Ne_Gfx2Renderer_PostEvent_AllocateResource": {
+   "pattern": "E8 ?? ?? ?? ?? 4C 8D 05 ?? ?? ?? ?? 48 89 F9 48 89 F2 E8 ?? ?? ?? ?? 4C 8D 05 ?? ?? ?? ?? 48 89 F9 48 89 F2 E8 ?? ?? ?? ?? 4C 8D 05 B9 1A 00 00 48 89 F9 48 89 F2 E8 CE 17 00 00 4C 8D 05 E7 1D 00 00 48 89 F9 48 89 F2 E8 FC 1A 00 00 4C 8D 05 45 23 00 00 48 89 F9 48 89 F2 E8 5A",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Ne_HashMap_FatalStub_GroundCover": {
+   "pattern": "C5 F8 28 BC 24 ?? ?? ?? ?? 48 81 C4 B8 01 00 00 5B 5D 5F 5E 41 5C 41 5D 41 5E 41 5F C3 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? CC",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 30,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 29
+   }
+  },
+  "Ne_HashMap_FatalStub_Particles": {
+   "pattern": "C5 F8 11 04 08 EB 08 48 89 D9 E8 ?? ?? ?? ?? 4C 39 E7 0F 94 C3",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 11,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 10
+   }
+  },
+  "Ne_HashMap_Grow_Gfx2ResourceObject": {
+   "pattern": "E8 ?? ?? ?? ?? FF C5 81 FD 00 01 00 00 0F 84 ?? ?? ?? ?? 4C 8B 9E ?? 41",
+   "note": "The base pattern holds displacements or constants that moved on 1.0.145. They are wildcarded; the match is the same code as on the KB build."
+  },
+  "Ne_HashMap_ThrowLengthError_Decals2": {
+   "pattern": "48 8B 4C 24 68 48 8B 01 49 89 07 4C 89 39 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? CC",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 15,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 14
+   }
+  },
+  "Ne_Libpng_WriteITXt": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 81 EC B8 04 00 00 4D 89 CC 4C 89 C0 89 D5 48",
+   "note": "The function is located through its callers, which map one to one from the Steam 1.0.145 build; the pattern is the Steam bytes with the ones that differ wildcarded."
+  },
+  "Ne_Make_RandomIdBlock": {
+   "pattern": "41 56 56 57 55 53 48 83 EC 30 48 89 CE C6 01 ?? C5 F8 57 C0 C5 F8 11 41",
+   "note": "The function is located through its callers, which map one to one from the Steam 1.0.145 build; the pattern is the Steam bytes with the ones that differ wildcarded."
+  },
+  "Ne_Map_LowerBoundPairIntInt": {
+   "pattern": "41 57 41 56 56 57 55 53 48 83 EC 28 4C 89 C3 48 89 D6 48 89 CF 4C 8B 79 08 4D 8B 4F 08 31 ED 41 80 79 19 00 0F 84 86 00 00 00 4D 89",
+   "note": "The function is located through its callers, which map one to one from the Steam 1.0.145 build; the pattern is the Steam bytes with the ones that differ wildcarded."
+  },
+  "Ne_NetTransport_MigrateConnections": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 83 EC 28 48 89 D6 48 89 CF 80 3D ?? ?? ?? ?? 01 ?? 8D 2D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image."
+  },
+  "Ne_SaveSystem2Win_Mount": {
+   "pattern": "41 54 56 57 55 53 B8 18 13 00 00 E8 ?? ?? ?? ?? 48 29 C4 44 89 CD",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Ne_SaveSystem2Win_SaveSelected": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 81 EC 78 04 00 00 44 89 CB 4D 89 C6 48 89 D7",
+   "note": "The function is at 0x4150830 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Ne_SaveSystem2Win_Start": {
+   "pattern": "C5 F8 29 B4 24 ?? ?? ?? ?? 48 89 CE 48 8B 49 08 48 8B 01",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -10
+  },
+  "Ne_SaveSystem_BuildSaveInfoList": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 81 EC 98 04 00 00 4C 89 CB",
+   "note": "The function is at 0x413fee0 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Ne_SaveSystem_InitDevice": {
+   "pattern": "41 56 56 57 53 48 81 EC 88 00 00 00 80 B9 DC 02 00 00 00 0F 84 ?? ?? ?? ?? 8B 05",
+   "note": "The EA device init at 0x413e9d0; the pattern matches once in the EA image."
+  },
+  "Ne_SaveSystem_SelectAndDelete": {
+   "pattern": "41 57 41 56 41 54 56 57 55 53 48 81 EC A0 04 00 00 4C 89 CB",
+   "note": "The function is at 0x4144940 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Ne_SharedPtr_Release": {
+   "pattern": "E8 ?? ?? ?? ?? 48 83 BE ?? ?? ?? ?? 00 75 4C 48 8B 86 ?? ?? ?? ?? 48 8B 88 ?? ?? ?? ?? 4C 8D 05 ?? ?? ?? ?? 48 8D 7C 24 58",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 1,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 0
+   }
+  },
+  "Ne_SharedPtr_ReleaseB": {
+   "pattern": "56 48 83 EC 20 48 8B 71 08 48 85 F6 74 23 F0 FF 4E 08 75 1D 48 8B 06 48 89 F1 FF 10 F0 FF 4E 0C 75 0F 48 8B 06 48 89 F1 48 83 C4 20 5E 48 FF 60 08 90 48 83 C4 20 5E C3 CC CC CC CC CC CC CC CC E9 BB",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Ne_StdMap_At_141107280": {
+   "pattern": "48 89 F9 E8 ?? ?? ?? ?? 48 85 C0 74 60 48 8D 5C 24 28",
+   "anchor": 4,
+   "note": "The call site of the KB build was rewritten. This caller of the same lookup function (4 callers there, 3 here) resolves to it through the call.",
+   "resolve": {
+    "kind": "rel32",
+    "insn": 3
+   }
+  },
+  "Render_Gfx2Buffer_Construct": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 81 EC 28 01 00 00 C5 F8 29 B4 24 10 01 00 00 48 89 D7 48 89 CE 48 8D 05 ?? ?? ?? ?? 48 89 01 4C",
+   "note": "The function is at 0x39c2800 in the EA dump. The base pattern differs there in rip-relative displacements and frame constants; the pattern is the EA body, extended until it matches once."
+  },
+  "Sess_Flow_ParseXml": {
+   "pattern": "E9 ?? ?? ?? ?? 01 06 E9 A0 04 DB 03 DE E9 7D 99",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_FormationLapLogic_SubscribeSafetyCarDeployment": {
+   "pattern": "E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 8B 48 08 48 8D 05 ?? ?? ?? ?? 48 89 44 24 38 C7 44 24 40 00 00 00 00 4C 8D 44 24 38 48 89 F2 E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 8B 48 08 48 8D 05 ?? ?? ?? ?? 48 89 44 24 38 C7 44 24 40 00 00 00 00 4C 8D 44 24 38 48 89 F2 E8 ?? BC 06 00 48 8B 05 ?? ?? ?? 02 48 8B 48 08 48 8D 05 99 01 00 00 48 89 44 24 38 C7 44 24 40 00 00 00 00 4C 8D 44 24 38 48 89 F2 E8 ?? ?? 06 00",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Sess_GridRundown_Update": {
+   "pattern": "E9 ?? ?? ?? ?? 23 8A D8 AC 19 DA 17 0F 83 6C 42",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_Invalidate_Lap_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? E9 C5 91 1E 03 E9 3B 54 B9 00 A1",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_LapTimes_CheckPersonalBestSector": {
+   "pattern": "56 57 53 48 83 EC 20 48 89 CE 48 8B 81 B0 00 00 00 48 8B 48 30 48 8B 89",
+   "note": "The function is located through its callers, which map one to one from the Steam 1.0.145 build; the pattern is the Steam bytes with the ones that differ wildcarded."
+  },
+  "Sess_PreLights_Update": {
+   "pattern": "E9 ?? ?? ?? ?? 4C 10 0F 82 E7 5F D2 01 F5 E6 67",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_PreRaceToRace_Update": {
+   "pattern": "E9 ?? ?? ?? 0B E9 CC CC CC CC CC CC CC CC CC CC",
+   "note": "The bytes after the protector thunk's jmp are build-specific filler. The thunk is at the same place relative to its neighbours and its callers and vtable slots agree with the KB build."
+  },
+  "Sess_RaceRuleset_OnLapCompleted": {
+   "pattern": "E9 ?? ?? ?? ?? 0F 8D 15 74 C2 FD 0F 87 8B 5E 67",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_RaceRuleset_SetTimeLimit": {
+   "pattern": "E9 ?? ?? ?? ?? 20 8D 96 CC CC CC CC CC CC CC CC",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_Recordable_Register": {
+   "pattern": "E9 ?? ?? ?? ?? 98 44 17 E9 C4 6F 1C 02 E9 7D CF",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_RedFlagRaceStrategy_Update": {
+   "pattern": "56 57 53 48 83 EC 30 48 89 D6 8B 05 ?? ?? ?? 03 89 81 90 0C 00 00 80 B9",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image."
+  },
+  "Sess_RedFlagSystem_OnSessionBeginGameplay": {
+   "pattern": "E9 ?? ?? ?? ?? EE 7D DF 5E 4E AB 34 5F FA 8B 5E",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_RedFlagSystem_OnStartLightsBegin": {
+   "pattern": "E9 ?? ?? ?? ?? C7 F3 1A 95 0F 8B 29 38 F6 FE 79",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_SafetyCarTether_UpdateTarget": {
+   "pattern": "E9 ?? ?? ?? ?? 85 D4 0F 86 D7 56 EB 01 15 20 75",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_SessionClock_SetTime": {
+   "pattern": "E9 ?? ?? ?? ?? F5 D1 E9 87 55 F1 01 0F 80 E4 5A",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Sess_Tod_BuildSessionDataset_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? D6 3C 78 AD 0F 86 A8 A3 4F 00 A0",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "Trk_TimeTrialTrackSelectVm_OnCommandRaised": {
+   "pattern": "48 8B 02 48 85 C0 0F 84 ?? ?? ?? ?? 48 89 CE 8B 00 3D 79 35 B0 02 7E 7D",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -7
+  },
+  "Vm_List_AppendChild": {
+   "pattern": "48 8D BE 30 06 00 00 80 BE 70 07 00 00 00 74 0F 48 89 F9 E8 ?? ?? ?? ?? C6 86 70 07 00 00 00 48 8B 46 10 48 8D 50 08 48 85 C0 4C 8D 35 ?? ?? ?? ?? 49 0F 44 D6 4C 8D 05 ?? ?? ?? 03 48 89 F9 E8 ?? ?? ?? ?? 48 8D 9E 50 06 00 00 48 89 F9 E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 48 89 4C 24 20 4C 8D 05 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 89 D9 48 89 C2 E8 ?? ?? ?? ?? 48 8D 9E D0 06 00 00 48 89 F9 E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 48 89 4C 24 20 4C 8D 05 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 89 D9 48 89 C2 E8 ?? ?? ?? ?? C6 44 24 30 00 48 8B 46 10 48 8D 50 08 48 85 C0 49 0F 44 D6 48 8B 0D ?? ?? ?? 05 C7 44 24 20 01 00 00 00 4C 8D 05 ?? ?? ?? 03 4C 8D 4C 24 30 E8 ?? ?? F3 FE 48",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Vm_Release_Node": {
+   "pattern": "48 89 CF 48 8D 71 08 48 89 F2 E8 ?? ?? ?? 02 48 8D 1D ?? ?? ?? ?? 48 89 9F 20 01 00 00 48 8B 87 28 01 00 00 48 85 C0 74 57 48 8B 8F 30 01 00 00 48 8B 97 38 01 00 00 48 85 D2 74 04 48 89 4A 08 4C 8D B7 28 01 00 00 4C 8D 87 30 01 00 00 48 85 C9 74 04 48 89 51 10 C5 F8 57 C0 C4 C1 78 11 00 4C 39 70 28 75 04 48 89 48 28 48 8B 0D ?? ?? ?? ?? 49 8B 16 E8 ?? ?? ?? ?? 49 C7 06 00 00 00 00 48 89 9F 00 01 00 00 48 8B 87 08 01 00 00 48 85 C0 74 57 48 8B 8F 10 01 00 00 48 8B 97 18 01 00 00 48 85 D2 74 04 48 89 4A 08 4C 8D B7 08 01 00 00 4C 8D 87 10 01 00 00 48 85 C9 74 04 48 89 51 10 C5 F8 57 C0 C4 C1 78 11 00 4C 39 70 28 75 04 48 89 48 28 48 8B 0D ?? ?? ?? 05 49 8B 16 E8 64",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "Vm_Set_TabEnabled": {
+   "pattern": "E9 ?? ?? ?? ?? 0B DC 9D E9 28 DF 75 01 2B E9 48",
+   "note": "The pattern is anchored on the EA image: the protector thunk or the wildcarded Steam match, located by its callers, its jump target or its surrounding bytes."
+  },
+  "core.save_system2_win": {
+   "pattern": "48 89 47 20 48 8D 05 ?? ?? ?? ?? 48 89 07 48 8D 47 48 48 C7 47 38 04 01 00 00",
+   "note": "The Steam pattern also matches a second site on EA. This one extends it into the next stores of the device constructor (vtable 0x145b6dbf0 on EA). From the decrypted dump."
+  },
+  "core.save_system2_win_mount": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 B8 18 13 00 00 E8 ?? ?? ?? ?? 48 29 C4 44 89 CD 4C 89 C3 48",
+   "note": "EA's Mount is at 0x144146f80 with a 0x1318-byte frame (Steam 0x1728). From the decrypted dump."
+  },
+  "core.save_system2_win_start": {
+   "pattern": "56 57 53 48 81 EC 50 02 00 00 C5 F8 29 B4 24 40 02 00 00 48 89 CE 48 8B 49 08",
+   "note": "EA's save device is a different build of the same class (0x340 bytes, no Steam helper): Start is at 0x14413f690 and its frame is 0x250 bytes. From the decrypted dump; one match."
+  },
+  "site_Car_VehicleTableRemove": {
+   "pattern": "74 07 41 88 89 E8 00 00 00 FE C8 88 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "88 05 83 B3 6E 02"
+  },
+  "site_Career_ApplyUpgradeBlockNameDefault": {
+   "pattern": "41 80 7A 19 00 74 F3 EB A1 48 8D 15",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 AA DB 1B F7"
+  },
+  "site_Career_ApplyUpgradeKeyCall": {
+   "pattern": "0F B6 53 20 8D 42 F5 3C 06 77 08 48 89 F1 E8",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 89 F1 E8 95 9E 9F F4"
+  },
+  "site_Career_DeserialiseUpgradesEnd": {
+   "pattern": "85 C0 74 B6 E9 ?? ?? ?? ?? 48 8D 15",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 3B 31 43 02"
+  },
+  "site_Career_LoadUpgradeRows_DeptPath": {
+   "pattern": "48 8D 8C 24 98 06 00 00 48 8D 15 ?? ?? ?? 02 E8 C8 27 00 00 48 8B 8C",
+   "note": "The pattern is the Steam 1.0.145 match at the same place in the EA image, extended until it matches once, with the bytes that differ wildcarded."
+  },
+  "site_Career_RnDBoxGridNameIndex": {
+   "pattern": "48 0F BE C0 48 8D 0D ?? ?? ?? ?? 48 8B 14 C1 48 C7 44 24 50 00 00 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 0F BE C0 48 8D 0D 11 80 BE 03"
+  },
+  "site_Career_RnDCardArtImage0": {
+   "pattern": "4C 8B 40 10 4C 89 7C 24 20 48 8D 15 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D FE 99 01 04"
+  },
+  "site_Career_RnDCardArtImage1": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 48 89 E9 E8 ?? ?? ?? ?? 48 8B 44 24 50 48 8D 50 09 48 85 C0 48 0F 44 D7",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 50 46 01 04"
+  },
+  "site_Career_RnDCardArtImage2": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F9 E8 ?? ?? ?? ?? 48 8B 84 24 C0 00 00 00 48 8D 50 09 48 85 C0 48 0F 44 D5 4C 8D 05 ?? ?? ?? ?? 4C 89 F1 45 31 C9 E8 ?? ?? ?? ?? 48 8D 8E 40 02 00 00 48 89 C2",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D C4 16 01 04"
+  },
+  "site_Career_RnDCardArtMask0": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F9 E8 ?? ?? ?? ?? 48 8B 44 24 28 48 8D 50 09 48 85 C0 49 0F 44 D5 4C 8D 05 ?? ?? ?? ?? 4C 89 F1 45 31 C9 E8 ?? ?? ?? ?? 48 8D 8F 28 01 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 99 97 01 04"
+  },
+  "site_Career_RnDCardArtMask1": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 48 89 E9 E8 ?? ?? ?? ?? 48 8B 44 24 50 48 8D 50 09 48 85 C0 48 8D 05 ?? ?? ?? ?? 48 0F 44 D0 4C 8D 05 ?? ?? ?? ?? 4C 89 E9 45 31 C9 E8 ?? ?? ?? ?? 48 8D 8E A0 02 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D AC 45 01 04"
+  },
+  "site_Career_RnDCardArtMask2": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F9 E8 ?? ?? ?? ?? 48 8B 84 24 C0 00 00 00 48 8D 50 09 48 85 C0 48 0F 44 D5 4C 8D 05 ?? ?? ?? ?? 4C 89 F1 45 31 C9 E8 ?? ?? ?? ?? 48 8D 8E A0 02 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 0D 16 01 04"
+  },
+  "site_Career_RnDCardDeptIcon0": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F9 E8 ?? ?? ?? ?? 48 8B 44 24 28 48 8D 50 09 48 85 C0 49 0F 44 D5 4C 8D 05 ?? ?? ?? ?? 4C 89 F1 45 31 C9 E8 ?? ?? ?? ?? 48 8D 8F C8 01 00 00",
+   "expect": "4C 8D 0D FB 4A 01 04",
+   "note": "expect holds a Steam rel32/disp32. It is the same instruction on 1.0.145 with its displacement (the target string or callee matches the KB build's)."
+  },
+  "site_Career_RnDCardDeptIcon1": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 48 89 E9 E8 ?? ?? ?? ?? 48 8B 44 24 50 48 8D 50 09 48 85 C0 48 8D 05 ?? ?? ?? ?? 48 0F 44 D0 4C 8D 05 ?? ?? ?? ?? 4C 89 E9 45 31 C9 E8 ?? ?? ?? ?? 48 8D 8E 40 04 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 0D F9 00 04"
+  },
+  "site_Career_RnDCardDeptIcon2": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F9 E8 ?? ?? ?? ?? 48 8B 84 24 C0 00 00 00 48 8D 50 09 48 85 C0 48 0F 44 D5 4C 8D 05 ?? ?? ?? ?? 4C 89 F1 45 31 C9 E8 ?? ?? ?? ?? 48 8D 8E 40 04 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 62 C9 00 04"
+  },
+  "site_Career_RnDDeptRowCategoryIcon": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F1 E8 ?? ?? ?? ?? 48 8B 44 24 60 48 8D 50 09",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D E0 F3 BA 03"
+  },
+  "site_Career_RnDDeptRowTypeIcon": {
+   "pattern": "48 8B 8C 24 B0 00 00 00 48 63 0C 88 48 01 C1 4C 8D 0D ?? ?? ?? ?? FF E1 4C 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 77 2C D1 03"
+  },
+  "site_Career_RnDDeptRowTypeLabel": {
+   "pattern": "4A 63 0C 88 48 01 C1 FF E1 4C 8D 05 ?? ?? ?? ?? E9 ?? ?? ?? ?? 4C 8D 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 05 B2 3C D1 03"
+  },
+  "site_Career_RnDDeptRowTypeLabelJoin": {
+   "pattern": "48 8D 15 ?? ?? ?? ?? 48 8D 8C 24 90 00 00 00 E8 ?? ?? ?? ?? 49 8B 5C 24 08",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 A7 3D D1 03"
+  },
+  "site_Career_RnDInProgressPartIcon": {
+   "pattern": "4C 89 74 24 20 48 89 D9 48 8D 15 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 17 64 8F 03"
+  },
+  "site_Career_RnDInProgressStrip": {
+   "pattern": "4C 89 F9 48 8D 15 ?? ?? ?? ?? 4C 8D 0D",
+   "expect": "4C 8D 0D 35 A6 93 03",
+   "note": "expect holds a Steam rel32/disp32. It is the same instruction on 1.0.145 with its displacement (the target string or callee matches the KB build's)."
+  },
+  "site_Career_RnDInProgressTypeIcon": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? EB 50 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 48 9B A5 03"
+  },
+  "site_Career_RnDInProgressTypeIconJoin": {
+   "pattern": "48 89 DE 4C 8D 05 ?? ?? ?? ?? 3C 03",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 89 DE 4C 8D 05 63 9C A5 03"
+  },
+  "site_Career_RnDInProgressTypeLabel": {
+   "pattern": "4C 8D 05 ?? ?? ?? ?? EB 4B 4C 8D 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 05 23 A3 A5 03"
+  },
+  "site_Career_RnDInProgressTypeLabelJoin": {
+   "pattern": "0F 1F 44 00 00 4C 89 F1 48 8D 15 ?? ?? ?? ?? E8",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 89 F1 48 8D 15 7F A4 A5 03"
+  },
+  "site_Career_RnDListRowDeptIcon": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 84 24 A0 0C 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D AE 62 0D 04"
+  },
+  "site_Career_RnDPerfViewModelSlotDtor": {
+   "pattern": "48 8B 9E 68 06 00 00 48 85 DB 0F 84 ?? ?? ?? ?? 4C 8D B7 80 00 00 00 48 8D 8F E0 06 00 00 E8 ?? ?? ?? ?? 48 8D 8F C0 04 00 00",
+   "expect": "E8 7A 45 DD FF",
+   "note": "expect holds a Steam rel32/disp32. It is the same instruction on EA with EA's displacement, read from the dump. The base pattern matches EA once."
+  },
+  "site_Career_RnDPerksTitleDeptIcon": {
+   "pattern": "4C 89 64 24 20 48 8D 15 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 74 C5 B9 03"
+  },
+  "site_Career_RnDPieMoveAssignSlotDtor": {
+   "pattern": "4C 8B 36 4D 85 F6 0F 84 ?? ?? ?? ?? 4C 8D BB 80 00 00 00 48 8D 8B E0 06 00 00 E8 ?? ?? ?? ?? 48 8D 8B C0 04 00 00",
+   "expect": "E8 81 E8 E2 FF",
+   "note": "expect holds a Steam rel32/disp32. It is the same instruction on EA with EA's displacement, read from the dump. The base pattern matches EA once."
+  },
+  "site_Career_RnDPiePopulateNextCode": {
+   "pattern": "EB 1B 0F 1F 84 00 00 00 00 00 48 8D 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 05 3F 7C 90 03"
+  },
+  "site_Career_RnDPieSliceDescFormat": {
+   "pattern": "E8 ?? ?? ?? ?? B8 FF FF FF FF 48 8D B4 24 B0 01 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "E8 80 64 21 02"
+  },
+  "site_Career_RnDPieSliceIconArgs": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 84 24 60 01 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D C5 F7 92 03"
+  },
+  "site_Career_RnDPopupCategoryIcon": {
+   "pattern": "4C 89 74 24 20 48 8D 15 ?? ?? ?? ?? 4C 8D 0D ?? ?? ?? ?? 48 89 D9",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D F0 39 E7 03"
+  },
+  "site_Career_RnDPurchasePanelTypeLabelJoin": {
+   "pattern": "4C 8D 05 ?? ?? ?? ?? EB 07 4C 8D 05 ?? ?? ?? ?? 48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 58",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 22 7B D0 03"
+  },
+  "site_Career_RnDPurchaseScreenTypeLabelJoin": {
+   "pattern": "4C 8D 05 ?? ?? ?? ?? EB 07 4C 8D 05 ?? ?? ?? ?? 48 8D 15 ?? ?? ?? ?? 48 8D 8C 24 C0 00 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 97 4F D4 03"
+  },
+  "site_Career_RnDResearchRowCategoryIcon": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F1 E8 ?? ?? ?? ?? 48 8B 44 24 50 48 8D 50 09",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D E8 AC BB 03"
+  },
+  "site_Career_RnDResearchRowTypeIcon": {
+   "pattern": "48 8B 8C 24 08 01 00 00 48 63 0C 88 48 01 C1 4C 8D 0D ?? ?? ?? ?? FF E1 4C 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 70 E5 D1 03"
+  },
+  "site_Career_RnDResearchRowTypeLabel": {
+   "pattern": "48 63 0C 90 48 01 C1 FF E1 4C 8D 05 ?? ?? ?? ?? E9 ?? ?? ?? ?? 4C 8D 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 05 B9 F5 D1 03"
+  },
+  "site_Career_RnDResearchRowTypeLabelJoin": {
+   "pattern": "48 8D 15 ?? ?? ?? ?? 48 8D 8C 24 88 00 00 00 E8 ?? ?? ?? ?? 49 8B 75 08",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 AE F6 D1 03"
+  },
+  "site_Career_RnDResultTypeIcon": {
+   "pattern": "4D 89 E0 E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D C6 58 0E 04"
+  },
+  "site_Career_RnDResultTypeIconJoin": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 66 90 4C 8D 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 05 86 59 0E 04"
+  },
+  "site_Career_RnDResultTypeLabel": {
+   "pattern": "45 84 C9 75 E4 E9 ?? ?? ?? ?? 4C 8D 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 05 E7 5A 0E 04"
+  },
+  "site_Career_RnDTodoTypeLabelJoin": {
+   "pattern": "48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 48 E8 ?? ?? ?? ?? 48 8B 9F 38 03 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 57 58 D1 03"
+  },
+  "site_Career_RnDUpgradeInfoTypeLabelJoin": {
+   "pattern": "48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 48 E8 ?? ?? ?? ?? 48 8B 86 50 03 00 00 48 8B B8 F8 00 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 E1 63 D2 03"
+  },
+  "site_Career_RnDUpgradeListDeptIcon": {
+   "pattern": "48 89 7C 24 20 48 89 E9 48 8D 15 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D 4F 75 0D 04"
+  },
+  "site_Career_TeamHqIsMyTeamResult": {
+   "pattern": "75 20 48 89 F9 E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 84 DB",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 10,
+   "expect": ""
+  },
+  "site_Career_TeamHqRnDPopupTypeIcon": {
+   "pattern": "48 01 D1 FF E1 4C 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? 4C 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D AA 71 FD 03"
+  },
+  "site_Career_TeamHqRnDPopupTypeIconJoin": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 3C 03 77 0D 48 8D 0D",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "3C 03 77 0D 48 8D 0D 4A 02 E9 03"
+  },
+  "site_Career_TeleFailedTypeNameJoin": {
+   "pattern": "0F B6 40 70 48 8B 54 C5 00 48 89 D9 E8",
+   "expect": "48 89 D9 E8 56 06 E7 FF",
+   "note": "expect holds a Steam rel32/disp32. It is the same instruction on EA with EA's displacement, read from the dump. The base pattern matches EA once."
+  },
+  "site_Career_TeleRecordTypeName": {
+   "pattern": "0F B6 43 70 48 8D 15 ?? ?? ?? ?? 48 8B 14 C2",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 0A 66 FE 04"
+  },
+  "site_Career_TeleRecordTypeNameCall": {
+   "pattern": "E8 ?? ?? ?? ?? 48 8B 0E 0F B6 43 72",
+   "expect": "E8 01 82 E1 FF",
+   "note": "expect holds a Steam rel32/disp32. It is the same instruction on EA with EA's displacement, read from the dump. The base pattern matches EA once."
+  },
+  "site_Career_TeleResearchTypeName": {
+   "pattern": "0F B6 40 70 48 8D 0D ?? ?? ?? ?? 48 8B 14 C1",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 0D AF 01 04 05"
+  },
+  "site_Career_TeleResearchTypeNameCall": {
+   "pattern": "E8 ?? ?? ?? ?? 48 8B 47 10 0F B6 40 72",
+   "expect": "E8 E3 08 E7 FF",
+   "note": "expect holds a Steam rel32/disp32. It is the same instruction on EA with EA's displacement, read from the dump. The base pattern matches EA once."
+  },
+  "site_Career_Unk141814320TypeLabelJoin": {
+   "pattern": "48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 40 E8 ?? ?? ?? ?? 48 8B 9E A8 00 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 93 20 18 04"
+  },
+  "site_Career_Unk1418169f0TypeLabelJoin": {
+   "pattern": "48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 40 E8 ?? ?? ?? ?? 4C 8B A6 A8 00 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 DC F8 17 04"
+  },
+  "site_Career_UpgradeCardDeptIcon": {
+   "pattern": "4C 8D 0D ?? ?? ?? ?? 4C 89 F9 E8 ?? ?? ?? ?? 48 8B 44 24 58",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 0D C4 C7 02 04"
+  },
+  "site_Career_UpgradeCardTypeLabel": {
+   "pattern": "4A 63 0C B0 48 01 C1 FF E1 4C 8D 05 ?? ?? ?? ?? E9 ?? ?? ?? ?? 4C 8D 05",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "4C 8D 05 DB E2 19 04"
+  },
+  "site_Career_UpgradeCardTypeLabelJoin": {
+   "pattern": "48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 68 E8 ?? ?? ?? ?? C6 44 24 45 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "48 8D 15 D0 E3 19 04"
+  },
+  "site_Career_UpgradeInitNormal": {
+   "pattern": "48 83 86 C8 00 00 00 10 E9 ?? ?? ?? ?? 8B 15",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "8B 15 4E A9 D2 02"
+  },
+  "site_Game_CareerContinue_DriverSlotTitle": {
+   "pattern": "4C 69 EE 40 05 00 00 F6 82 71 01 00 00 20 4A 8D 8C 29 B8 03 00 00 44 88 44 24 37 0F 85 ?? ?? ?? ?? 48 8D 15 ?? ?? ?? ?? E8 ?? ?? ?? ?? C6 84 24 08 04 00 00 01",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "E8 8F 4D DA FE"
+  },
+  "site_Game_CareerWizard_BackRoute": {
+   "pattern": "48 C7 44 24 40 00 00 00 00 48 8D 15 ?? ?? ?? ?? 48 8D 7C 24 40 48 89 F9 45 31 C0 45 31 C9 E8 ?? ?? ?? ?? 48 8B 4E 28 48 89 F2 49 89 F8 45 31 C9 E8 ?? ?? ?? ?? EB 24 BA 05 15 00 00",
+   "anchor": 16,
+   "note": "The pattern is the EA 1.0.145 code at the Steam 1.0.145 site, found from a decrypted in-game dump.",
+   "expect": "48 8D 7C 24 40"
+  },
+  "site_Game_DriverSelectHeader_BuildTabs": {
+   "pattern": "E8 ?? ?? ?? ?? C6 86 10 03 00 00 01 48 8B 86 C0 02 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "E8 F9 36 7F 02"
+  },
+  "site_Game_DriverSelect_BadgeFormat": {
+   "pattern": "E8 ?? ?? ?? ?? 48 8D 8E 58 FF FF FF",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "E8 CB 86 AB 02"
+  },
+  "site_Game_DriverSelect_TeamLogoFormat": {
+   "pattern": "48 8D 4C 24 60 E8 ?? ?? ?? ?? 48 8B 97 B0 00 00 00",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "E8 FD A3 AB 02"
+  },
+  "site_Game_GarageSetups_EntryStep": {
+   "pattern": "4E 8B 0C C2 ?? ?? ?? ?? ?? ?? ?? ?? 4D 8B 80 ?? ?? ?? ?? 41 39 80 ?? ?? ?? ?? 0F 84 ?? ?? ?? ?? 48 83 C2 08",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 4,
+   "expect": ""
+  },
+  "site_Game_GarageSetups_NotFound": {
+   "pattern": "31 F6 48 8D 8C 24 D8 00 00 00 48 89 F2",
+   "expect": "31 F6 48 8D 8C",
+   "note": "The inlined lookup's not-found join (xor esi,esi, then the name node built from rsi) at F1_25.exe+0xc2076f; Steam's equivalent is the function exit that returns rsi."
+  },
+  "site_Game_SaveData_ContainersChildren": {
+   "pattern": "41 89 04 24 85 C0 0F 85 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 4C 8D AC 24 ?? ?? ?? ?? C5 C8 57 F6",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 12,
+   "expect": ""
+  },
+  "site_Game_SaveData_ContainersDone": {
+   "pattern": "4C 8B 4C 24 30 4C 8B 74 24 38 75 4E B8 BA 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -7,
+   "expect": ""
+  },
+  "site_Game_TeamSelect_TeamLogoFormat": {
+   "pattern": "E8 ?? ?? ?? ?? 48 8D 8F 58 FF FF FF",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image.",
+   "expect": "E8 D6 42 8E 02"
+  },
+  "site_Game_TheatreList_EntryStep": {
+   "pattern": "48 8B B9 A8 02 00 00 48 8B 49 40 48 69 DA A0 01 00 00 8B 44 1F 08",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image. The loader patches the site itself in the decrypted dump, so no expect bytes are checked.",
+   "expect": ""
+  },
+  "site_Game_TheatreList_EntryStepAlt": {
+   "pattern": "48 8B B9 C8 02 00 00 48 8B 49 40 48 69 DA A0 01 00 00 8B 44 1F 08",
+   "note": "The pattern is the Steam 1.0.145 match with the bytes that differ in the EA image wildcarded; it matches once in the EA image. The loader patches the site itself in the decrypted dump, so no expect bytes are checked.",
+   "expect": ""
+  },
+  "site_Ne_HwBool_CrowdInShadows": {
+   "pattern": "49 8B 4C 24 50 48 8D 15 ?? ?? ?? ?? E8",
+   "anchor": 12,
+   "note": "The EA 1.0.145 code around the call is padded with junk instructions, so the pattern is the shared run before the call and the match address is the hint.",
+   "expect": "E8",
+   "section": ".xtls"
+  },
+  "site_Ne_HwBool_NightShadowCharCast": {
+   "pattern": "49 8B 4C 24 50 48 8D 15 ?? ?? ?? ?? E8",
+   "anchor": 12,
+   "note": "The EA 1.0.145 code around the call is padded with junk instructions, so the pattern is the shared run before the call and the match address is the hint.",
+   "expect": "E8",
+   "section": ".xtls"
+  },
+  "site_Ne_HwInt_NightShadowMapSize": {
+   "pattern": "85 C0 75 D4 49 8B 4C 24 50 31 D2 45 31 C0 E8",
+   "anchor": 14,
+   "note": "The EA 1.0.145 code around the call is padded with junk instructions, so the pattern is the shared run before the call and the match address is the hint.",
+   "expect": "E8",
+   "section": ".xtls"
+  },
+  "site_Ne_HwInt_ShadowSampling": {
+   "pattern": "49 8B 4C 24 50 31 FF 31 D2 45 31 C0 E8",
+   "anchor": 12,
+   "note": "The EA 1.0.145 code around the call is padded with junk instructions, so the pattern is the shared run before the call and the match address is the hint.",
+   "expect": "E8",
+   "section": ".xtls"
+  },
+  "site_Sess_InGamePlayerFinishedAiCall": {
+   "pattern": "E8 ?? ?? ?? ?? 49 81 C6 A8 00 00 00 4C 89 F1 E8",
+   "expect": "E8 FA F3 B3 00",
+   "note": "The pattern matches EA once at the Steam offset. The expected site bytes carry a rip-relative or call displacement that differs on EA; they are the EA dump's bytes."
+  },
+  "site_Sess_InGameSessionCompleteAiCall": {
+   "pattern": "E8 ?? ?? ?? ?? FE C3 48 8B 87 A8 0D 00 00 8B 48 30 2B 48 28 C1 E9 03 38 CB 72 D0 EB 6C",
+   "expect": "E8 96 F9 B3 00",
+   "note": "The pattern matches EA once at the Steam offset. The expected site bytes carry a rip-relative or call displacement that differs on EA; they are the EA dump's bytes."
+  },
+  "site_Sess_TimeTrialLeaderboard_TabChild": {
+   "pattern": "FF 50 30 48 89 F1 E8 ?? ?? ?? ?? 90 48 83 C4 40 5E C3 56 48 83 EC 40 F6 81 28 06 00 00 02 0F 84 8C 00 00 00 48 89 CE C7 44 24 28 04 00 00 00 C7 44 24 30 00 00 00 00 48 C7 44 24 38 00 00 00 00 48 8D",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5,
+   "expect": ""
+  },
+  "site_Sess_TyreVisSlotLookup": {
+   "pattern": "4C 89 F9 E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 49 8B 8E ?? ?? ?? ?? 8B 51 94",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 8,
+   "expect": ""
+  },
+  "site_Team_LoadInsertCall": {
+   "pattern": "4C 8D BC 24 ?? ?? ?? ?? 4C 8D 25 ?? ?? ?? ?? 41 FF C5",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -14,
+   "expect": ""
+  },
+  "vt_Sess_UnloadRewardSequence": {
+   "pattern": "C7 86 78 0C 00 00 00 00 00 00 48 8D 05 ?? ?? ?? ?? 48 89 06 66 C7 86 80 0C 00 00",
+   "note": "The pattern is the EA 1.0.145 code at the Steam 1.0.145 site, found from a decrypted in-game dump.",
+   "section": ".xtls",
+   "anchor": 13,
+   "resolve": {
+    "kind": "riprel",
+    "insn": 10,
+    "len": 7
+   }
+  },
+  "Career_Select_DeluxeUpgradeBundleLabel": {
+   "pattern": "56 57 53 48 81 EC 60 01 00 00 48 8B 02 48 85 C0 0F 84 ?? ?? ?? ?? 81 38 87 D5 39 95",
+   "note": "The pattern is the EA 1.0.145 code at the Steam 1.0.145 site, found from a decrypted in-game dump."
+  },
+  "Ne_Load_SystemConfigXml": {
+   "pattern": "41 57 41 56 41 54 56 57 53 48 83 EC 28 48 89 CE 48 8B 39 4C 8D 81 08 01 00 00",
+   "note": "The pattern is the EA 1.0.145 code at the Steam 1.0.145 site, found from a decrypted in-game dump."
+  },
+  "site_Ne_HwInt_TexStreamSizeInMiB": {
+   "pattern": "85 C0 75 D4 49 8B 4C 24 50 31 D2 45 31 C0 E8",
+   "anchor": 14,
+   "expect": "E8",
+   "section": ".xtls",
+   "note": "The EA 1.0.145 code around the call is padded with junk instructions, so the pattern is the shared run before the call and the match address is the hint."
+  },
+  "Ent_Deserialise_EntrantVector": {
+   "pattern": "41 54 56 57 55 53 48 81 EC 68 01 00 00 48 89 D3 48 89 CE 48 8B 41 08",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "FeFlow_Set_StateStatus": {
+   "pattern": "41 57 41 56 41 55 41 54 56 57 55 53 48 81 EC D8 00 00 00 ?? ?? ?? ?? ?? ?? 80 3D ?? ?? ?? ?? 01 89 54 24 3C",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 0
+  },
+  "Game_PracticeTrackAcclimatisation_RefreshState": {
+   "pattern": "56 57 55 53 48 83 EC 20 48 89 CE 48 8B 81 ?? ?? ?? ?? 48 85 C0 74 09",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Game_SaveData_DeserialiseContainer": {
+   "pattern": "41 54 56 57 55 53 48 81 EC F8 00 00 00 C5 F8 29 B4 24 ?? ?? ?? ?? 44 88 4C 24 37",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Game_SaveSlotManager_Deserialise": {
+   "pattern": "41 54 56 57 55 53 48 83 EC 38 4D 89 C7 49 89 D6",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Game_Vfx_UpdateWheelTyreInstance": {
+   "pattern": "41 54 56 57 55 53 48 81 EC E8 01 00 00 C5 78 29 84 24 ?? ?? ?? ?? C5 F8 29 BC 24 ?? ?? ?? ?? C5 F8 29 B4 24 ?? ?? ?? ?? 80 FA FF",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Gdb_Load_GameDatabase": {
+   "pattern": "41 54 56 57 55 53 48 81 EC 28 02 00 00 48 89 D7 49 89 CC",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Ne_Crt_ReportGsFailure": {
+   "pattern": "48 83 EC 38 B9 17 00 00 00 FF 15 ?? ?? ?? ?? 85 C0",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5
+  },
+  "Ne_Format_String": {
+   "pattern": "57 55 53 48 81 EC 48 02 00 00 48 89 D7 48 89 CE 4C 89 84 24 ?? ?? ?? ?? 4C 89 8C 24 ?? ?? ?? ?? 48 8D 9C 24 ?? ?? ?? ?? 48 89 5C 24 38",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5
+  },
+  "Sess_Apply_ContentAvailability": {
+   "pattern": "41 54 56 57 55 53 B8 88 13 00 00 E8 ?? ?? ?? ?? 48 29 C4 C5 78 29 84 24 ?? ?? ?? ?? C5 F8 29 BC 24 ?? ?? ?? ?? C5 F8 29 B4 24 ?? ?? ?? ?? 48 89 D6",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Sess_Collect_GameModeSetupModes": {
+   "pattern": "41 54 56 57 55 53 48 83 EC 58 C5 F8 29 74 24 40 48 89 CE 48 89 11",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Sess_Parse_EntrantList": {
+   "pattern": "41 54 56 57 55 53 48 81 EC F8 06 00 00 4C 89 4C 24 38",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Sess_RaceStrategy_RedFlagRecompute": {
+   "pattern": "57 55 53 48 83 EC 28 48 8B 42 10 48 8B 80 ?? ?? ?? ?? 80 78 40 02",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5
+  },
+  "Sess_Setup_VehicleComponents": {
+   "pattern": "41 54 56 57 55 53 48 83 EC 58 C5 F8 29 74 24 40 48 89 CE C6 41 48 01",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Sess_TyreAllocation_OnSessionStart": {
+   "pattern": "41 54 56 57 55 53 48 81 EC 88 00 00 00 48 89 CE 48 8B 89 ?? ?? ?? ?? 48 8B 01",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Snd_Request_JobWorker": {
+   "pattern": "56 57 55 53 48 83 EC 20 44 89 C6 89 D7 48 89 CB",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "Trk_GrandPrixTrackSelectVm_OnCommandRaised": {
+   "pattern": "41 54 56 57 55 53 48 81 EC 18 01 00 00 C5 F8 29 B4 24 ?? ?? ?? ?? 48 8B 02",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6
+  },
+  "site_Ai_BuildSystem_RecordPushed": {
+   "pattern": "39 43 08 0F 86 ?? ?? ?? ?? 48 8B 0B 48 8B 01 BA 30 01 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -7,
+   "expect": ""
+  },
+  "site_Ai_UpdateCars_CornerLineLoad": {
+   "pattern": "48 85 C0 0F 84 ?? ?? ?? ?? 48 8B 68 08 48 8B 70 10",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -8,
+   "expect": ""
+  },
+  "site_Car_ChassisRegistryCount": {
+   "pattern": "49 8B 4C 24 28 48 8B 99 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 83 BB ?? ?? ?? ?? 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 12,
+   "expect": ""
+  },
+  "site_Car_ErsGearModifierLoad": {
+   "pattern": "4C 01 F2 ?? ?? ?? ?? ?? ?? ?? ?? ?? C5 F8 2E CE",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 3,
+   "expect": ""
+  },
+  "site_Career_ScheduleComponent_TrackListEntryDone": {
+   "pattern": "49 39 C7 4C 8B 6C 24 38 0F 83 ?? ?? ?? ?? 48 C7 44 24 28 00 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -7,
+   "expect": ""
+  },
+  "site_Career_ScheduleComponent_TrackListPush": {
+   "pattern": "44 38 6B 08 75 ED ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? EB E0",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 6,
+   "expect": ""
+  },
+  "site_Career_ScheduleComponent_TrackListSave": {
+   "pattern": "66 89 77 12 ?? ?? ?? ?? ?? ?? ?? 4D 39 A6 ?? ?? ?? ?? 0F 84 ?? ?? ?? ?? BE 08 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 4,
+   "expect": ""
+  },
+  "site_Career_StandingsWeekendTrackLoad": {
+   "pattern": "0F 84 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 8D 48 08 48 85 C0 48 8D 05 ?? ?? ?? ?? 48 0F 44 C8 C5 F8 29 74 24 40",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 6,
+   "expect": ""
+  },
+  "site_Career_WeekendsTrackRecordLoad": {
+   "pattern": "48 8B 44 08 08 ?? ?? ?? ?? ?? ?? ?? 48 8D 48 08",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": ""
+  },
+  "site_FeFlow_SetStateStatus": {
+   "pattern": "48 81 EC D8 00 00 00 ?? ?? ?? ?? ?? ?? 80 3D ?? ?? ?? ?? 01 89 54 24 3C",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 7,
+   "expect": ""
+  },
+  "site_FeHome_AfterCareerCall": {
+   "pattern": "45 8D 67 01 4C 89 F1 44 89 E2 E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? EB 10",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 15,
+   "expect": ""
+  },
+  "site_Game_CareerEventsSequencerFirstRecord": {
+   "pattern": "48 8B 84 24 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 4C 89 E9 E8 ?? ?? ?? ?? 48 8B 4C 24 38",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 8,
+   "expect": ""
+  },
+  "site_Game_CareerEventsSequencerPlayerDriver": {
+   "pattern": "48 8B 4C 24 38 4C 89 FA ?? ?? ?? ?? ?? ?? ?? ?? C6 83 ?? ?? ?? ?? 01",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 8,
+   "expect": ""
+  },
+  "site_Game_CareerEventsSequencerPlayerDriverJoin": {
+   "pattern": "C6 83 ?? ?? ?? ?? 01 80 3D ?? ?? ?? ?? 01 4C 8B A4 24 ?? ?? ?? ?? 75 5C",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 0,
+   "expect": "C6 83 E4 05"
+  },
+  "site_Game_CareerEventsSequencerTeamMateDriver": {
+   "pattern": "48 8B 4C 24 38 4C 89 EA ?? ?? ?? ?? ?? ?? ?? ?? 48 8B 94 24 ?? ?? ?? ?? 48 89 94 24 ?? ?? ?? ?? 48 85 D2",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 8,
+   "expect": ""
+  },
+  "site_Game_CareerEventsSequencerTeamMateDriverJoin": {
+   "pattern": "48 8B 94 24 ?? ?? ?? ?? 48 89 94 24 ?? ?? ?? ?? 48 85 D2 74 0E 48 8B 8C 24 ?? ?? ?? ?? 48 8B 01 FF 50 38 48 8B AC 24 ?? ?? ?? ?? C6 83 ?? ?? ?? ?? 01",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 0,
+   "expect": "48 8B 94 24"
+  },
+  "site_Game_GarageCrew_SceneRead": {
+   "pattern": "48 85 FF 0F 84 ?? ?? ?? ?? 4C 8B B5 ?? ?? ?? ?? BB 00 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -7,
+   "expect": ""
+  },
+  "site_Game_GarageCrew_SceneTest": {
+   "pattern": "48 85 FF 0F 84 ?? ?? ?? ?? 4C 8B B5 ?? ?? ?? ?? BB 00 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 0,
+   "expect": "48 85 FF 0F 84 CF 00 00 00"
+  },
+  "site_Game_GarageCrew_SpawnVector": {
+   "pattern": "31 C9 ?? ?? ?? ?? ?? ?? 49 C1 F8 04 4C 89 EA E8 ?? ?? ?? ?? BA D0 01 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 2,
+   "expect": ""
+  },
+  "site_Game_GhostlapTrace_RivalLogBoard": {
+   "pattern": "C3 ?? ?? ?? ?? ?? ?? ?? 48 8B 40 40 48 89 44 24 20",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 1,
+   "expect": ""
+  },
+  "site_Game_GrandPrixContinueVm_F1wCarCheck": {
+   "pattern": "0F 84 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F 85 ?? ?? ?? ?? 48 8B 8E ?? ?? ?? ?? 48 8B 41 10",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 6,
+   "expect": ""
+  },
+  "site_Game_GrandPrixContinueVm_F1wWarningCheck": {
+   "pattern": "74 13 49 8B 0E ?? ?? ?? ?? ?? ?? ?? 40 0F 94 C7",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": ""
+  },
+  "site_Game_MyTeamVehicleBases_AiConfigLoad": {
+   "pattern": "E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 4C 89 E2 E8 ?? ?? ?? ?? 48 8B 84 24 ?? ?? ?? ?? 48 89 84 24 ?? ?? ?? ?? C5 F8 28 84 24 ?? ?? ?? ?? C5 F8 28 8C 24 ?? ?? ?? ?? C5 F8 28 94 24 ?? ?? ?? ?? C5 F8 28 9C 24 ?? ?? ?? ?? C5 F8 29 9C 24 ?? ?? ?? ?? C5 F8 29 94 24 ?? ?? ?? ?? C5 F8 29 4C 24 70",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": ""
+  },
+  "site_Game_MyTeamVehicleBases_NextBase": {
+   "pattern": "48 8D 94 24 ?? ?? ?? ?? E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 49 39 C4",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 13,
+   "expect": ""
+  },
+  "site_Game_MyTeamVehicleBases_SaveRecord": {
+   "pattern": "8B 6C 24 38 85 ED 0F 85 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 66 41 0B 46 02",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 12,
+   "expect": ""
+  },
+  "site_Game_PitLane_BoxSlotRead": {
+   "pattern": "4D 85 C0 75 4B 48 8D 54 24 60 48 89 D9 41 89 F8",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -11,
+   "expect": ""
+  },
+  "site_Game_PitStops_CrewTemplateRead": {
+   "pattern": "4C 8B 2B 48 8B 73 08 49 8B 45 00 BA 60 06 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5,
+   "expect": ""
+  },
+  "site_Game_SaveData_ContainersCount": {
+   "pattern": "48 C1 F8 03 48 89 84 24 ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 8B 01",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 12,
+   "expect": ""
+  },
+  "site_Game_SaveData_UnclaimedChild": {
+   "pattern": "E9 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 8B 97 ?? ?? ?? ?? 83 E2 01",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": ""
+  },
+  "site_Game_SaveSlot_Selected": {
+   "pattern": "48 89 9E ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F 84 ?? ?? ?? ?? 48 89 F1",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 7,
+   "expect": ""
+  },
+  "site_Game_TheatreRows_RowOffset": {
+   "pattern": "89 7C 24 30 ?? ?? ?? ?? ?? ?? ?? 4A 8B B4 33 ?? ?? ?? ?? 48 85 F6",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 4,
+   "expect": ""
+  },
+  "site_Game_ThrustmasterLcd_EntrantRecord": {
+   "pattern": "E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 83 F8 02 77 40",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": ""
+  },
+  "site_Game_TileListSelect_ChildStep": {
+   "pattern": "4C 8D 2D ?? ?? ?? ?? 48 8D 35 ?? ?? ?? ?? 48 8D 2D ?? ?? ?? ?? 66 0F 1F 44 00 00 ?? ?? ?? ?? ?? ?? ?? EB 0F",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 27,
+   "expect": ""
+  },
+  "site_Game_TimeTrialLeaderboard_BoardRead": {
+   "pattern": "75 DB EB 02 31 C9 ?? ?? ?? ?? ?? ?? ?? 48 8B 91 ?? ?? ?? ?? 48 39 D0",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 6,
+   "expect": ""
+  },
+  "site_Game_TimeTrial_SetReferenceListBoard": {
+   "pattern": "0F 84 ?? ?? ?? ?? 45 85 F6 41 0F 94 C1 48 81 C2 E0 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -7,
+   "expect": ""
+  },
+  "site_Game_TimeTrial_SetReferenceLogBoard": {
+   "pattern": "E9 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 8B 78 40 48 C7 44 24 30 00 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": ""
+  },
+  "site_Gdb_ReserveTarget": {
+   "pattern": "48 89 8C 24 ?? ?? ?? ?? 48 0F 47 C8 ?? ?? ?? ?? ?? 49 B9 5C 8F C2 F5 28 5C 8F 02",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 12,
+   "expect": ""
+  },
+  "site_Ne_Format_String_Entry": {
+   "pattern": "57 55 53 48 81 EC 48 02 00 00 48 89 D7 48 89 CE 4C 89 84 24 ?? ?? ?? ?? 4C 89 8C 24 ?? ?? ?? ?? 48 8D 9C 24 ?? ?? ?? ?? 48 89 5C 24 38",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5,
+   "expect": ""
+  },
+  "site_Ne_MemoryMapHeapSize": {
+   "pattern": "48 8B 8C 24 ?? ?? ?? ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 8C 24 ?? ?? ?? ?? 48 85 C9 0F 84 ?? ?? ?? ?? 83 E5 F4 41 88 F6 41 09 EE 41 88 DC 43 8D 04 66 45 88 FD 4C 8B BC 24 ?? ?? ?? ?? 46 8D 34 E8 4C 8B A4 24 ?? ?? ?? ?? 48 8B AC 24 ?? ?? ?? ?? 8B 47 0C 48 85 ED 0F 84 ?? ?? ?? ?? 83 7F 04 00 0F 84 ?? ?? ?? ?? 48 89 CE 83 F8 01 0F 84 ?? ?? ?? ?? 83 F8 02 0F 85 ?? ?? ?? ?? 49 8B 07 BA 48 01 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 8,
+   "expect": ""
+  },
+  "site_Ne_MemoryMapInternalHeapSize": {
+   "pattern": "48 89 F1 4D 89 F9 E8 ?? ?? ?? ?? 4C 8B A4 24 ?? ?? ?? ?? 4D 85 E4",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -8,
+   "expect": ""
+  },
+  "site_Ne_ReplayAfterRecord": {
+   "pattern": "FF 50 20 ?? ?? ?? ?? ?? ?? 48 89 F1 FF 50 30 48 89 84 24 ?? ?? ?? ?? 48 8B 94 24 ?? ?? ?? ?? 48 8B 84 24 ?? ?? ?? ?? 4C 8B 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 3,
+   "expect": ""
+  },
+  "site_Ne_WatchdogKillPath": {
+   "pattern": "75 70 40 84 FF 75 6B 80 3D ?? ?? ?? ?? 01 75 4C",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5,
+   "expect": ""
+  },
+  "site_Sess_AiRecords_NameHash": {
+   "pattern": "4C 89 E9 49 89 C5 ?? ?? ?? ?? ?? ?? ?? 48 39 81 ?? ?? ?? ?? 0F 84 ?? ?? ?? ?? 31 DB",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 6,
+   "expect": ""
+  },
+  "site_Sess_GarageSlots_GarageLoad": {
+   "pattern": "0F 45 D8 ?? ?? ?? ?? ?? 48 8B 4C 24 58 4C 8B 34 C8",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 3,
+   "expect": ""
+  },
+  "site_Sess_InGameRaceRetirementDriver": {
+   "pattern": "48 85 C0 74 09 48 89 C1 48 83 C1 08 EB 02 31 C9 ?? ?? ?? ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 54 24 60",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 16,
+   "expect": ""
+  },
+  "site_Sess_PitEvalListSlot": {
+   "pattern": "48 8B 4C 24 28 E8 ?? ?? ?? ?? 48 C7 84 24 ?? ?? ?? ?? 00 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6,
+   "expect": ""
+  },
+  "site_Sess_PitEvalOwnSlot": {
+   "pattern": "49 8B 0C C8 ?? ?? ?? ?? ?? ?? ?? 8B 69 48 C4 C1 79 6E C9",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 4,
+   "expect": ""
+  },
+  "site_Sess_PitRankListSlot": {
+   "pattern": "49 8B 14 D0 ?? ?? ?? ?? ?? ?? ?? ?? 44 39 C6 83 D5 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 4,
+   "expect": ""
+  },
+  "site_Sess_PitRankOwnSlot": {
+   "pattern": "48 8B 04 C1 ?? ?? ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? FF 15 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 8B 41 08",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 4,
+   "expect": ""
+  },
+  "site_Sess_SessionEnter_VehicleLookup": {
+   "pattern": "48 89 D9 E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 0F BE 88 ?? ?? ?? ?? B8 FF FF FF FF",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 8,
+   "expect": ""
+  },
+  "site_Sess_TyreWearSlotLookup": {
+   "pattern": "E8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 48 8B 8E ?? ?? ?? ?? 8B 41 94",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": ""
+  },
+  "site_Sess_VirtualSession_EstimateTyreQuery": {
+   "pattern": "E8 ?? ?? ?? ?? 48 89 C7 C5 7A 11 4C 24 2C C5 7A 11 44 24 30",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5,
+   "expect": ""
+  },
+  "site_Team_LoadInserted": {
+   "pattern": "4C 8D BC 24 ?? ?? ?? ?? 4C 8D 25 ?? ?? ?? ?? 41 FF C5",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -9,
+   "expect": ""
+  },
+  "site_Team_RecognitionFirstRecord": {
+   "pattern": "44 8B 43 58 ?? ?? ?? ?? ?? ?? 48 8D 05 ?? ?? ?? ?? 48 89 44 24 28",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 4,
+   "expect": ""
+  },
+  "site_Trk_TrackData_SetMatched": {
+   "pattern": "4D 8B 43 10 4C 89 C2 48 29 CA 48 C1 FA 04 48 39 C2",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -8,
+   "expect": ""
+  },
+  "Ne_HashMap_ThrowLengthError_MaterialActorId": {
+   "pattern": "48 89 45 00 48 89 29 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? CC",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 8,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 7
+   }
+  },
+  "site_FeTile_ListRowEntry": {
+   "pattern": "49 89 D0 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? C7 84 24 ?? ?? ?? ?? FF FF FF FF C6 84 24 ?? ?? ?? ?? 01 C5 F8 28 05 ?? ?? ?? ?? C5 F8 11 44 24 20",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 3,
+   "expect": ""
+  },
+  "site_FeTile_ListRowFieldLoad": {
+   "pattern": "74 05 44 0F B6 70 08 48 8B 83 ?? ?? ?? ?? 48 8B 8B ?? ?? ?? ?? 48 29 C1",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6,
+   "expect": ""
+  },
+  "site_FeTile_ListScanStart": {
+   "pattern": "49 8B 46 28 48 8B 48 10 48 89 FA E8 ?? ?? ?? ?? 85 C0",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by whole-function comparison with the Steam 1.0.145 and EA 1.0.141 builds; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -17,
+   "expect": ""
+  },
+  "site_Game_AcclimPenalty_Entry": {
+   "pattern": "48 8B 81 50 03 00 00 48 69 CA 70 03 00 00 83 BC 08 C4 00 00 00 00 74 08 C6 84 08 62 03 00 00 01 C3",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -6,
+   "expect": ""
+  },
+  "site_Game_AcclimPenalty_Return": {
+   "pattern": "48 8B 81 50 03 00 00 48 69 CA 70 03 00 00 83 BC 08 C4 00 00 00 00 74 08 C6 84 08 62 03 00 00 01 C3",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 32,
+   "expect": ""
+  },
+  "site_Game_ErsNewLap_NextVehicle": {
+   "pattern": "48 8B 41 30 4C 8B 41 38 4C 39 C0 74 2C 0F B6 52 10 66 66 66 66 66 66 2E 0F 1F 84 00 00 00 00 00 4C 8B 08 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 74 0C 48 83 C0 08 4C 39 C0",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 48,
+   "expect": ""
+  },
+  "site_Game_ErsNewLap_VehicleLookup": {
+   "pattern": "48 8B 41 30 4C 8B 41 38 4C 39 C0 74 2C 0F B6 52 10 66 66 66 66 66 66 2E 0F 1F 84 00 00 00 00 00 4C 8B 08",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 35,
+   "expect": ""
+  },
+  "site_Sess_TimeTrialLeaderboard_BoundTabChild": {
+   "pattern": "FF 50 30 48 89 F1 E8 ?? ?? ?? ?? 90 48 83 C4 40 5E C3 CC CC CC 56 48 83 EC 40",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -5,
+   "expect": ""
+  },
+  "Ne_Crt_InvalidParameterAbort": {
+   "pattern": "48 85 C0 74 0A B9 16 00 00 00 E8 ?? ?? ?? ?? F6 05 ?? ?? ?? ?? 02",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": -9
+  },
+  "Ne_Std_ThrowBadArrayNewLength": {
+   "pattern": "48 89 F8 48 83 C4 48 5B 5D 5F 5E 41 5C 41 5D 41 5E 41 5F C3 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? FF",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 26,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 25
+   }
+  },
+  "Ne_Std_ThrowVectorTooLongC": {
+   "pattern": "48 8B 6C 24 58 E9 ?? ?? ?? ?? E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? FF",
+   "note": "The pattern is a call of this function in the EA 1.0.145 code, matched to the same call in the Steam 1.0.145 build; every caller that maps across both builds calls the same function, whose body matches the Steam one.",
+   "anchor": 16,
+   "resolve": {
+    "kind": "rel32",
+    "insn": 15
+   }
+  },
+  "site_Sess_InGameRaceRetirementDriverJoin": {
+   "pattern": "E8 ?? ?? ?? ?? 48 8B 54 24 60 48 C7 44 24 38 00 00 00 00",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 5,
+   "expect": "48 8B 54 24 60"
+  },
+  "site_Game_TileListSelect_ChildNext": {
+   "pattern": "49 83 C7 08 4D 39 E7 0F 85 ?? ?? ?? ?? E9 ?? ?? ?? ?? 49 8D 86 ?? ?? ?? ?? C5 F8 57 C0",
+   "note": "The pattern is the EA 1.0.145 code of this function, found by comparison with the Steam 1.0.145 build and the EA 1.0.141 dump; the loader's own jump patches in the decrypted dump are wildcarded.",
+   "anchor": 0,
+   "expect": "49 83 C7 08 4D 39 E7"
+  },
+  "Ai_Handle_PitStateChanged_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? 0F 8B 65 6C 1B FF E9 FB D8 B6 FF",
+   "note": "A protector thunk; the pattern is its EA 1.0.145 bytes. It is the only thunk in its slot range whose body is the Steam 1.0.145 function (instruction match 0.93, the same 17 field offsets and constants)."
+  }
+ },
+ "hints": {
+  "site_Ne_HwBool_CrowdInShadows": {
+   "match": "0x848254c"
+  },
+  "site_Ne_HwBool_NightShadowCharCast": {
+   "match": "0x73400bc"
+  },
+  "site_Ne_HwInt_NightShadowMapSize": {
+   "match": "0x10a3aea8"
+  },
+  "site_Ne_HwInt_ShadowSampling": {
+   "match": "0x10ae412c"
+  },
+  "site_Ne_HwInt_TexStreamSizeInMiB": {
+   "match": "0x72afde8"
+  },
+  "Game_Handle_GarageCrewEvent_Thunk": {
+   "match": "0x38d400"
+  },
+  "Game_Handle_SpecGarageCrewEvent_Thunk": {
+   "match": "0x2e0e030"
+  },
+  "Ent_Deserialise_EntrantVector": {
+   "match": "0x2453ea6"
+  },
+  "FeFlow_Set_StateStatus": {
+   "match": "0x441a730"
+  },
+  "Game_PracticeTrackAcclimatisation_RefreshState": {
+   "match": "0x2999ae6"
+  },
+  "Game_SaveData_DeserialiseContainer": {
+   "match": "0x3641b36"
+  },
+  "Game_SaveSlotManager_Deserialise": {
+   "match": "0x29d1f56"
+  },
+  "Game_Vfx_UpdateWheelTyreInstance": {
+   "match": "0x45a5606"
+  },
+  "Gdb_Load_GameDatabase": {
+   "match": "0x4598e56"
+  },
+  "Ne_Crt_ReportGsFailure": {
+   "match": "0x4fb55fd"
+  },
+  "Ne_Format_String": {
+   "match": "0x41598b5"
+  },
+  "Ne_SaveSystem2Win_Mount": {
+   "match": "0x4149556"
+  },
+  "Ne_SaveSystem2Win_Start": {
+   "match": "0x4141c6a"
+  },
+  "Sess_Apply_ContentAvailability": {
+   "match": "0x13df586"
+  },
+  "Sess_Collect_GameModeSetupModes": {
+   "match": "0x2457076"
+  },
+  "Sess_Parse_EntrantList": {
+   "match": "0x244ebc6"
+  },
+  "Sess_RaceStrategy_RedFlagRecompute": {
+   "match": "0x368efb5"
+  },
+  "Sess_Setup_VehicleComponents": {
+   "match": "0x2f3bed6"
+  },
+  "Sess_TyreAllocation_OnSessionStart": {
+   "match": "0xbcb5b6"
+  },
+  "Snd_Request_JobWorker": {
+   "match": "0x3facba6"
+  },
+  "Trk_GrandPrixTrackSelectVm_OnCommandRaised": {
+   "match": "0x1c02d86"
+  },
+  "Trk_TimeTrialTrackSelectVm_OnCommandRaised": {
+   "match": "0x1f23287"
+  },
+  "site_Ai_BuildSystem_RecordPushed": {
+   "match": "0x600f34"
+  },
+  "site_Ai_UpdateCars_CornerLineLoad": {
+   "match": "0x6410f6"
+  },
+  "site_Car_ChassisRegistryCount": {
+   "match": "0x4623153"
+  },
+  "site_Car_ErsGearModifierLoad": {
+   "match": "0x46db36c"
+  },
+  "site_Career_ScheduleComponent_TrackListEntryDone": {
+   "match": "0x126d4f7"
+  },
+  "site_Career_ScheduleComponent_TrackListPush": {
+   "match": "0x126d5bd"
+  },
+  "site_Career_ScheduleComponent_TrackListSave": {
+   "match": "0x126c9e0"
+  },
+  "site_Career_StandingsWeekendTrackLoad": {
+   "match": "0x1819ecb"
+  },
+  "site_Career_TeamHqIsMyTeamResult": {
+   "match": "0x36f22a3"
+  },
+  "site_Career_WeekendsTrackRecordLoad": {
+   "match": "0x1817584"
+  },
+  "site_FeFlow_SetStateStatus": {
+   "match": "0x441a73c"
+  },
+  "site_FeHome_AfterCareerCall": {
+   "match": "0x173eb17"
+  },
+  "site_Game_CareerEventsSequencerFirstRecord": {
+   "match": "0xc6dbe8"
+  },
+  "site_Game_CareerEventsSequencerPlayerDriver": {
+   "match": "0xc6de59"
+  },
+  "site_Game_CareerEventsSequencerPlayerDriverJoin": {
+   "match": "0xc6de69"
+  },
+  "site_Game_CareerEventsSequencerTeamMateDriver": {
+   "match": "0xc6dbff"
+  },
+  "site_Game_CareerEventsSequencerTeamMateDriverJoin": {
+   "match": "0xc6dc0f"
+  },
+  "site_Game_GarageCrew_SceneRead": {
+   "match": "0x38c1a7"
+  },
+  "site_Game_GarageCrew_SceneTest": {
+   "match": "0x38c1a7"
+  },
+  "site_Game_GarageCrew_SpawnVector": {
+   "match": "0x389a92"
+  },
+  "site_Game_GarageSetups_EntryStep": {
+   "match": "0xc211af"
+  },
+  "site_Game_GhostlapTrace_RivalLogBoard": {
+   "match": "0x147db66"
+  },
+  "site_Game_GrandPrixContinueVm_F1wCarCheck": {
+   "match": "0x1bcab5c"
+  },
+  "site_Game_GrandPrixContinueVm_F1wWarningCheck": {
+   "match": "0x1bcaed5"
+  },
+  "site_Game_MyTeamVehicleBases_AiConfigLoad": {
+   "match": "0x2503275"
+  },
+  "site_Game_MyTeamVehicleBases_NextBase": {
+   "match": "0x250484d"
+  },
+  "site_Game_MyTeamVehicleBases_SaveRecord": {
+   "match": "0x2502033"
+  },
+  "site_Game_PitLane_BoxSlotRead": {
+   "match": "0x34b5f0e"
+  },
+  "site_Game_PitStops_CrewTemplateRead": {
+   "match": "0x3c7666"
+  },
+  "site_Game_SaveData_ContainersChildren": {
+   "match": "0x3644368"
+  },
+  "site_Game_SaveData_ContainersCount": {
+   "match": "0x3644343"
+  },
+  "site_Game_SaveData_ContainersDone": {
+   "match": "0x3644453"
+  },
+  "site_Game_SaveData_UnclaimedChild": {
+   "match": "0x364267b"
+  },
+  "site_Game_SaveSlot_Selected": {
+   "match": "0x29cc380"
+  },
+  "site_Game_TheatreRows_RowOffset": {
+   "match": "0x1f06b42"
+  },
+  "site_Game_ThrustmasterLcd_EntrantRecord": {
+   "match": "0x2fd2804"
+  },
+  "site_Game_TileListSelect_ChildStep": {
+   "match": "0x3828785"
+  },
+  "site_Game_TimeTrialLeaderboard_BoardRead": {
+   "match": "0x2fc4f4d"
+  },
+  "site_Game_TimeTrial_SetReferenceListBoard": {
+   "match": "0x14767a9"
+  },
+  "site_Game_TimeTrial_SetReferenceLogBoard": {
+   "match": "0x147683f"
+  },
+  "site_Gdb_ReserveTarget": {
+   "match": "0x4599505"
+  },
+  "site_Ne_Format_String_Entry": {
+   "match": "0x41598b5"
+  },
+  "site_Ne_MemoryMapHeapSize": {
+   "match": "0x395e758"
+  },
+  "site_Ne_MemoryMapInternalHeapSize": {
+   "match": "0x3961a9c"
+  },
+  "site_Ne_ReplayAfterRecord": {
+   "match": "0x45ca20f"
+  },
+  "site_Ne_WatchdogKillPath": {
+   "match": "0x43d83ae"
+  },
+  "site_Sess_AiRecords_NameHash": {
+   "match": "0x38933f1"
+  },
+  "site_Sess_GarageSlots_GarageLoad": {
+   "match": "0x24a319d"
+  },
+  "site_Sess_InGameRaceRetirementDriver": {
+   "match": "0x2d587a0"
+  },
+  "site_Sess_PitEvalListSlot": {
+   "match": "0x36847ea"
+  },
+  "site_Sess_PitEvalOwnSlot": {
+   "match": "0x368478b"
+  },
+  "site_Sess_PitRankListSlot": {
+   "match": "0x3684572"
+  },
+  "site_Sess_PitRankOwnSlot": {
+   "match": "0x3684514"
+  },
+  "site_Sess_SessionEnter_VehicleLookup": {
+   "match": "0x98e04f"
+  },
+  "site_Sess_TyreVisSlotLookup": {
+   "match": "0x2e98c74"
+  },
+  "site_Sess_TyreWearSlotLookup": {
+   "match": "0x2e984e1"
+  },
+  "site_Sess_VirtualSession_EstimateTyreQuery": {
+   "match": "0x2f6300b"
+  },
+  "site_Team_LoadInsertCall": {
+   "match": "0x2464782"
+  },
+  "site_Team_LoadInserted": {
+   "match": "0x2464782"
+  },
+  "site_Team_RecognitionFirstRecord": {
+   "match": "0x20b6ac6"
+  },
+  "site_Trk_TrackData_SetMatched": {
+   "match": "0x2e57189"
+  },
+  "Ne_Container_AbortNoReturn_1435d82f0": {
+   "match": "0x34e61b6"
+  },
+  "Ne_HashMap_FatalStub_GroundCover": {
+   "match": "0x3ccd12b"
+  },
+  "Ne_HashMap_ThrowLengthError_MaterialActorId": {
+   "match": "0x1ee700"
+  },
+  "site_FeTile_ListRowEntry": {
+   "match": "0x242371e"
+  },
+  "site_FeTile_ListRowFieldLoad": {
+   "match": "0x24237b8"
+  },
+  "site_FeTile_ListScanStart": {
+   "match": "0x1734a80"
+  },
+  "site_Game_AcclimPenalty_Entry": {
+   "match": "0x299bd66"
+  },
+  "site_Game_AcclimPenalty_Return": {
+   "match": "0x299bd66"
+  },
+  "site_Game_ErsNewLap_NextVehicle": {
+   "match": "0x2513380"
+  },
+  "site_Game_ErsNewLap_VehicleLookup": {
+   "match": "0x2513380"
+  },
+  "site_Sess_TimeTrialLeaderboard_BoundTabChild": {
+   "match": "0x2fc36db"
+  },
+  "site_Sess_TimeTrialLeaderboard_TabChild": {
+   "match": "0x2fc207e"
+  },
+  "Ne_Crt_InvalidParameterAbort": {
+   "match": "0x545b2d9"
+  },
+  "Ne_Crt_AbortNoReturn_B": {
+   "match": "0x2908bba"
+  },
+  "Ne_Crt_ThrowOverflow_B": {
+   "match": "0x43794ac"
+  },
+  "Ne_HashMap_FatalStub_Particles": {
+   "match": "0x3de2e5f"
+  },
+  "Ne_HashMap_ThrowLengthError_Decals2": {
+   "match": "0x141e643"
+  },
+  "Ne_SharedPtr_Release": {
+   "match": "0x2d78f08"
+  },
+  "Ne_Std_ThrowBadArrayNewLength": {
+   "match": "0x31b5e8"
+  },
+  "Ne_Std_ThrowVectorTooLongC": {
+   "match": "0x750e3f"
+  },
+  "Ne_Crt_ThrowOverflow_C": {
+   "match": "0x46466d5"
+  },
+  "site_Sess_InGameRaceRetirementDriverJoin": {
+   "match": "0x2d587b9"
+  },
+  "site_Game_TileListSelect_ChildNext": {
+   "match": "0x382881e"
+  },
+  "Ai_Handle_PitStateChanged_Thunk": {
+   "match": "0x6b3b60"
+  }
+ },
+ "unresolvable": {
+  "Ne_SaveSystem2Win_WriteInfoXml": "the EA save device has no corrupt-save upload: its vtable slot +0x58 is xor eax,eax; ret",
+  "Ne_SaveError_NotDirectoryFmtSS": "the EA mount passes the format string to a generic error helper; the Steam function has no copy of its own",
+  "Ne_Ugc_DeleteTemporaryFiles": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_Ugc_GameOverlayActivatedCallback": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_Ugc_ReadInstalledItem": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_Ugc_UpdateItemCallback": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_UgcSearcher_SearchCallback": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_UgcSearcher_StartSearch": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_UgcUtil_BrowseWorkshopInSteamOverlay": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_UgcUtil_OpenWorkshopFileInSteamOverlay": "Steam Workshop code: its NeUgc strings and SteamUGC calls are not in the EA 1.0.145 image",
+  "Ne_SteamTransport_FlushPeerBuffers": "Steam API code: its SteamAPI error strings are not in the EA 1.0.145 image",
+  "Ne_SteamTransport_QueuePacket": "Steam API code: its SteamAPI error strings are not in the EA 1.0.145 image",
+  "Ne_Steam_OnEncryptedAppTicket": "Steam API code: its SteamAPI error strings are not in the EA 1.0.145 image",
+  "Asset_Unk_14379dd00": "Steam Workshop asset loader: its steam_workshop/ strings are not in the EA 1.0.145 image and no function matches its remaining strings (best body score 0.25)",
+  "Game_F1osHttpTask_Ctor_Vt14583cd40": "Steam build's online task constructor: no function in the EA 1.0.145 image matches it (best body score 0.44)",
+  "Game_F1osTasksystem_CreateTask_FinalisePackagePTask": "Steam-only package task type: the EA 1.0.145 image has no call of a matching CreateTask instantiation",
+  "Game_F1osTasksystem_CreateTask_RequestPackagePTask": "Steam-only package task type: the EA 1.0.145 image only holds CreateTask instantiations for other task types (best body score 0.79)",
+  "Game_F1os_CreateTask_RequestPackageP": "Steam-only package task type: the EA 1.0.145 image only holds sibling CreateTask instantiations (best body score 0.96 against 0.93, not distinguishable)",
+  "Game_HandleUserEntitlementsUpdateTask_OnChildDone": "Steam entitlement task: no function in the EA 1.0.145 image matches it (best body score 0.32)",
+  "Game_RetrieveConsumableEntitlementsTask_RequestSteamPrices": "Steam store price request: its store.steampowered.com string is not in the EA 1.0.145 image and no function matches it (best body score 0.35)",
+  "Ne_CloudUploader_Upload": "Steam cloud upload: no function in the EA 1.0.145 image matches it (best body score 0.17 within the order-preserved window)",
+  "Ne_NetTransportCommon_SetLocalConnectivity": "the EA 1.0.145 function that uses the same strings is a different implementation (body score 0.31)",
+  "Ne_SaveError_Win32FmtSSU": "two near-identical functions in the EA 1.0.145 image match it (body scores 0.973 and 0.970) and its callers do not map across builds"
+ }
+}

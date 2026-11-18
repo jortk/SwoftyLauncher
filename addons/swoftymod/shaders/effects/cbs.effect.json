@@ -1,0 +1,278 @@
+{
+  "id": "cbs",
+  "name": "Colour Balance",
+  "description": "Exposure, contrast, brightness, saturation, vibrance, tint, per-hue saturation and dither, applied in display brightness (gamma 2.2) with optional far values that fade in with distance.",
+  "params": [
+    {
+      "id": "exposure",
+      "type": "float",
+      "default": 0,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "label": "Exposure",
+      "doc": "Brightness in stops; each stop doubles the light."
+    },
+    {
+      "id": "contrast",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Contrast",
+      "doc": "-1 is the flattest curve, 0 leaves the picture as it is, 1 is the steepest. Black and white stay put."
+    },
+    {
+      "id": "brightness",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Brightness",
+      "doc": "Lifts or lowers the picture, strongest in the shadows."
+    },
+    {
+      "id": "saturation",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Saturation",
+      "doc": "Colour strength of the whole picture."
+    },
+    {
+      "id": "vibrance",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Vibrance",
+      "doc": "Boosts the colours that are least saturated and leaves strong colours alone."
+    },
+    {
+      "id": "tint",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Tint",
+      "doc": "Moves the picture from green at -1 to magenta at 1."
+    },
+    {
+      "id": "sat_r",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Red saturation",
+      "doc": "Saturation of red colours only; negative values calm the colour, positive ones push it."
+    },
+    {
+      "id": "sat_y",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Yellow saturation",
+      "doc": "Saturation of yellow colours only."
+    },
+    {
+      "id": "sat_g",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Green saturation",
+      "doc": "Saturation of green colours only."
+    },
+    {
+      "id": "sat_a",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Aqua saturation",
+      "doc": "Saturation of aqua colours only."
+    },
+    {
+      "id": "sat_b",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Blue saturation",
+      "doc": "Saturation of blue colours only."
+    },
+    {
+      "id": "sat_p",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Purple saturation",
+      "doc": "Saturation of purple colours only."
+    },
+    {
+      "id": "sat_m",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Magenta saturation",
+      "doc": "Saturation of magenta colours only."
+    },
+    {
+      "id": "sat_custom",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Custom hue saturation",
+      "doc": "Saturation of the colours around the custom hue."
+    },
+    {
+      "id": "huemid",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0.001,
+      "label": "Custom hue",
+      "doc": "The centre of the custom hue, from 0 (red) round the colour wheel to 1."
+    },
+    {
+      "id": "huerange",
+      "type": "float",
+      "default": 0.25,
+      "min": 0.01,
+      "max": 1,
+      "step": 0.001,
+      "label": "Custom hue range",
+      "doc": "How wide the custom hue is, as a fraction of the colour wheel."
+    },
+    {
+      "id": "enable_dither",
+      "type": "bool",
+      "default": true,
+      "label": "Dither",
+      "doc": "Adds fine noise that hides banding in smooth gradients."
+    },
+    {
+      "id": "dither_strength",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 8,
+      "step": 0.01,
+      "label": "Dither strength",
+      "doc": "The noise strength in output levels."
+    },
+    {
+      "id": "enable_depth",
+      "type": "bool",
+      "default": false,
+      "label": "Far values",
+      "doc": "Uses the Far settings instead of the near ones in the distance. Needs the game's depth buffer."
+    },
+    {
+      "id": "depth_start",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0.001,
+      "label": "Far start",
+      "doc": "Depth value where the far settings start to fade in; lower is further away."
+    },
+    {
+      "id": "depth_end",
+      "type": "float",
+      "default": 0.1,
+      "min": 0,
+      "max": 1,
+      "step": 0.001,
+      "label": "Far end",
+      "doc": "Depth value where the far settings are fully in effect; nearer than this blends towards the near settings."
+    },
+    {
+      "id": "depth_curve",
+      "type": "float",
+      "default": 1,
+      "min": 0.1,
+      "max": 4,
+      "step": 0.01,
+      "label": "Far curve",
+      "doc": "Shapes the blend between near and far; above 1 keeps the near settings longer."
+    },
+    {
+      "id": "exposure_d",
+      "type": "float",
+      "default": 0,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "label": "Far exposure",
+      "doc": "Exposure in the distance."
+    },
+    {
+      "id": "contrast_d",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Far contrast",
+      "doc": "Contrast in the distance."
+    },
+    {
+      "id": "brightness_d",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Far brightness",
+      "doc": "Brightness in the distance."
+    },
+    {
+      "id": "saturation_d",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Far saturation",
+      "doc": "Saturation in the distance."
+    },
+    {
+      "id": "vibrance_d",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 1,
+      "step": 0.001,
+      "label": "Far vibrance",
+      "doc": "Vibrance in the distance."
+    }
+  ],
+  "passes": [
+    {
+      "name": "cbs",
+      "shader": "cbs.hlsl",
+      "entry": "effect"
+    }
+  ]
+}

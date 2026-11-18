@@ -1,0 +1,48 @@
+{
+  "id": "broadcast_camera",
+  "name": "Broadcast Camera",
+  "description": "A broadcast camera's tone chain: exposure and white balance in linear light, then black level, gamma, contrast, a colour-keeping highlight knee and saturation on the camera signal. An optional auto mode meters the picture and eases the knee and the blacks towards bright-and-contrasty or flat-and-overcast scenes.",
+  "params": [
+    { "id": "exposure", "type": "float", "default": 0, "min": -3, "max": 3, "step": 0.05,
+      "label": "Exposure", "doc": "Exposure in stops; 0 leaves it as it is." },
+    { "id": "temperature", "type": "float", "default": 0, "min": -1, "max": 1, "step": 0.01,
+      "label": "Temperature", "doc": "A gentle white balance shift: negative is cooler, positive is warmer." },
+    { "id": "tint", "type": "float", "default": 0, "min": -1, "max": 1, "step": 0.01,
+      "label": "Tint", "doc": "A gentle shift between green (negative) and magenta (positive)." },
+    { "id": "pedestal", "type": "float", "default": 0, "min": 0, "max": 0.2, "step": 0.005,
+      "label": "Pedestal", "doc": "Lifts the black floor while white stays white; 0 is none." },
+    { "id": "black_stretch", "type": "float", "default": 0, "min": -1, "max": 1, "step": 0.01,
+      "label": "Black stretch", "doc": "Contrast near black: positive deepens and separates the shadows, negative opens them up." },
+    { "id": "gamma", "type": "float", "default": 1, "min": 0.5, "max": 2, "step": 0.01,
+      "label": "Gamma", "doc": "The camera curve's gamma: above 1 brightens the midtones, below 1 darkens them; 1 leaves them as they are." },
+    { "id": "contrast", "type": "float", "default": 1, "min": 0.5, "max": 1.5, "step": 0.01,
+      "label": "Contrast", "doc": "Contrast around mid grey; 1 leaves it as it is." },
+    { "id": "knee_point", "type": "float", "default": 1, "min": 0.4, "max": 1, "step": 0.01,
+      "label": "Knee point", "doc": "The signal level above which highlights start to compress; 1 turns the knee off." },
+    { "id": "knee_slope", "type": "float", "default": 0.35, "min": 0.05, "max": 1, "step": 0.01,
+      "label": "Knee slope", "doc": "How much of the highlight gain is left at the knee point: 1 does not compress, lower rolls the highlights off harder." },
+    { "id": "white_clip", "type": "float", "default": 1, "min": 0.5, "max": 4, "step": 0.01,
+      "label": "White clip", "doc": "The level the compressed highlights approach and never pass, in linear light where 1 is SDR white." },
+    { "id": "knee_saturation", "type": "float", "default": 1, "min": 0, "max": 2, "step": 0.01,
+      "label": "Knee saturation", "doc": "How much colour the compressed highlights keep: 1 keeps their hue and colour, 0 turns them towards grey, 2 pushes them further." },
+    { "id": "saturation", "type": "float", "default": 1, "min": 0, "max": 2, "step": 0.01,
+      "label": "Saturation", "doc": "The picture's colour, from grey at 0 to the picture's own at 1." },
+    { "id": "auto_strength", "type": "float", "default": 0, "min": 0, "max": 1, "step": 0.01,
+      "label": "Auto strength", "doc": "How far the automatic knee and blacks take over from the fixed values: bright, contrasty scenes lower the knee and deepen the blacks, flat, overcast ones raise the knee and lift the blacks; 0 is fixed." },
+    { "id": "auto_speed", "type": "float", "default": 1.5, "min": 0.1, "max": 10, "step": 0.1,
+      "label": "Auto speed", "doc": "The time in seconds the automatic knee and blacks take to follow a change in the scene." },
+    { "id": "view", "type": "enum", "values": ["normal", "meter"], "default": "normal",
+      "label": "View", "doc": "Normal shows the picture; meter adds bars for the metered brightness, contrast, highlight share and the automatic push." }
+  ],
+  "textures": [
+    { "name": "stats", "width": 64, "height": 32, "format": "rgba16f", "mips": 7 },
+    { "name": "state_next", "width": 1, "height": 1, "format": "rgba32f" },
+    { "name": "state", "width": 1, "height": 1, "format": "rgba32f", "persistent": true }
+  ],
+  "passes": [
+    { "name": "meter", "shader": "broadcast_camera.hlsl", "entry": "meter", "output": "stats", "budget_ms": 0.1 },
+    { "name": "ease", "shader": "broadcast_camera.hlsl", "entry": "ease", "inputs": ["stats", "state"], "output": "state_next", "budget_ms": 0.05 },
+    { "name": "store", "shader": "broadcast_camera.hlsl", "entry": "store", "inputs": ["state_next"], "output": "state", "budget_ms": 0.05 },
+    { "name": "apply", "shader": "broadcast_camera.hlsl", "entry": "apply", "inputs": ["state"], "budget_ms": 0.25 }
+  ]
+}

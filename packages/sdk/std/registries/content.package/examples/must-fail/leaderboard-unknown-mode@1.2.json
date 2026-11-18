@@ -1,0 +1,8 @@
+{
+  "content.package": {
+    "mod.example/f1_2012": {
+      "$comment": "box, addon, group:<name> or stock:<label>",
+      "leaderboard": "classic"
+    }
+  }
+}

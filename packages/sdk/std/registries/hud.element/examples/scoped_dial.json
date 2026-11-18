@@ -1,0 +1,16 @@
+{
+  "hud.element": {
+    "scoped": {
+      "$comment": "A dial record shown only while the addon's leaf is on: the stock f1_25 dial shows while the leaf is off or never written (default false), and the stock parts are hidden only while it is on.",
+      "dial": "f1_25",
+      "stock": "hide",
+      "switch": { "view_model": "view_model_data.hud_x_dial", "default": false },
+      "sprites": {
+        "base": { "png": "art/base.png", "bounds": [-60, -20, 60, 20] }
+      },
+      "elements": [
+        { "kind": "sprite", "id": "base", "sprite": "base", "layer": 20 }
+      ]
+    }
+  }
+}

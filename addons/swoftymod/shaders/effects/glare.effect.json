@@ -1,0 +1,38 @@
+{
+  "id": "glare",
+  "name": "Glare",
+  "description": "A soft glow around bright lights and sky plus a six-point star on very bright lights, added to the picture in linear light.",
+  "params": [
+    { "id": "bloom", "type": "float", "default": 35, "min": 0, "max": 100, "step": 5,
+      "label": "Bloom", "doc": "The soft glow around bright lights and sky, from none at 0." },
+    { "id": "star", "type": "float", "default": 30, "min": 0, "max": 100, "step": 5,
+      "label": "Star glare", "doc": "The six-point star on very bright lights such as the sun on paint and glass, from none at 0." },
+    { "id": "threshold", "type": "float", "default": 82, "min": 50, "max": 98, "step": 2,
+      "label": "Glare threshold", "doc": "How bright a pixel has to be to glow; lower makes more of the picture glow." }
+  ],
+  "textures": [
+    { "name": "b1", "scale": 0.5, "format": "rgba16f" },
+    { "name": "b2", "scale": 0.25, "format": "rgba16f" },
+    { "name": "b3", "scale": 0.125, "format": "rgba16f" },
+    { "name": "b4", "scale": 0.0625, "format": "rgba16f" },
+    { "name": "b5", "scale": 0.03125, "format": "rgba16f" },
+    { "name": "u4", "scale": 0.0625, "format": "rgba16f" },
+    { "name": "u3", "scale": 0.125, "format": "rgba16f" },
+    { "name": "u2", "scale": 0.25, "format": "rgba16f" },
+    { "name": "u1", "scale": 0.5, "format": "rgba16f" },
+    { "name": "star", "scale": 0.25, "format": "rgba16f" }
+  ],
+  "passes": [
+    { "name": "bright", "shader": "glare.hlsl", "entry": "prefilter", "output": "b1" },
+    { "name": "down-2", "shader": "glare.hlsl", "entry": "down", "inputs": ["b1"], "output": "b2" },
+    { "name": "down-3", "shader": "glare.hlsl", "entry": "down", "inputs": ["b2"], "output": "b3" },
+    { "name": "down-4", "shader": "glare.hlsl", "entry": "down", "inputs": ["b3"], "output": "b4" },
+    { "name": "down-5", "shader": "glare.hlsl", "entry": "down", "inputs": ["b4"], "output": "b5" },
+    { "name": "up-4", "shader": "glare.hlsl", "entry": "up", "inputs": ["b5", "b4"], "output": "u4" },
+    { "name": "up-3", "shader": "glare.hlsl", "entry": "up", "inputs": ["u4", "b3"], "output": "u3" },
+    { "name": "up-2", "shader": "glare.hlsl", "entry": "up", "inputs": ["u3", "b2"], "output": "u2" },
+    { "name": "up-1", "shader": "glare.hlsl", "entry": "up", "inputs": ["u2", "b1"], "output": "u1" },
+    { "name": "star", "shader": "glare.hlsl", "entry": "star", "inputs": ["b2"], "output": "star" },
+    { "name": "apply", "shader": "glare.hlsl", "entry": "apply", "inputs": ["u1", "star"] }
+  ]
+}

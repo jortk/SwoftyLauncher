@@ -147,6 +147,11 @@ static void stock_rows(Db &db)
     db.row("content_sets.content_set_0", {{"_metadata_", "2025"}});
     db.put("content_sets.content_set_0.available_entrant_lists_0.entrant_lists", 13, "f1_2025");
     db.put("entrants.vehicles._vehicle_instancecount_", 0, "0");
+    db.put("leaderboards._leaderboard_descriptor_instancecount_", 0, "2");
+    db.row("leaderboards.leaderboard_descriptor_0", {{"_metadata_", "f1"}, {"default_ghost_folder", "f1"}});
+    db.put("leaderboards.leaderboard_descriptor_0.stat_id", 0, "0");
+    db.row("leaderboards.leaderboard_descriptor_1", {{"_metadata_", "classic"}, {"default_ghost_folder", "classic"}});
+    db.put("leaderboards.leaderboard_descriptor_1.stat_id", 0, "1");
 }
 
 static std::optional<std::string> written(const rows::Engine &e, const std::string &path)

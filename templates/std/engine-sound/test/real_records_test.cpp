@@ -45,7 +45,7 @@ int main()
     swofty_core::registry::older::declare(st);
     check(reg::load_data_file("swofty.classic-seasons", "registry/drivers.json", R"j({ "driver.identity": { "stoffel_vandoorne": {
         "names": { "first": { "literal": "Stoffel" }, "last": { "literal": "Vandoorne" }, "full": { "literal": "Stoffel Vandoorne" }, "code": "VAN" } } } })j") == SWOFTY_ASSET_OK, "stands in for the base addon's driver");
-    std::string text = slurp(root + "/addons/classicseasons/classic-seasons-2017/registry/content.json");
+    std::string text = slurp("test/fixtures/classic-seasons-2017.content.json");
     check(!text.empty(), "reads Classic Seasons 2017's real content.json");
     check(reg::load_data_file("swofty.classic-seasons-2017", "registry/content.json", text) == SWOFTY_ASSET_OK, "loads the real records");
 

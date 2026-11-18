@@ -182,15 +182,19 @@ impl Moved {
 }
 
 /// `dir` against the folders the EA app records F1 25 in. Nothing recorded
-/// says nothing either way.
+/// says nothing either way, and neither does a record with a `?` or U+FFFD:
+/// reg.exe writes a letter its code page has no room for that way, and no
+/// Windows folder name holds a `?`.
 pub fn moved(dir: &Path, recorded: &[PathBuf], is_install: impl Fn(&Path) -> bool) -> Option<Moved> {
+    let readable = |r: &&PathBuf| !r.to_string_lossy().contains(['?', '\u{fffd}']);
+    let recorded: Vec<&PathBuf> = recorded.iter().filter(readable).collect();
     if recorded.is_empty() || recorded.iter().any(|r| same_folder(r, dir)) {
         return None;
     }
     let there = recorded.iter().find(|r| is_install(r));
     Some(Moved {
         dir: dir.to_path_buf(),
-        recorded: there.unwrap_or(&recorded[0]).clone(),
+        recorded: (*there.unwrap_or(&recorded[0])).clone(),
         there: there.is_some(),
     })
 }
@@ -417,6 +421,17 @@ impl Handoff {
                 };
                 vec!["sh".into(), "-c".into(), line]
             }
+        }
+    }
+
+    /// The program the hand-off runs, when it is an exe rather than a shell
+    /// command line.
+    pub fn program(&self) -> Option<PathBuf> {
+        match self {
+            Self::Program(words) if words[0].to_ascii_lowercase().ends_with(".exe") => {
+                Some(PathBuf::from(&words[0]))
+            }
+            _ => None,
         }
     }
 
@@ -724,6 +739,12 @@ mod tests {
             gone.text()
         );
         assert_eq!(moved(&moved_to, &[], is_install), None);
+        let mangled = [
+            PathBuf::from("D:\\Yeni klas?r\\F1 25"),
+            PathBuf::from("D:\\Yeni klas\u{fffd}r\\F1 25"),
+        ];
+        assert_eq!(moved(&moved_to, &mangled, is_install), None);
+        assert_eq!(moved(&moved_to, &mangled[..1], is_install), None);
         assert!(recorded(|_| None).is_empty());
         std::fs::remove_dir_all(&root).ok();
     }
@@ -828,6 +849,14 @@ mod tests {
         );
         assert_eq!(split_handler(r"C:\a.exe.d\b.exe %1"), [r"C:\a.exe.d\b.exe", "%1"]);
         assert_eq!(split_handler("open %1"), ["open", "%1"]);
+        assert_eq!(
+            h.program(),
+            Some(PathBuf::from(
+                r"C:\Program Files\Electronic Arts\EA Desktop\EA Desktop\EALauncher.exe"
+            ))
+        );
+        assert_eq!(Handoff::Program(vec!["open.bat".into()]).program(), None);
+        assert_eq!(Handoff::Shell("/games/ea-app.sh {url}".into()).program(), None);
     }
 
     #[test]

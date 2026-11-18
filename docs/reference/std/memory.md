@@ -76,7 +76,7 @@ SWOFTY_ADDON()
 ```
 
 - **Header:** `swofty/mem.hpp`, namespace `swofty::mem`
-- **Table:** none; the header is self-contained, needs no core table and works with any loader
+- **Table:** the core export `SwoftyCoreMem` (`SwoftyMem`, table version 1) when the core has it; `SWOFTY_API_VERSION` is unchanged. Without it the header checks memory on its own, with any loader
 - **Feature:** none
 - **Thread:** any
 
@@ -142,13 +142,15 @@ Tab, newline and carriage return pass. Overlong forms, surrogates, C1 controls (
 
 ```cpp
 // mem::ttl_ms     = 250: how long a cached answer stays good
-// mem::big_region = 1 MB: regions this size or larger are also cached per region
-mem::invalidate(); // drop every thread's cached answers now
+// mem::big_region = 1 MB: without the core's table, regions this size or larger are also cached per region
+mem::invalidate(); // drop every cached answer now, the core's table included
 ```
 
-Each thread caches the region answers of `VirtualQuery` for 64 pages and keeps each for `ttl_ms` (250 ms). Regions of at least `big_region` bytes are also kept in a per-region table of 8 entries, so every page of the game's large heap views shares one answer. Most checks in a per-frame walk hit the cache, so the guards are cheap enough to run every frame.
+`readable` asks the core's page table through the core export `SwoftyCoreMem`. It looks the export up in `swofty_core.dll` on its first call and keeps what it found. The core and every addon share that one table across all their threads. It answers a page from the process working set, at the same cost in any heap, and from `VirtualQuery` only for a page that is not resident. It never touches a page to test it, and guard pages stay armed. An answer stays good for `ttl_ms` (250 ms), a refused one for 32 ms. A check of a page the table already has takes well under a microsecond.
 
-Memory the game frees can stay marked readable in the cache until the entry expires. If you know the game has just freed or remapped memory you were reading, call `invalidate()`; otherwise the entries expire on their own.
+On a core without `SwoftyCoreMem`, or with `version.dll` alone, the header checks memory on its own. Each thread caches the region answers of `VirtualQuery` for 64 pages and keeps each for `ttl_ms`. Regions of at least `big_region` bytes are also kept in a per-region table of 8 entries, and every page of the game's large heap views shares one answer. A refused answer for a free region is kept as long, so memory allocated in that region within `ttl_ms` reads as not readable until the entry expires.
+
+Memory the game frees can stay marked readable until the answer expires. If you know the game has just freed or remapped memory you were reading, call `invalidate()`; otherwise the answers expire on their own. `invalidate()` clears the core's whole table, for the core and every addon.
 
 ## Trust
 
@@ -162,4 +164,30 @@ static void poll(double, void *) // a poll that runs every 2 s, not every frame
 } // t ends here: back to ttl_ms
 ```
 
-A fresh `VirtualQuery` answer for an address in one of the game's multi-GB heaps can take milliseconds on Windows; under Wine and Proton its cost grows with the rest of the region (about 7 µs per GB). A poll that reads long-lived objects in those heaps less often than every 250 ms can hold a `Trust` for its reads, so it pays that once per `ms` instead of on every poll. While `t` is alive, this thread keeps the answer for a region of 1 MB or more for `ms` instead of `ttl_ms`; an `ms` below `ttl_ms` changes nothing. Only use it for memory that stays mapped for as long as you trust it.
+A fresh `VirtualQuery` answer for an address in one of the game's multi-GB heaps can take milliseconds on Windows; under Wine and Proton its cost grows with the rest of the region (about 7 µs per GB). A poll that reads long-lived objects in those heaps less often than every 250 ms can hold a `Trust` for its reads, so it pays that once per `ms` instead of on every poll. While `t` is alive, this thread keeps the answer for a region of 1 MB or more for `ms` instead of `ttl_ms`; an `ms` below `ttl_ms` changes nothing. Only use it for memory that stays mapped for as long as you trust it. `Trust` changes only the header's own per-thread caches; on a core with `SwoftyCoreMem` it changes nothing.
+
+## From C
+
+```c [native/src/my_plugin.c]
+#include <swofty_api.h>
+#include <windows.h>
+
+static const SwoftyMem *core_mem(void)
+{
+    HMODULE core = GetModuleHandleW(L"swofty_core.dll");
+    SwoftyCoreMemFn get = core ? (SwoftyCoreMemFn)(void *)GetProcAddress(core, "SwoftyCoreMem") : NULL;
+    const SwoftyMem *m = get ? get() : NULL;
+    return m && m->version >= 1 ? m : NULL;
+}
+
+static int read_u64(const void *p, uint64_t *out)
+{
+    const SwoftyMem *m = core_mem();
+    if (!m || !m->readable || !m->readable(p, sizeof *out))
+        return 0;
+    *out = *(const uint64_t *)p;
+    return 1;
+}
+```
+
+`readable(p, n)` is nonzero when all `n` bytes at `p` are committed and readable, the same answer as `swofty::mem::readable`. An `n` of 0 counts as 1. A null pointer, an address in the first 64 KB or above user space, a range that wraps, and pages marked `PAGE_GUARD` or `PAGE_NOACCESS` give 0. `invalidate()` drops every answer in the table. Both calls are safe from any thread.

@@ -68,11 +68,11 @@ static int set_logo(const char *team, const char *logo)
 }
 
 static const SwoftyCareerOps kOps2 = {2,       available, driver_stat, nullptr, nullptr,       nullptr, nullptr, nullptr,
-                                      nullptr, set_seat,  set_car_number, set_track_fuel, nullptr, nullptr};
+                                      nullptr, set_seat,  set_car_number, set_track_fuel, nullptr, nullptr, nullptr, nullptr, nullptr};
 static const SwoftyCareerOps kOps4 = {4,       available, driver_stat, nullptr, nullptr,       nullptr, nullptr, nullptr,
-                                      nullptr, set_seat,  set_car_number, set_track_fuel, set_logo, nullptr};
+                                      nullptr, set_seat,  set_car_number, set_track_fuel, set_logo, nullptr, nullptr, nullptr, nullptr};
 static const SwoftyCareerOps kOps5 = {5,       available, driver_stat, nullptr, nullptr,       nullptr, nullptr, nullptr,
-                                      nullptr, set_seat,  set_car_number, set_track_fuel, set_logo, nullptr};
+                                      nullptr, set_seat,  set_car_number, set_track_fuel, set_logo, nullptr, nullptr, nullptr, nullptr};
 
 int main()
 {

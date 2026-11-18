@@ -12,12 +12,15 @@
 #include "pe_exports.h"
 #include "data_folder.h"
 #include "alog.h"
+#include "supported_builds.h"
+#include "build_gate.h"
 
 #define HOST_EXE L"F1_25.exe"
 #define EXPECTED_SIZE 408063872ULL
 #define EXPECTED_STAMP 1789118616UL
 #define WINDOW_TIMEOUT_MS 1800000
 #define POLL_MS 50
+#define FOREIGN_WINDOW_GRACE_MS 30000
 
 static const char *const fwd_names[] = {
     "GetFileVersionInfoA", "GetFileVersionInfoByHandle", "GetFileVersionInfoExA", "GetFileVersionInfoExW",
@@ -77,6 +80,7 @@ static int early_count, plugin_count;
 
 static HANDLE diag_file = INVALID_HANDLE_VALUE;
 static int ea_diag;
+static int build_blocked;
 static LPTOP_LEVEL_EXCEPTION_FILTER prev_filter;
 static volatile LONG diag_crash_reports, activation_logged;
 
@@ -573,18 +577,39 @@ static void note_dialog(HWND h)
         slog("dialog shown: %s: %s", t.text, body.text);
 }
 
+static int foreign_noted;
+
+static int foreign_window(HWND h, const wchar_t *cls)
+{
+    HMODULE inst = (HMODULE)GetWindowLongPtrW(h, GWLP_HINSTANCE);
+    if (!inst || inst == GetModuleHandleW(NULL) || GetTickCount() - attach_tick > FOREIGN_WINDOW_GRACE_MS)
+        return 0;
+    if (!foreign_noted) {
+        foreign_noted = 1;
+        wchar_t mod[MAX_PATH] = {0};
+        if (!GetModuleFileNameW(inst, mod, MAX_PATH))
+            wcscpy(mod, L"a module outside the game");
+        slog("fallback watcher: window class '%ls' belongs to %ls, not the game; it is not taken as the main window "
+             "for the first %d s",
+             cls, mod, FOREIGN_WINDOW_GRACE_MS / 1000);
+    }
+    return 1;
+}
+
 static BOOL CALLBACK find_window(HWND h, LPARAM out)
 {
     DWORD pid = 0;
     GetWindowThreadProcessId(h, &pid);
     if (pid != GetCurrentProcessId() || !IsWindowVisible(h) || GetWindow(h, GW_OWNER))
         return TRUE;
-    wchar_t cls[16] = {0};
-    GetClassNameW(h, cls, 16);
+    wchar_t cls[128] = {0};
+    GetClassNameW(h, cls, 128);
     if (!wcscmp(cls, L"#32770")) {
         note_dialog(h);
         return TRUE;
     }
+    if (foreign_window(h, cls))
+        return TRUE;
     *(HWND *)out = h;
     return FALSE;
 }
@@ -1163,6 +1188,14 @@ static void load_addons_once(const char *why, LPCWSTR detail, int stage)
     if (detail && !((uintptr_t)detail >> 16))
         detail = NULL;
     loaded_early = stage == STAGE_EARLY;
+    if (build_blocked) {
+        slog("trigger: %s; addons NOT loaded, this exe is not a supported build", why);
+        unhook_iat(0);
+        InterlockedExchange(&load_state, 2);
+        if (loaded_event)
+            SetEvent(loaded_event);
+        return;
+    }
     slog("trigger: %s%s%ls%s on thread %lu, %lu ms after attach; loading addons now%s", why,
          detail ? (loaded_early ? " name '" : " class '") : "", detail ? detail : L"", detail ? "'" : "",
          GetCurrentThreadId(), GetTickCount() - attach_tick, loaded_early ? " (early stage)" : "");
@@ -1189,6 +1222,8 @@ static void load_addons_once(const char *why, LPCWSTR detail, int stage)
 
 static void load_rest(void)
 {
+    if (build_blocked)
+        return;
     int first = deferred_count;
     slog("addons: loading the addons without \"early\": true at the window stage");
     load_plugins(PICK_REST);
@@ -1641,12 +1676,56 @@ static void log_build(void)
     /* Engage the build-mismatch diagnostics only for a real, large game build that is not the analysed
        one (the EA App exe is ~327 MiB); never for a small host such as the test harness's fake exe. */
     ea_diag = !ok && size >= ((unsigned long long)64 << 20);
+    char bypass[16] = {0};
+    GetEnvironmentVariableA("SWOFTY_ALLOW_UNSUPPORTED_BUILD", bypass, sizeof bypass);
+    build_blocked = swofty_build_blocked(size, stamp, bypass);
+    if (build_blocked)
+        slog("exe: size %llu, PE timestamp %lu is not a build this launcher supports; the core and the addons are NOT "
+             "loaded (SWOFTY_ALLOW_UNSUPPORTED_BUILD=1 overrides)",
+             size, stamp);
     slog("exe: size %llu (analysed %llu), PE timestamp %lu (analysed %lu) -> %s", size, EXPECTED_SIZE, stamp,
          EXPECTED_STAMP, ok ? "MATCHES the analysed build" : "DIFFERS from the analysed build, signatures may fail");
     slog("exe: image base %p, %d sections", (void *)image_base, section_count);
     for (int i = 0; i < section_count; i++)
         slog("  section %-8s %p size 0x%llx flags 0x%08lx", sections[i].name, (void *)sections[i].start,
              (unsigned long long)sections[i].size, sections[i].flags);
+}
+
+/* Before the real version.dll is loaded, which is where a hooking module can stall the loader before its first
+   log line: one small write of the pid to %LOCALAPPDATA%\Swofty\state\loader-start.marker. kernel32 only; no
+   loading, no locks. Any failure is ignored. */
+static void write_start_marker(void)
+{
+    wchar_t self_exe[MAX_PATH];
+    if (!GetModuleFileNameW(NULL, self_exe, MAX_PATH))
+        return;
+    wchar_t *exe_slash = wcsrchr(self_exe, L'\\');
+    if (_wcsicmp(exe_slash ? exe_slash + 1 : self_exe, HOST_EXE) != 0)
+        return;
+    wchar_t path[MAX_PATH];
+    DWORD n = swofty_data_folder(path, MAX_PATH - 32);
+    if (!n)
+        return;
+    wcscpy(path + n, L"\\state\\loader-start.marker");
+    HANDLE h = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE)
+        return;
+    char text[48];
+    int len = 0;
+    DWORD pid = GetCurrentProcessId();
+    char digits[12];
+    int d = 0;
+    do {
+        digits[d++] = (char)('0' + pid % 10);
+        pid /= 10;
+    } while (pid);
+    while (d)
+        text[len++] = digits[--d];
+    text[len++] = '\n';
+    DWORD wrote;
+    WriteFile(h, text, (DWORD)len, &wrote, NULL);
+    CloseHandle(h);
 }
 
 BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved)
@@ -1657,6 +1736,7 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved)
     if (reason != DLL_PROCESS_ATTACH)
         return TRUE;
     DisableThreadLibraryCalls(self);
+    write_start_marker();
 
     wchar_t sys[MAX_PATH * 2];
     UINT len = GetSystemDirectoryW(sys, MAX_PATH);
@@ -1750,7 +1830,7 @@ BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved)
         early_enabled = 1;
         slog("early stage: on for %d early plugin(s); SwoftyMod loads with them", early_count);
     }
-    if (!early_enabled && !early_env) {
+    if (!early_enabled && !early_env && !build_blocked) {
         int registering = registering_dlls();
         if (registering) {
             early_enabled = 1;

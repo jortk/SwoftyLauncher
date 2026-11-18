@@ -1,4 +1,5 @@
 #include "runtime.hpp"
+#include "services/lap_host.hpp"
 
 #include <windows.h>
 
@@ -52,11 +53,17 @@ void lookup_entry(SwoftyContext *c)
 {
     uintptr_t vehicle = 0;
     uint8_t id = 0;
-    bool known = c->r9 && mem::read(c->r9 + ENTRY_VEHICLE, vehicle) && vehicle && mem::read(vehicle + VEHICLE_ID, id);
+    bool known;
+    {
+        mem::Trust trust(runtime::HEAP_TRUST_MS);
+        known = c->r9 && mem::read(c->r9 + ENTRY_VEHICLE, vehicle) && vehicle && mem::read(vehicle + VEHICLE_ID, id);
+    }
     uint8_t car = uint8_t(c->rdx & 0xff);
     auto step = runtime::ers::step(c->r9, vehicle, known ? int(id) : -1, car);
-    if (step == runtime::ers::Step::lap)
+    if (step == runtime::ers::Step::lap) {
+        runtime::lap_host::lap_line(car);
         runtime::events_fire(SWOFTY_EVENT_LAP, car, 0, nullptr);
+    }
     if (step != runtime::ers::Step::skip)
         return;
     c->rip = next_vehicle;

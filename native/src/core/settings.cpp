@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <set>
@@ -28,6 +29,30 @@ struct Watcher {
     void *user;
 };
 
+// The state an option last read as, with the stamp it was read at: (stamp << 8) | state index, 0 for none.
+struct Memo {
+    std::atomic<uint64_t> v{0};
+    Memo() = default;
+    Memo(const Memo &m) : v(m.v.load(std::memory_order_relaxed)) {}
+    Memo &operator=(const Memo &m)
+    {
+        v.store(m.v.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        return *this;
+    }
+    bool at(uint64_t stamp, size_t &state) const
+    {
+        uint64_t m = v.load(std::memory_order_acquire);
+        state = m & 0xff;
+        return stamp && m >> 8 == stamp;
+    }
+    void keep(uint64_t stamp, size_t state)
+    {
+        uint64_t want = stamp << 8 | state, cur = v.load(std::memory_order_relaxed);
+        while (cur >> 8 < stamp && !v.compare_exchange_weak(cur, want, std::memory_order_release, std::memory_order_relaxed)) {
+        }
+    }
+};
+
 struct Option {
     std::string id;
     uint32_t type;
@@ -35,6 +60,7 @@ struct Option {
     size_t current;
     bool requested = false;
     std::vector<Watcher> watchers;
+    Memo memo;
 };
 
 struct AddonSettings {
@@ -59,6 +85,11 @@ struct Owner {
     std::string dll;
 };
 
+struct Site {
+    const void *from;
+    const Owner *owner;
+};
+
 const char *const type_names[] = {"?", "toggle", "slider", "choice"};
 
 SwoftyApi *api;
@@ -72,6 +103,10 @@ std::vector<MfdRow> mfd_rows;
 std::unordered_map<uint32_t, Command> commands;
 std::unordered_map<HMODULE, Owner> owners;
 std::set<std::string> warned;
+std::atomic<uint64_t> epoch{0};
+std::atomic<swofty_core::registry::Store *> memo_store{nullptr};
+thread_local Site sites[8];
+thread_local unsigned next_site;
 
 uint32_t djb2(const std::string &s)
 {
@@ -301,6 +336,46 @@ Option *find_option(const Owner *w, const char *id)
     return nullptr;
 }
 
+// A caller's return address names its module for the life of the process, so each thread keeps its last
+// few callers and skips GetModuleHandleExW, which takes the loader lock under Wine.
+const Owner *caller(const void *from)
+{
+    for (auto &s : sites)
+        if (s.from == from)
+            return s.owner;
+    const Owner *w = owner_of(from);
+    sites[next_site++ % 8] = {from, w};
+    return w;
+}
+
+// What an option's value is read at: the store's generation, which moves on every change to the store
+// (a settings write's put, a layer, a profile or career change, a reload), plus the settings epoch, which
+// moves on every settings command. Both only grow, so the sum moves when either does. 0 means do not
+// use a memo: no store yet, or a get on this thread would wait for a career load.
+uint64_t stamp(const swofty_core::registry::Store *st)
+{
+    if (!st || st->would_wait())
+        return 0;
+    uint64_t e = epoch.load(std::memory_order_acquire);
+    return st->generation() + e;
+}
+
+size_t read_option(const Owner *w, Option &o)
+{
+    namespace reg = swofty_core::registry;
+    reg::Store &st = runtime::older_store();
+    memo_store.store(&st, std::memory_order_release);
+    uint64_t at_stamp = stamp(&st);
+    reg::Record r = st.get(older::OPTION, addons[w->addon].id + "/" + o.id);
+    swofty::json::Value rec = r.status == reg::Status::ok ? r.value : swofty::json::Value();
+    AcquireSRWLockShared(&lock);
+    size_t state = older::option_current(rec, option_states(o), o.current);
+    ReleaseSRWLockShared(&lock);
+    if (r.status != reg::Status::late && state < 0x100)
+        o.memo.keep(at_stamp, state);
+    return state;
+}
+
 }
 
 namespace {
@@ -337,7 +412,7 @@ void settings_attach(SwoftyApi *a, const std::wstring &dir)
         for (auto &c : jm["enable_commands"].a)
             m.enable_commands.push_back(c.str());
         for (auto &jo : jm["options"].a) {
-            Option o{jo["id"].str(), 0, {}, (size_t)jo["current"].num(-1), false, {}};
+            Option o{jo["id"].str(), 0, {}, (size_t)jo["current"].num(-1), false, {}, {}};
             for (uint32_t t = 1; t < 4; t++)
                 if (jo["type"].str() == type_names[t])
                     o.type = t;
@@ -400,17 +475,18 @@ int settings_get(const char *id, uint32_t type, SwoftySettingValue *out)
     const void *from = __builtin_return_address(0);
     if (!loaded || !id)
         return 0;
-    const Owner *w = owner_of(from);
-    swofty::json::Value rec;
-    if (w->addon >= 0)
-        rec = older::effective(runtime::older_store(), older::OPTION, addons[w->addon].id + "/" + id);
-    AcquireSRWLockExclusive(&lock);
-    const Option *o = find_option(w, id);
-    bool ok = o && o->type == type;
-    bool warn = !ok && warned.insert((w->addon < 0 ? w->dll : addons[w->addon].id) + '\n' + id).second;
-    if (ok && out) {
-        *out = value_of(*o, older::option_current(rec, option_states(*o), o->current));
+    const Owner *w = caller(from);
+    Option *o = find_option(w, id);
+    if (o && o->type == type) {
+        size_t state = 0;
+        if (out && !o->memo.at(stamp(memo_store.load(std::memory_order_acquire)), state))
+            state = read_option(w, *o);
+        if (out)
+            *out = value_of(*o, state);
+        return 1;
     }
+    AcquireSRWLockExclusive(&lock);
+    bool warn = warned.insert((w->addon < 0 ? w->dll : addons[w->addon].id) + '\n' + id).second;
     ReleaseSRWLockExclusive(&lock);
     const char *want = type < 4 ? type_names[type] : "?";
     if (warn && w->addon < 0)
@@ -422,7 +498,7 @@ int settings_get(const char *id, uint32_t type, SwoftySettingValue *out)
     else if (warn)
         api->log("[settings] %s (%s): %s is a %s option, the code reads a %s; the code default is used",
                  w->dll.c_str(), addons[w->addon].id.c_str(), id, type_names[o->type], want);
-    return ok;
+    return 0;
 }
 
 int settings_watch(const char *id, SwoftySettingFn fn, void *user)
@@ -489,6 +565,7 @@ bool settings_command(uint32_t hash)
     if (o) {
         o->current = c.state;
         o->requested = true;
+        epoch.fetch_add(1, std::memory_order_acq_rel);
         call = o->watchers;
         v = value_of(*o, o->current);
         changed = *o;

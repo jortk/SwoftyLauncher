@@ -20,6 +20,9 @@ const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
 /// The waits between tries of an archive's open or replace that Windows
 /// refused for now: an antivirus holds a file it scans for a moment.
 const BACKOFF_MS: [u64; 6] = [25, 50, 100, 200, 400, 800];
+/// The fewest index bytes a resource entry takes: its length, name length,
+/// kind, the shorter type argument, fragment count and hash.
+const MIN_ENTRY_LEN: usize = 4 + 2 + 16 + 4 + 1 + 16;
 
 #[derive(Debug, Clone)]
 pub struct Fragment {
@@ -342,7 +345,7 @@ impl Erp {
         let (mut erp, data_off) = Self::parse_index(data)?;
         for res in &mut erp.resources {
             for f in &mut res.fragments {
-                f.raw = Reader::new(data, data_off + f.offset as usize)
+                f.raw = Reader::new(data, data_off.saturating_add(f.offset as usize))
                     .take(f.packed as usize)?
                     .to_vec();
             }
@@ -373,7 +376,8 @@ impl Erp {
         let data_off = u64::from_le_bytes(header[0x20..0x28].try_into().expect("8 bytes")) as usize;
         let count = r.u32()?;
         let _fragments = r.u32()?;
-        let mut resources = Vec::with_capacity(count as usize);
+        let fit = data.len().saturating_sub(r.pos) / MIN_ENTRY_LEN;
+        let mut resources = Vec::with_capacity((count as usize).min(fit));
         for _ in 0..count {
             let _entry_len = r.u32()?;
             let name_len = r.u16()? as usize;
@@ -513,6 +517,16 @@ impl ErpFile {
             });
         }
         let data_off = u64::from_le_bytes(index[0x20..0x28].try_into().expect("8 bytes"));
+        if data_off < HEADER_LEN as u64 {
+            return Err(Error::Format(format!(
+                "{}: data starts at {data_off:#x}, inside the {HEADER_LEN:#x}-byte header",
+                path.display()
+            )));
+        }
+        let len = file.metadata().map_err(crate::io_at(path))?.len();
+        if data_off > len {
+            return Err(crate::io_at(path)(std::io::ErrorKind::UnexpectedEof.into()));
+        }
         index.resize(data_off as usize, 0);
         file.read_exact(&mut index[HEADER_LEN..])
             .map_err(crate::io_at(path))?;
@@ -525,8 +539,16 @@ impl ErpFile {
 
     pub fn load(&self, res: &Resource) -> Result<Resource> {
         let mut file = open(&self.path)?;
+        let len = file.metadata().map_err(crate::io_at(&self.path))?.len();
         let mut out = res.clone();
         for f in &mut out.fragments {
+            let end = self
+                .data_off
+                .checked_add(f.offset)
+                .and_then(|at| at.checked_add(f.packed));
+            if end.is_none_or(|end| end > len) {
+                return Err(crate::io_at(&self.path)(std::io::ErrorKind::UnexpectedEof.into()));
+            }
             file.seek(SeekFrom::Start(self.data_off + f.offset))
                 .map_err(crate::io_at(&self.path))?;
             f.raw = vec![0; f.packed as usize];
@@ -683,6 +705,54 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_bad_data_offset_or_count_is_an_error_not_a_panic() {
+        let dir = std::env::temp_dir().join(format!("swofty-erp-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut head = vec![0; HEADER_LEN];
+        head[..4].copy_from_slice(MAGIC);
+        let path = dir.join("zero.erp");
+        std::fs::write(&path, &head).unwrap();
+        assert!(matches!(ErpFile::open(&path), Err(Error::Format(_))));
+
+        head[0x20..0x28].copy_from_slice(&u64::MAX.to_le_bytes());
+        let path = dir.join("huge.erp");
+        std::fs::write(&path, &head).unwrap();
+        let err = ErpFile::open(&path).unwrap_err();
+        assert!(
+            matches!(&err, Error::IoAt { path: p, source } if p == &path && source.kind() == std::io::ErrorKind::UnexpectedEof),
+            "{err}"
+        );
+
+        let mut counted = head.clone();
+        counted[0x20..0x28].copy_from_slice(&(HEADER_LEN as u64 + 8).to_le_bytes());
+        counted.extend_from_slice(&u32::MAX.to_le_bytes());
+        counted.extend_from_slice(&0u32.to_le_bytes());
+        let path = dir.join("count.erp");
+        std::fs::write(&path, &counted).unwrap();
+        assert!(matches!(ErpFile::open(&path), Err(Error::Eof(_))));
+        assert!(matches!(Erp::parse(&counted), Err(Error::Eof(_))));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_fragment_past_the_end_of_its_file_is_an_error_not_a_panic() {
+        let path = std::env::temp_dir().join(format!("swofty-erp-packed-{}.erp", std::process::id()));
+        std::fs::write(&path, sample().to_bytes()).unwrap();
+        let file = ErpFile::open(&path).unwrap();
+        let mut res = file.erp.resources[0].clone();
+        res.fragments[0].packed = u64::MAX;
+        let err = file.load(&res).unwrap_err();
+        assert!(
+            matches!(&err, Error::IoAt { source, .. } if source.kind() == std::io::ErrorKind::UnexpectedEof),
+            "{err}"
+        );
+        res.fragments[0].packed = 1 << 40;
+        assert!(file.load(&res).is_err());
+        assert!(file.load(&file.erp.resources[0]).is_ok());
+        std::fs::remove_file(&path).ok();
     }
 
     fn streamed(data: &[u8], level: i32) -> Vec<u8> {

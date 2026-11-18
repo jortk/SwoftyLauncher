@@ -13,6 +13,25 @@ fn read_at(r: &mut (impl Read + Seek), offset: u64, len: usize) -> Result<Vec<u8
     Ok(buf)
 }
 
+pub fn timestamp(r: &mut (impl Read + Seek)) -> Result<u32> {
+    let dos = read_at(r, 0, 64)?;
+    if !dos.starts_with(b"MZ") {
+        return Err(Error::Magic {
+            offset: 0,
+            expected: "MZ",
+        });
+    }
+    let pe = Reader::new(&dos, 0x3c).u32()? as u64;
+    let head = read_at(r, pe, 12)?;
+    if !head.starts_with(b"PE\0\0") {
+        return Err(Error::Magic {
+            offset: pe as usize,
+            expected: "PE",
+        });
+    }
+    Reader::new(&head, 8).u32()
+}
+
 pub fn file_version(r: &mut (impl Read + Seek)) -> Result<Option<String>> {
     let dos = read_at(r, 0, 64)?;
     if !dos.starts_with(b"MZ") {
@@ -99,6 +118,14 @@ mod tests {
             out[at + 12..at + 16].copy_from_slice(&ls.to_le_bytes());
         }
         out
+    }
+
+    #[test]
+    fn reads_the_link_timestamp() {
+        let mut data = exe(None);
+        data[0x88..0x8c].copy_from_slice(&1_789_118_616u32.to_le_bytes());
+        assert_eq!(timestamp(&mut Cursor::new(data)).unwrap(), 1_789_118_616);
+        assert!(timestamp(&mut Cursor::new(vec![0; 64])).is_err());
     }
 
     #[test]

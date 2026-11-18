@@ -42,6 +42,41 @@ pub struct SessionOverlay {
     pub target: Option<String>,
     pub off: Option<String>,
     pub removed: Option<String>,
+    pub removal: Option<Removal>,
+}
+
+/// How long before the graphics device was lost the overlay last drew, as the core's
+/// `the GPU was removed` line words it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Removal {
+    /// `4.8 s after the overlay last drew`: the overlay drew within the core's window.
+    /// `at_present` when a Present the overlay drew into returned the removal (`present
+    /// 0x887a0005`); `present 0x00000000` is the core finding the device already gone, before a
+    /// draw or as the game aborts.
+    AfterDraw { at_present: bool },
+    /// `more than 10 s after the overlay last drew`.
+    LongAfterDraw,
+    /// `and the overlay had not drawn`.
+    NeverDrew,
+}
+
+impl Removal {
+    /// `rest` is the line from `the GPU was removed` on. `None` for a wording this doesn't know.
+    fn parse(rest: &str) -> Option<Self> {
+        let (_, said) = rest.split_once(") ")?;
+        if said.starts_with("and the overlay had not drawn") {
+            return Some(Self::NeverDrew);
+        }
+        let (age, _) = said.split_once(" s after the overlay last drew")?;
+        if age.starts_with("more than ") {
+            return Some(Self::LongAfterDraw);
+        }
+        let at_present = rest
+            .split_once("(present 0x")
+            .and_then(|(_, hr)| u32::from_str_radix(hr.get(..8)?, 16).ok())
+            .is_some_and(|hr| hr != 0);
+        age.parse::<f64>().ok().map(|_| Self::AfterDraw { at_present })
+    }
 }
 
 const TAG: &str = "[overlay] ";
@@ -83,6 +118,7 @@ impl SessionOverlay {
                 s.off = Some(clip(rest.strip_prefix("off: ").unwrap_or(rest), 200));
             } else if rest.starts_with("the GPU was removed") {
                 s.removed = Some(clip(rest, 200));
+                s.removal = Removal::parse(rest);
             }
         }
         any.then_some(s)
@@ -190,6 +226,40 @@ mod tests {
             "{}",
             s.describe()
         );
+    }
+
+    #[test]
+    fn the_removal_line_says_whether_the_overlay_had_just_drawn() {
+        let at_present = SessionOverlay::scan(
+            "1 [overlay] the GPU was removed (present 0x887a0005, reason 0x887a0006) 4.8 s after the overlay last \
+             drew; the overlay stops drawing\n",
+        )
+        .unwrap()
+        .removal;
+        assert_eq!(at_present, Some(Removal::AfterDraw { at_present: true }));
+        let removal = |said: &str| {
+            let log = format!(
+                "1 [overlay] the GPU was removed (present 0x00000000, reason 0x887a0006) {said}; the overlay stops \
+                 drawing\n"
+            );
+            let s = SessionOverlay::scan(&log).unwrap();
+            assert!(s.removed.is_some());
+            s.removal
+        };
+        assert_eq!(
+            removal("4.8 s after the overlay last drew"),
+            Some(Removal::AfterDraw { at_present: false })
+        );
+        assert_eq!(
+            removal("0.1 s after the overlay last drew (swapchain by sl.interposer.dll <- F1_25.exe)"),
+            Some(Removal::AfterDraw { at_present: false })
+        );
+        assert_eq!(
+            removal("more than 10 s after the overlay last drew"),
+            Some(Removal::LongAfterDraw)
+        );
+        assert_eq!(removal("and the overlay had not drawn"), Some(Removal::NeverDrew));
+        assert_eq!(removal("at some point"), None);
     }
 
     #[test]

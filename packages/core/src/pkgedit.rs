@@ -123,7 +123,7 @@ fn floats(v: &Json, n: &[usize]) -> Option<Vec<u8>> {
 
 fn hex(s: &str, len: usize) -> Option<Vec<u8>> {
     let s = s.trim_start_matches('#');
-    if s.len() != 2 * len {
+    if s.len() != 2 * len || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     (0..len)
@@ -420,5 +420,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(value_text(&pkg.root, "instances[0].name").unwrap(), "renamed");
+    }
+
+    #[test]
+    fn refuses_a_hex_value_with_a_multibyte_character() {
+        assert_eq!(hex("ff€000", 4), None);
+        assert!(json_to_val(*b"rgba", &Json::from("ff€000")).is_err());
+        assert!(json_to_val(*b"woid", &Json::from("€€00112233445566778899aabbcc")).is_err());
+        assert_eq!(hex("#ff8000aa", 4), Some(vec![0xff, 0x80, 0x00, 0xaa]));
     }
 }

@@ -17,10 +17,19 @@ constexpr int kDevices = 8;
 
 bool armed;
 HMODULE core_module;
-std::wstring flag_path;
+std::vector<std::wstring> marker_folders;
+void (*log_fn)(const char *, ...);
 ID3D12Device *devices[kDevices];
 LONG ndevices;
 safetyhook::InlineHook create_hook;
+bool debug_armed;
+CRITICAL_SECTION debug_lock;
+DebugBudget debug_budget;
+std::vector<std::string> debug_lines;
+ID3D12InfoQueue *polled[kDevices];
+LONG npolled;
+HANDLE poll_thread;
+std::vector<BuildStop> stops;
 
 bool readable(const void *p, size_t n)
 {
@@ -76,6 +85,87 @@ bool caller_is_core(void *ret)
            m == core_module;
 }
 
+void record_message(D3D12_MESSAGE_CATEGORY category, D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID id, const char *text)
+{
+    EnterCriticalSection(&debug_lock);
+    bool take = debug_budget.take(int(severity));
+    int n = debug_budget.taken;
+    std::string line = take ? debug_line(n, int(severity), int(category), uint32_t(id), text) : std::string();
+    if (take)
+        debug_lines.push_back(line);
+    LeaveCriticalSection(&debug_lock);
+    if (take && log_fn)
+        log_fn("%s%s", line.c_str(), n == kMaxDebugMessages ? " (50 messages logged; later ones are dropped)" : "");
+}
+
+void WINAPI on_message(D3D12_MESSAGE_CATEGORY category, D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID id, LPCSTR text, void *)
+{
+    record_message(category, severity, id, text);
+}
+
+void drain(ID3D12InfoQueue *q)
+{
+    UINT64 n = q->GetNumStoredMessagesAllowedByRetrievalFilter();
+    for (UINT64 i = 0; i < n && debug_budget.taken < kMaxDebugMessages; i++) {
+        SIZE_T len = 0;
+        if (FAILED(q->GetMessage(i, nullptr, &len)) || !len || len > (1u << 20))
+            continue;
+        std::vector<char> buf(len);
+        auto *m = reinterpret_cast<D3D12_MESSAGE *>(buf.data());
+        if (SUCCEEDED(q->GetMessage(i, m, &len)))
+            record_message(m->Category, m->Severity, m->ID, m->pDescription);
+    }
+    q->ClearStoredMessages();
+}
+
+void drain_all()
+{
+    for (LONG i = 0; i < npolled && i < kDevices; i++)
+        drain(polled[i]);
+}
+
+DWORD WINAPI poll_main(void *)
+{
+    while (debug_budget.taken < kMaxDebugMessages) {
+        Sleep(200);
+        drain_all();
+    }
+    return 0;
+}
+
+void attach_info_queue(ID3D12Device *dev)
+{
+    ID3D12InfoQueue *q = nullptr;
+    if (FAILED(dev->QueryInterface(__uuidof(ID3D12InfoQueue), reinterpret_cast<void **>(&q))) || !q) {
+        if (log_fn)
+            log_fn("[d3d-debug] the device has no ID3D12InfoQueue (the debug layer did not attach to it)");
+        return;
+    }
+    ID3D12InfoQueue1 *q1 = nullptr;
+    DWORD cookie = 0;
+    if (SUCCEEDED(q->QueryInterface(__uuidof(ID3D12InfoQueue1), reinterpret_cast<void **>(&q1))) && q1 &&
+        SUCCEEDED(q1->RegisterMessageCallback(on_message, D3D12_MESSAGE_CALLBACK_FLAG_NONE, nullptr, &cookie))) {
+        q1->Release();
+        q->Release();
+        if (log_fn)
+            log_fn("[d3d-debug] message callback registered on device %p; the first %d ERROR/CORRUPTION messages are logged", static_cast<void *>(dev),
+                   kMaxDebugMessages);
+        return;
+    }
+    if (q1)
+        q1->Release();
+    LONG i = InterlockedIncrement(&npolled) - 1;
+    if (i >= kDevices) {
+        q->Release();
+        return;
+    }
+    polled[i] = q;
+    if (!poll_thread)
+        poll_thread = CreateThread(nullptr, 0, poll_main, nullptr, 0, nullptr);
+    if (log_fn)
+        log_fn("[d3d-debug] ID3D12InfoQueue1 is missing (older Windows); polling the message queue of device %p every 200 ms", static_cast<void *>(dev));
+}
+
 HRESULT WINAPI hooked_create_device(IUnknown *adapter, D3D_FEATURE_LEVEL level, REFIID riid, void **out)
 {
     void *ret = __builtin_return_address(0);
@@ -83,6 +173,8 @@ HRESULT WINAPI hooked_create_device(IUnknown *adapter, D3D_FEATURE_LEVEL level, 
     if (SUCCEEDED(hr) && out && readable(out, sizeof *out) && *out && !caller_is_core(ret)) {
         ID3D12Device *dev = nullptr;
         if (SUCCEEDED(static_cast<IUnknown *>(*out)->QueryInterface(__uuidof(ID3D12Device), reinterpret_cast<void **>(&dev)))) {
+            if (debug_armed)
+                attach_info_queue(dev);
             LONG i = InterlockedIncrement(&ndevices) - 1;
             if (i < kDevices)
                 devices[i] = dev;
@@ -93,26 +185,116 @@ HRESULT WINAPI hooked_create_device(IUnknown *adapter, D3D_FEATURE_LEVEL level, 
     return hr;
 }
 
-bool prior_session_removed()
+std::string read_file(const std::wstring &path, size_t cap)
 {
-    DWORD a = flag_path.empty() ? INVALID_FILE_ATTRIBUTES : GetFileAttributesW(flag_path.c_str());
-    if (a == INVALID_FILE_ATTRIBUTES)
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE)
+        return {};
+    std::string s(cap, '\0');
+    DWORD n = 0;
+    ReadFile(f, s.data(), DWORD(cap), &n, nullptr);
+    CloseHandle(f);
+    s.resize(n);
+    return s;
+}
+
+DWORD write_text(const std::wstring &path, const std::string &text)
+{
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE)
+        return GetLastError();
+    DWORD w = 0, err = 0;
+    if (!WriteFile(f, text.data(), DWORD(text.size()), &w, nullptr))
+        err = GetLastError();
+    CloseHandle(f);
+    return err;
+}
+
+bool put_marker(const wchar_t *name, const std::string &text)
+{
+    DWORD err = 0;
+    int at = write_first(marker_folders, [&](const std::wstring &dir) {
+        if (dir.size() > 4 && dir.find(L"\\state\\") != std::wstring::npos)
+            CreateDirectoryW((dir.substr(0, dir.size() - 7)).c_str(), nullptr), CreateDirectoryW(dir.c_str(), nullptr);
+        err = write_text(dir + name, text);
+        if (err && log_fn)
+            log_fn("[dred] could not write %ls%ls: error %lu", dir.c_str(), name, (unsigned long)err);
+        return err == 0;
+    });
+    return at >= 0;
+}
+
+std::string read_marker(const wchar_t *name)
+{
+    for (const auto &d : marker_folders) {
+        std::string s = read_file(d + name, 128);
+        if (!s.empty())
+            return s;
+    }
+    return {};
+}
+
+bool take_marker(const wchar_t *name)
+{
+    bool had = false;
+    for (const auto &d : marker_folders)
+        if (GetFileAttributesW((d + name).c_str()) != INVALID_FILE_ATTRIBUTES) {
+            had = true;
+            DeleteFileW((d + name).c_str());
+        }
+    return had;
+}
+
+std::wstring widen(const std::string &s)
+{
+    return std::wstring(s.begin(), s.end());
+}
+
+std::string newest_in(const std::wstring &dir)
+{
+    std::vector<std::string> names;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW((dir + L"crash-*.txt").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE)
+        return {};
+    do {
+        std::string n;
+        for (const wchar_t *c = fd.cFileName; *c; c++)
+            n += *c < 0x80 ? char(*c) : '?';
+        names.push_back(n);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return newest_report(names);
+}
+
+bool prior_session_removed(const char **how)
+{
+    if (take_marker(L"dred.flag")) {
+        *how = "dred.flag";
+        return true;
+    }
+    std::string checked = read_marker(L"dred.checked");
+    while (!checked.empty() && (checked.back() == '\n' || checked.back() == '\r'))
+        checked.pop_back();
+    std::wstring found_dir;
+    std::string newest;
+    for (const auto &d : marker_folders) {
+        std::string c = newest_in(d);
+        if (c > newest)
+            newest = c, found_dir = d;
+    }
+    if (newest.empty() || newest == checked)
         return false;
-    DeleteFileW(flag_path.c_str());
+    put_marker(L"dred.checked", newest + "\n");
+    if (!should_arm_from(checked, newest, read_file(found_dir + widen(newest), 4 << 20)))
+        return false;
+    *how = "the newest crash report";
     return true;
 }
 
 void write_flag()
 {
-    if (flag_path.empty())
-        return;
-    HANDLE f = CreateFileW(flag_path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE)
-        return;
-    DWORD w;
-    const char text[] = "removed\n";
-    WriteFile(f, text, sizeof text - 1, &w, nullptr);
-    CloseHandle(f);
+    put_marker(L"dred.flag", "removed\n");
 }
 
 template <typename Node> std::string breadcrumbs(const Node *head)
@@ -140,7 +322,16 @@ template <typename Node> std::string breadcrumbs(const Node *head)
             uint32_t count = n->BreadcrumbCount;
             uint32_t done = n->pLastBreadcrumbValue && readable(n->pLastBreadcrumbValue, 4) ? *n->pLastBreadcrumbValue : 0;
             s += node_header(shown++, pick(n->pCommandListDebugNameA, n->pCommandListDebugNameW).c_str(),
-                             pick(n->pCommandQueueDebugNameA, n->pCommandQueueDebugNameW).c_str(), count, done);
+                             pick(n->pCommandQueueDebugNameA, n->pCommandQueueDebugNameW).c_str(), count, done,
+                             reinterpret_cast<uint64_t>(n->pCommandList));
+            if (list == &unfinished && n->pCommandHistory && readable(n->pCommandHistory, count * sizeof(uint32_t))) {
+                BuildStop st = build_stop(n->pCommandHistory, count, done, reinterpret_cast<uint64_t>(n->pCommandList));
+                bool seen = false;
+                for (const BuildStop &o : stops)
+                    seen = seen || (o.list == st.list && o.nth == st.nth && o.of == st.of);
+                if (st.nth && !seen)
+                    stops.push_back(st);
+            }
             Window w = op_window(count, done);
             if (w.from)
                 s += "      ... " + std::to_string(w.from) + " earlier op(s) not shown\n";
@@ -247,45 +438,68 @@ std::string removed_device(ID3D12Device *dev, HRESULT reason)
 void arm(const std::wstring &swofty_dir, void (*log)(const char *, ...), HMODULE self)
 {
     core_module = self;
-    flag_path = swofty_dir + L"dred.flag";
-    char env[16] = {0};
+    log_fn = log;
+    wchar_t local[MAX_PATH];
+    DWORD ln = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+    marker_folders = marker_dirs(swofty_dir, ln && ln < MAX_PATH ? std::wstring(local) : std::wstring());
+    char env[16] = {0}, denv[16] = {0};
     GetEnvironmentVariableA("SWOFTY_DRED", env, sizeof env);
-    Decision d = decide(env, prior_session_removed());
-    if (!d.on) {
-        log("[dred] off: %s (SWOFTY_DRED=1 turns it on)", d.why);
+    GetEnvironmentVariableA("SWOFTY_D3D_DEBUG", denv, sizeof denv);
+    const char *how_prior = "";
+    Decision d = decide(env, prior_session_removed(&how_prior));
+    bool want_debug = debug_requested(denv);
+    if (!d.on && !want_debug) {
+        log("[dred] off: %s (SWOFTY_DRED=1 turns it on; it is on by default)", d.why);
         return;
     }
     bool loaded = GetModuleHandleW(L"d3d12.dll") != nullptr;
     HMODULE d3d12 = LoadLibraryW(L"d3d12.dll");
     auto get = d3d12 ? reinterpret_cast<DebugInterfaceFn>(reinterpret_cast<void *>(GetProcAddress(d3d12, "D3D12GetDebugInterface"))) : nullptr;
     if (!get) {
-        log("[dred] on (%s), but d3d12.dll has no D3D12GetDebugInterface; carrying on without it", d.why);
+        log("[dred] d3d12.dll has no D3D12GetDebugInterface; carrying on without DRED or the debug layer");
         return;
     }
-    const char *how = nullptr;
-    ID3D12DeviceRemovedExtendedDataSettings1 *s1 = nullptr;
-    ID3D12DeviceRemovedExtendedDataSettings *s0 = nullptr;
-    HRESULT h1 = get(__uuidof(ID3D12DeviceRemovedExtendedDataSettings1), reinterpret_cast<void **>(&s1));
-    if (SUCCEEDED(h1) && s1) {
-        s1->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-        s1->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-        s1->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-        s1->Release();
-        how = "breadcrumbs, page faults and breadcrumb contexts";
-    } else {
-        HRESULT h0 = get(__uuidof(ID3D12DeviceRemovedExtendedDataSettings), reinterpret_cast<void **>(&s0));
-        if (SUCCEEDED(h0) && s0) {
-            s0->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-            s0->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-            s0->Release();
-            how = "breadcrumbs and page faults";
+    if (want_debug) {
+        InitializeCriticalSection(&debug_lock);
+        ID3D12Debug *dbg = nullptr;
+        HRESULT hd = get(__uuidof(ID3D12Debug), reinterpret_cast<void **>(&dbg));
+        if (SUCCEEDED(hd) && dbg) {
+            dbg->EnableDebugLayer();
+            dbg->Release();
+            debug_armed = true;
+            log("[d3d-debug] on (SWOFTY_D3D_DEBUG=1): debug layer enabled%s",
+                loaded ? " (d3d12.dll was already loaded; a device created before this point is not covered)" : "");
         } else {
-            log("[dred] on (%s), but the DRED settings interface is missing (0x%08lx, 0x%08lx; Wine/vkd3d or an old Windows); "
-                "carrying on without it",
-                d.why, (unsigned long)h1, (unsigned long)h0);
-            return;
+            log("%s", debug_missing_note(uint32_t(hd)).c_str());
         }
     }
+    const char *how = nullptr;
+    if (d.on) {
+        ID3D12DeviceRemovedExtendedDataSettings1 *s1 = nullptr;
+        ID3D12DeviceRemovedExtendedDataSettings *s0 = nullptr;
+        HRESULT h1 = get(__uuidof(ID3D12DeviceRemovedExtendedDataSettings1), reinterpret_cast<void **>(&s1));
+        if (SUCCEEDED(h1) && s1) {
+            s1->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            s1->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            s1->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            s1->Release();
+            how = "breadcrumbs, page faults and breadcrumb contexts";
+        } else {
+            HRESULT h0 = get(__uuidof(ID3D12DeviceRemovedExtendedDataSettings), reinterpret_cast<void **>(&s0));
+            if (SUCCEEDED(h0) && s0) {
+                s0->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+                s0->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+                s0->Release();
+                how = "breadcrumbs and page faults";
+            } else {
+                log("[dred] on (%s), but the DRED settings interface is missing (0x%08lx, 0x%08lx; Wine/vkd3d or an old Windows); "
+                    "carrying on without it",
+                    d.why, (unsigned long)h1, (unsigned long)h0);
+            }
+        }
+    }
+    if (!how && !debug_armed)
+        return;
     auto create = reinterpret_cast<void *>(GetProcAddress(d3d12, "D3D12CreateDevice"));
     bool hooked = false;
     if (create) {
@@ -295,14 +509,44 @@ void arm(const std::wstring &swofty_dir, void (*log)(const char *, ...), HMODULE
             hooked = true;
         }
     }
-    armed = true;
-    log("[dred] on (%s): forced on %s%s; D3D12CreateDevice %s, so a crash report names the removed device's GPU operation", d.why, how,
-        loaded ? " (d3d12.dll was already loaded; a device created before this point is not covered)" : "",
-        hooked ? "hooked" : "NOT hooked");
+    armed = how != nullptr;
+    if (how)
+        log("[dred] on (%s): forced on %s%s; D3D12CreateDevice %s, so a crash report names the removed device's GPU operation", d.why, how,
+            loaded ? " (d3d12.dll was already loaded; a device created before this point is not covered)" : "",
+            hooked ? "hooked" : "NOT hooked");
+    else
+        log("[d3d-debug] D3D12CreateDevice %s", hooked ? "hooked" : "NOT hooked, so no message queue is attached");
 }
+
+static std::string debug_section()
+{
+    if (!debug_armed)
+        return std::string();
+    drain_all();
+    EnterCriticalSection(&debug_lock);
+    std::string body;
+    for (const std::string &l : debug_lines)
+        body += "  " + l + "\n";
+    LeaveCriticalSection(&debug_lock);
+    std::string head = "\n== D3D12 debug layer (SWOFTY_D3D_DEBUG=1)\n";
+    return head + (body.empty() ? "  no ERROR or CORRUPTION message was raised\n" : body);
+}
+
+static std::string dred_section(bool registers_show_removal);
 
 std::string section(bool registers_show_removal)
 {
+    return dred_section(registers_show_removal) + debug_section();
+}
+
+std::vector<BuildStop> build_stops()
+{
+    return stops;
+}
+
+static std::string dred_section(bool registers_show_removal)
+{
+    stops.clear();
     std::string head = "\n== GPU device removal (D3D12 DRED)\n";
     int removed = 0;
     std::string body;
@@ -324,7 +568,7 @@ std::string section(bool registers_show_removal)
     if (armed)
         return head + "  a register holds a DXGI device-removed HRESULT, but no device the game created reports removal\n";
     return head + "  a register holds a DXGI device-removed HRESULT. DRED was off this session, so there is no breadcrumb data.\n"
-                  "  The next session turns it on by itself; SWOFTY_DRED=1 forces it on, SWOFTY_DRED=0 off.\n";
+                  "  DRED is on by default; SWOFTY_DRED=0 turned it off, or this GPU or Windows lacks the interface.\n";
 }
 
 }

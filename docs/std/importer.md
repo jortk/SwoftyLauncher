@@ -105,7 +105,7 @@ pub struct Claim {
 
 What each recogniser looks for:
 
-- **Track:** a `track.add` op from a track zip becomes track `mod.<id>/<track>`. Its venue comes from the track's name in the mod, matched against the core's venue names, or from the player's choice on the importer page ("This track is: Sepang"). It never comes from the track's code: `bahrain24` is Sepang, `hanoi` is Valencia and `miami24` is Igora Drive.
+- **Track:** a `track.add` op from a track zip becomes track `<addon id>/<track>`, such as `imported-mod.testring/testring` ([The addon's id](/reference/mods/tracks#the-addon-s-id)). Its venue comes from the track's name in the mod, matched against the core's venue names, or from the player's choice on the importer page ("This track is: Sepang"). It never comes from the track's code: `bahrain24` is Sepang, `hanoi` is Valencia and `miami24` is Igora Drive.
 - **Car archive:** overlays of `2025_asset_groups/<pkg>/teams/<t>/wep/<t>.erp`, split by resource path:
   - `teams/<t>/textures/` and `materials/` become a livery;
   - `teams/<t>/idf/` and `wep/` become the vehicle's `model`;

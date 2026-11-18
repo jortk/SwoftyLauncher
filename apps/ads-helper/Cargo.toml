@@ -1,0 +1,21 @@
+[package]
+name = "swofty-ads-helper"
+description = "The swofty-ads helper: hosts the launcher's ad slots on Linux, inside the launcher's X11 window"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "swofty-ads"
+path = "src/main.rs"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+swofty-ads = { workspace = true, features = ["view"] }
+wry = "0.57.2"
+
+[lints]
+workspace = true

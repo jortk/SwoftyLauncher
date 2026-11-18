@@ -4,7 +4,7 @@
   "name": "Vignette Pass",
   "version": "0.1.0",
   "author": "Your Name",
-  "description": "Darkens the corners of the race and sets its saturation.",
+  "description": "Darkens the corners of the race, sets its saturation and adds a soft glow.",
   "license": "MIT",
   "category": "shaders",
   "experimental_features": ["postfx"],
@@ -31,9 +31,25 @@
       "step": 10,
       "default": 100,
       "binds": "db"
+    },
+    {
+      "id": "glow",
+      "type": "slider",
+      "label": "Glow",
+      "description": "How much the bright parts of the picture bloom, from none at 0.",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "default": 30,
+      "binds": "db"
     }
   ],
+  "postfx_textures": [
+    { "name": "half", "scale": 0.5, "format": "rgba16f" }
+  ],
   "postfx": [
-    { "shader": "fx/vignette.hlsl", "name": "vignette", "options": ["{{vignette}}", "{{saturation}}"] }
+    { "shader": "fx/vignette.hlsl", "name": "vignette", "options": ["{{vignette}}", "{{saturation}}"] },
+    { "shader": "fx/glow.hlsl", "entry": "down", "name": "glow-down", "inputs": ["original"], "output": "half" },
+    { "shader": "fx/glow.hlsl", "entry": "up", "name": "glow-up", "options": ["{{glow}}"], "inputs": ["half"] }
   ]
 }

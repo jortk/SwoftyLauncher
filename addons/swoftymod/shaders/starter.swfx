@@ -1,0 +1,23 @@
+# A config lists effects in the order they run. Each [table] is an effect; the keys under it are its options.
+# Remove the # from a block to turn it on, add enabled = false to switch an effect off without deleting it.
+name = "My config"
+
+# [look]
+# strength = 100
+# brightness = 125
+# saturation = 110
+# white_balance = 6000
+
+# [glare]
+# bloom = 35
+# star = 30
+# threshold = 82
+
+# [vignette]
+# amount = 0.4
+# radius = 0.75
+# color = [0.0, 0.0, 0.0]
+
+# [sharpen]
+# sharpness = 0.5
+# limit = 0.1

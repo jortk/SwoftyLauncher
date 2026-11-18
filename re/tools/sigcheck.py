@@ -52,6 +52,9 @@ class Image:
         self.secs = [(s.Name.rstrip(b'\0').decode(), s.VirtualAddress, max(s.Misc_VirtualSize, s.SizeOfRawData), s.PointerToRawData, s.SizeOfRawData) for s in pe.sections]
         self.data = np.memmap(path, dtype=np.uint8, mode='r')
         self.ts = pe.FILE_HEADER.TimeDateStamp
+        exception = pe.OPTIONAL_HEADER.DATA_DIRECTORY[3]
+        self._exception_rva, self._exception_size = exception.VirtualAddress, exception.Size
+        pe.close()
         self._sec_bytes = {}
         self._pdata = None
 
@@ -85,8 +88,10 @@ class Image:
     def pdata(self):
         if self._pdata is None:
             import numpy as np
-            n, va, vs, ro, rs = self.sec('.srdata') or self.sec('.pdata')
-            raw = bytes(self.data[ro:ro + rs])
+            # Steam overlays can shuffle section names. Unwind metadata is identified by the PE directory,
+            # not a section label (the current .srdata is unrelated and only 512 bytes).
+            raw = self.read(self.base + self._exception_rva, self._exception_size) if self._exception_rva else b''
+            raw = raw or b''
             raw = raw[:len(raw) - len(raw) % 12]
             arr = np.frombuffer(raw, dtype=np.uint32).reshape(-1, 3)
             arr = arr[(arr[:, 0] != 0) & (arr[:, 1] > arr[:, 0])]

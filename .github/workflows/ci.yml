@@ -52,8 +52,8 @@ jobs:
               - installer/**
               - templates/**
               - addons/builtins/**
+              - tools/native-charts/**
               - addons/swoftymod/**
-              - addons/custom-grid-size/**
               - re/db/functions.tsv
               - tools/gamedb/catalog/**
             # The installer crate, its path dependencies (swofty-core, -addon, -formats, -sdk) and what they embed.
@@ -71,13 +71,11 @@ jobs:
               - templates/addon/native/include/**
               - addons/swoftymod/swofty.json
               - apps/launcher/assets/**
-            # native/build.sh bundles the whole re-optimization addon, so its manifest and README count too.
             native:
               - *always
               - native/**
               - re/**
               - addons/*/native/**
-              - addons/re-optimization/**
               - packages/sdk/**
               - tools/pack_addon.py
               - tools/rtassets.py
@@ -96,17 +94,12 @@ jobs:
               - package.json
               - pnpm-lock.yaml
               - pnpm-workspace.yaml
-            # The registry schemas and examples, the tools that check them, the templates whose data files they validate, and the
-            # venues table with the Classic Seasons calendars made from it.
+            # The registry schemas and examples, the tools that check them, and the templates whose data files they validate.
             std:
               - *always
               - packages/sdk/std/**
               - tools/std/**
               - templates/std/**
-              - addons/classicseasons/*/registry/**
-              - addons/classicseasons/classic-seasons/tools/calendars.py
-              - addons/classicseasons/test/calendars.py
-              - addons/progressive/data/rounds.json
             compat:
               - *always
               - tools/compat/**
@@ -182,9 +175,9 @@ jobs:
       - name: GPUI system libraries
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libfontconfig-dev libfreetype-dev libwayland-dev \
-            libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev libvulkan-dev
+          .github/runners/apt-install.sh pkg-config libfontconfig-dev libfreetype-dev libwayland-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev libvulkan-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Format
         if: runner.os == 'Linux'
@@ -198,6 +191,15 @@ jobs:
       # without F1_25_DIR; CI has no game files. --no-fail-fast reports every failing test binary in one run.
       - name: Test
         run: cargo test --workspace --no-fail-fast
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Native chart helper protocol
+        run: |
+          cargo build -p swofty-addon --example native_charts
+          python tools/native-charts/protocol-smoke.py target/debug/examples/native_charts
 
   swofty-ui:
     name: Swofty UI (${{ matrix.os }})
@@ -331,10 +333,6 @@ jobs:
       - name: Template data files
         run: python3 tools/std/templates.py --no-build
 
-      # The venues table, and each Classic Seasons season's calendar against Progressive's rounds and the schemas.
-      - name: Venues and Classic Seasons calendars
-        run: python3 addons/classicseasons/test/calendars.py
-
   native:
     name: Native loader and Wine test
     needs: [changes, ec2]
@@ -342,6 +340,16 @@ jobs:
     runs-on: ${{ needs.ec2.outputs.native }}
     steps:
       - uses: actions/checkout@v7
+
+      # The EC2 runner has a 150 GB root volume; the hosted fallback has about 14 GB free, which the Wine
+      # prefixes of the parallel tests fill, so it drops the preinstalled toolchains it never uses.
+      - name: Free disk space on a hosted runner
+        run: |
+          df -h /
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+            df -h /
+          fi
 
       # Only the Wine tests need these, so the install runs in the background while the build and unit tests do.
       - name: Start installing Wine and Xvfb
@@ -410,29 +418,11 @@ jobs:
         with:
           path: |
             native/build/zig-cache
-            addons/re-optimization/native/build/zig-cache
           key: zig-${{ runner.os }}-0.16.0-${{ steps.zig-period.outputs.month }}-${{ hashFiles('native/**', 'addons/*/native/**', 'packages/sdk/include/**') }}
           restore-keys: zig-${{ runner.os }}-0.16.0-${{ steps.zig-period.outputs.month }}-
 
-      - name: Build version.dll, swofty_core.dll and the bundled addons
+      - name: Build version.dll and swofty_core.dll
         run: native/build.sh
-
-      - name: Bundled addon packages
-        run: |
-          python3 - <<'EOF'
-          import glob, json, zipfile
-          pkgs = sorted(glob.glob('native/bundled/*.swoftyaddon'))
-          assert pkgs, 'native/build.sh packaged no bundled addons'
-          for p in pkgs:
-              z = zipfile.ZipFile(p)
-              names = z.namelist()
-              assert 'swofty.json' in names, f'{p}: no swofty.json at the root'
-              m = json.loads(z.read('swofty.json'))
-              for n in m.get('operations', {}).get('native', []):
-                  assert n['dll'] in names, f"{p}: {n['dll']} is missing"
-              assert not any(n.startswith('native/build/') for n in names), f'{p}: build files packaged'
-              print(p, names)
-          EOF
 
       - name: Wine and Xvfb
         timeout-minutes: 10
@@ -444,7 +434,10 @@ jobs:
       # Every host and Wine test, the templates build and the Any Team Transfers build, side by side; each
       # test's output is in its own group in the log, and the step fails on any failing test.
       - name: Native tests
-        run: native/test/run_ci_tests.sh
+        run: |
+          df -h / "$RUNNER_TEMP"
+          trap 'df -h / "$RUNNER_TEMP"' EXIT
+          native/test/run_ci_tests.sh
 
       # Saved after the tests, which compile their fixtures into the same cache.
       - name: Save the Zig cache
@@ -453,7 +446,6 @@ jobs:
         with:
           path: |
             native/build/zig-cache
-            addons/re-optimization/native/build/zig-cache
           key: ${{ steps.zig-cache.outputs.cache-primary-key }}
 
   # Every push to main also builds the release binaries: the run keeps the release cache warm, and a tag on

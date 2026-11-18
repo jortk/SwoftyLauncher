@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "track 1.1",
+  "x-registry": "track",
+  "x-version": "1.1",
+  "x-applies": "boot",
+  "x-snapshot": false,
+  "description": "tracks::Track (experimental): a tracks.Track row, its files and its rows in every data set. Stock rows are game/<code> with time_trial true. An added track clones base's rows in every data set that holds base; slot fills a dormant stock row (one without assets) instead of adding a row. provides lists the venue/ ids it provides.",
+  "type": "object",
+  "properties": {
+    "code": {
+      "description": "The track code: its folder under environment_package/tracks/ and its tracks.Track row label.",
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "base": {
+      "description": "The track whose rows it clones in every data set; null on a stock row.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "x-ref": "track",
+      "x-missing": {
+        "default": "required",
+        "allow": [
+          "required"
+        ]
+      }
+    },
+    "slot": {
+      "description": "A dormant stock row it fills (game/sochi); null: a new row.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "x-ref": "track",
+      "x-missing": {
+        "default": "required",
+        "allow": [
+          "required"
+        ]
+      }
+    },
+    "provides": {
+      "description": "The venue/ ids it provides: a reference to the venue resolves to the last enabled provider in load order.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^venue/[a-z0-9_]+$"
+      },
+      "uniqueItems": true
+    },
+    "names": {
+      "$ref": "#/$defs/names"
+    },
+    "files": {
+      "$ref": "#/$defs/path"
+    },
+    "length_metres": {
+      "type": "number",
+      "minimum": 0
+    },
+    "corners": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "latitude": {
+      "type": "number",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "longitude": {
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "time_trial": {
+      "description": "Offered in Time Trial boxes; stock tracks true, added tracks false.",
+      "type": "boolean"
+    },
+    "stat_id": {
+      "$ref": "#/$defs/stat_id"
+    },
+    "sprint": {
+      "description": "The TrackDataSet labels (\"f1\", \"f1_2026\") in which an added track's weekend is a sprint weekend. Every other data set gets weekend_format default, whatever the base has.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "extends": {
+      "description": "Data files only: this record is a variant of that record, and its value is a merge patch on the base.",
+      "type": "string",
+      "x-ref": "track",
+      "x-missing": {
+        "default": "required",
+        "allow": [
+          "required"
+        ]
+      }
+    }
+  },
+  "required": [
+    "code"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "names": {
+      "description": "tracks::TrackNames: the names menus read from TrackNameData.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/text"
+        },
+        "gp": {
+          "$ref": "#/$defs/text"
+        },
+        "acronym": {
+          "type": "string",
+          "maxLength": 8
+        },
+        "city": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "additionalProperties": false
+    },
+    "text": {
+      "description": "A Text: a lang key as a string, or a literal.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "literal": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "literal"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "path": {
+      "description": "A Path: a file or folder in the addon's folder, the game's original file (stock), or resources in an archive. null: empty.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[^/\\\\][^\\\\]*$"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stock": {
+              "type": "string",
+              "pattern": "^[^/\\\\][^\\\\]*$"
+            }
+          },
+          "required": [
+            "stock"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "erp": {
+              "type": "string",
+              "pattern": "^[^/\\\\][^\\\\]*$"
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "kinds": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "textures",
+                  "materials",
+                  "idf",
+                  "wep"
+                ]
+              }
+            }
+          },
+          "required": [
+            "erp",
+            "prefix",
+            "kinds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "erp": {
+              "type": "string",
+              "pattern": "^[^/\\\\][^\\\\]*$"
+            },
+            "resources": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^eaid://"
+              }
+            }
+          },
+          "required": [
+            "erp",
+            "resources"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "stat_id": {
+      "description": "A StatId: an explicit tracks.Track statId (0 to 254; 255 is the game's \"no track\"), or \"auto\" (absent: \"auto\") for the core to allocate one.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 254
+        },
+        {
+          "const": "auto"
+        }
+      ]
+    }
+  }
+}

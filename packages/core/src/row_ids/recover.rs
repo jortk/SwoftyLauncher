@@ -278,7 +278,7 @@ impl Store {
         for row in order {
             if keep.contains(&row.addon) {
                 if let Some((_, id)) = earlier.get(&row.key) {
-                    self.alias(&row.key, *id);
+                    self.alias(&row.key, *id, false);
                 }
                 kept_new += 1;
                 continue;
@@ -293,13 +293,15 @@ impl Store {
             };
             match earlier.get(&row.key).map(|(_, id)| *id) {
                 Some(id) if !held(id) && taken.entry(table.clone()).or_default().insert(id) => {
-                    self.alias(&row.key, row.kept);
+                    self.alias(&row.key, row.kept, false);
                     self.insert(row.key.clone(), id);
                     self.from.insert(row.key.clone(), IdFrom::Seeded);
+                    self.base_put(&row.key, id, IdFrom::Seeded);
                     back += 1;
                 }
                 _ => {
-                    self.alias(&row.key, row.kept);
+                    self.alias(&row.key, row.kept, false);
+                    self.base_drop(&row.key);
                     if self.rows.get(&row.key) == Some(&row.kept) {
                         self.rows.remove(&row.key);
                         if let Some(ids) = self.by_id.get_mut(&table)
@@ -419,6 +421,7 @@ mod tests {
             r.lines
         );
         let teams = BTreeMap::from([(646, 518), (652, 524)]);
+        store.claimed.extend([a.to_owned(), b.to_owned()]);
         assert_eq!(store.id_aliases().tables["teams"], teams);
         store.save(&data).unwrap();
         let (mut again, _) = Store::load(&data, None, "default", None);
@@ -427,6 +430,7 @@ mod tests {
             "the recovery runs once"
         );
         assert_eq!(again.get(a), Some(518));
+        again.claimed.extend([a.to_owned(), b.to_owned()]);
         let aliases = again.id_aliases();
         assert_eq!(
             aliases.tables["teams"], teams,

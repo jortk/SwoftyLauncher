@@ -27,6 +27,7 @@ using BlameFn = void (*)(const void *ctx, unsigned long code, uintptr_t at, cons
 int isolated_call(SwoftyHookFn fn, void *user, SwoftyHookCall *call, Seen *seen);
 int blamed_call(SwoftyHookFn fn, void *user, SwoftyHookCall *call, BlameFn blame, const void *ctx);
 bool recoverable(unsigned long code);
+bool copy_memory(void *out, const void *from, size_t n);
 bool isolated_service(SwoftyServiceFn fn, void *user, const void *table, size_t size, uint32_t version, Seen *seen);
 
 }

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "../apply/tracks/box.hpp"
+#include "../hooks/car_live.hpp"
 #include "../title_skip.hpp"
 #include "../virtual_pad.hpp"
 #include "agent_logic.hpp"
@@ -399,6 +400,18 @@ std::string car_unbound()
     return {};
 }
 
+// ai_drives_player reads only CarLive.vehicle_id and is_ai, which re/research/car-live-1-0-145.md checked on every
+// build in car_live::CAR_BUILDS; the FIELDS table above stays on the KB build.
+std::string player_car_unbound()
+{
+    runtime::ImageId id = runtime::image_id();
+    if (!swofty_core::hooks::car_live::car_build_for(id.stamp, id.size))
+        return "CarLive.vehicle_id and is_ai are not checked on build " + std::to_string(id.stamp);
+    if (!ga.vehicle_table || !ga.vehicle_count)
+        return "g_Sess_VehicleTable or g_Sess_VehicleCount did not resolve on this build";
+    return {};
+}
+
 uint8_t *car_at(int index, std::string &why)
 {
     auto *count = reinterpret_cast<uint32_t *>(ga.vehicle_count);
@@ -721,7 +734,7 @@ struct InGame : ta::Game {
         if (!sys)
             return ta::Outcome::unavailable("the game has not handed a car to a controller since the agent armed, so the "
                                             "vehicle controller system is not known yet (start a session first)");
-        std::string why = car_unbound();
+        std::string why = player_car_unbound();
         int idx = why.empty() ? player_index(why) : -1;
         if (idx < 0)
             return ta::Outcome::unavailable("the player's car: " + why);

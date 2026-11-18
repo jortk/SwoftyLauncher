@@ -9,7 +9,9 @@
 // wrapped function) so it is not counted as swofty time. Frames come from the frame index the game
 // passes to Streamline (or, while it is not updated, from gaps between flow-state ticks), which also
 // paces the on_frame callbacks through frame_claim; the report goes to swofty/perf.log every 15 s and
-// at exit, and a one-line summary goes to loader.log every minute.
+// at exit, and summary lines go to loader.log every minute: frames and swofty time, VirtualQuery calls
+// from swofty modules, the process's CPU use, frame pacing, presents (presented, from the core's Present
+// hook), the GPU, the CPU, the other processes and a verdict (pacing_logic.hpp, perf_system.cpp).
 
 namespace perf {
 
@@ -63,9 +65,16 @@ private:
     bool on_;
 };
 
+inline uint64_t stamp()
+{
+    return __builtin_ia32_rdtsc();
+}
+
+void presented(void *swapchain, unsigned sync, unsigned flags, long hr, uint64_t entry, uint64_t before, uint64_t after);
 void flow_tick();
 bool frame_claim();
 void frame_release();
+void background();
 void mark(const char *kind, const std::string &what);
 void attach();
 void start();

@@ -1,0 +1,20 @@
+{
+  "id": "look",
+  "name": "Look",
+  "description": "A colour grade in linear light: white balance, then a brightness lift that keeps white, contrast around mid grey and saturation, blended in by strength.",
+  "params": [
+    { "id": "strength", "type": "float", "default": 100, "min": 0, "max": 100, "step": 5,
+      "label": "Look strength", "doc": "How much of the grade is applied, from the picture as it is at 0 to the full grade at 100." },
+    { "id": "brightness", "type": "float", "default": 125, "min": 50, "max": 200, "step": 5,
+      "label": "Brightness", "doc": "Lifts the midtones while white stays white; 100 leaves them as they are." },
+    { "id": "saturation", "type": "float", "default": 110, "min": 0, "max": 200, "step": 5,
+      "label": "Saturation", "doc": "The picture's colour, from grey at 0 to the picture's own at 100." },
+    { "id": "white_balance", "type": "float", "default": 6000, "min": 4000, "max": 9000, "step": 100,
+      "label": "White balance (K)", "doc": "Colour temperature: lower is warmer, 6500 is neutral." },
+    { "id": "contrast", "type": "float", "default": 100, "min": 50, "max": 150, "step": 5,
+      "label": "Contrast", "doc": "Contrast around mid grey; 100 leaves it as it is." }
+  ],
+  "passes": [
+    { "name": "look", "shader": "look.hlsl", "entry": "effect" }
+  ]
+}

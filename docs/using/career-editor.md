@@ -9,9 +9,8 @@ The Career Mode Editor addon adds a **Career Editor** page to the launcher. It e
 
 ## Install
 
-1. Download [`swofty.career-editor.zip`](https://github.com/Swofty-Developments/SwoftyLauncher/releases/latest/download/swofty.career-editor.zip) from the latest release.
-2. Drag it onto the launcher window, or follow [Install an addon](/using/addons#install-an-addon).
-3. Turn it on in your profile and start the game.
+1. Open the [Addon Browser](/using/addon-browser), search for **Career Mode Editor** and select **Install**.
+2. Turn it on in your profile and start the game.
 
 ## Use it
 

@@ -70,6 +70,12 @@ impl AddonOption {
                 "id must match [a-z][a-z0-9_]* and be at most {MAX_ID_LEN} characters"
             ));
         }
+        if self.id == "addon" {
+            return Err("the id addon is reserved: an op's when.addon names addons".into());
+        }
+        if !self.needs.is_empty() && self.kind != OptionType::Toggle {
+            return Err("needs is only for a toggle".into());
+        }
         let range = self.min.is_some() || self.max.is_some() || self.step.is_some();
         match self.kind {
             OptionType::Toggle => {

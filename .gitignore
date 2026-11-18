@@ -20,7 +20,6 @@ docs/.vitepress/cache/
 
 native/build/
 native/dist/
-native/bundled/
 re/decomp/
 re/ghidra/*
 !re/ghidra/scripts/
@@ -40,5 +39,8 @@ re/trace_plugin/build/
 *.wep
 *.swoftymod
 templates/addon/native/build/
+templates/hud-dial/native/build/
+templates/mod/native/build/
 re/db/*.tmp
 !packages/sdk/std/fixtures/*.bin
+/target

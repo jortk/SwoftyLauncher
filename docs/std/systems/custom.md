@@ -424,11 +424,8 @@ SWOFTY_REGISTER
 
 SWOFTY_ON_LOAD
 {
-    events::on<career::events::StandingsRebuild>().in(events::data_group("f1_career_1990"))
-        .after([](const career::events::StandingsRebuild &s, const events::Context &) {
-            auto rules = championship_rules.get(championship_rules["swofty.f1-1990/drivers"]);
-            career::apply_dropped_scores(s, rules->best_results);    // keeps the gross totals for the UI
-        });
+    auto rules = championship_rules.get(championship_rules["swofty.f1-1990/drivers"]);
+    career::set_dropped_scores("f1_career_1990", rules->best_results);
 }
 ```
 

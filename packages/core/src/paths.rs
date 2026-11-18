@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
+pub const ENV: &str = "SWOFTY_DATA_DIR";
+
 pub fn data_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("SWOFTY_DATA_DIR") {
+    if let Some(dir) = std::env::var_os(ENV) {
         return PathBuf::from(dir);
     }
     platform_data_dir()
@@ -30,6 +32,14 @@ pub fn platform_data_dir() -> PathBuf {
         .join("swofty")
 }
 
+pub fn dangling_link(path: &std::path::Path) -> Option<PathBuf> {
+    let link = path.symlink_metadata().ok()?.file_type().is_symlink();
+    if !link || path.metadata().is_ok() {
+        return None;
+    }
+    std::fs::read_link(path).ok()
+}
+
 pub fn game_folder_view(path: &std::path::Path) -> String {
     if cfg!(windows) {
         return path.display().to_string();
@@ -40,6 +50,22 @@ pub fn game_folder_view(path: &std::path::Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn finds_a_link_whose_target_is_gone() {
+        let dir = std::env::temp_dir().join(format!("swofty-paths-dangling-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        let (target, at) = (dir.join("target"), dir.join("link"));
+        std::fs::create_dir_all(&target).unwrap();
+        std::os::unix::fs::symlink(&target, &at).unwrap();
+        assert_eq!(dangling_link(&at), None);
+        assert_eq!(dangling_link(&target), None);
+        std::fs::remove_dir(&target).unwrap();
+        assert_eq!(dangling_link(&at), Some(target));
+        assert_eq!(dangling_link(&dir.join("absent")), None);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn proton_view_uses_z_drive() {

@@ -2,17 +2,19 @@ use std::collections::{BTreeSet, HashMap};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::Duration;
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_json::value::RawValue;
 use swofty_addon::asset::{AssetBatch, Op, Origin};
 use swofty_addon::helper::{
     ADDON_CALLS, API_VERSION, Built, Call, Hello, HostCall, Incoming, MOVE_ADDON, PROFILE_HEADS, RESTART,
-    Reply, Request, TASKS, Welcome,
+    Reply, Request, SAVE_DIR, TASKS, Welcome,
 };
 use swofty_addon::launcher::{
     Addon, BuildCx, Claim, CommandSpec, Cx, Importer, ProfileInfo, Progress, Summary,
@@ -49,6 +51,7 @@ pub struct HelperAddon {
     run: Mutex<Run>,
     summaries: Mutex<HashMap<String, Option<Summary>>>,
     stale: Arc<Mutex<Option<Stale>>>,
+    paused: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,6 +107,61 @@ struct Live {
     profile: ProfileInfo,
 }
 
+#[derive(Deserialize)]
+struct RawReply<'a> {
+    id: u64,
+    #[serde(borrow)]
+    result: &'a RawValue,
+}
+
+/// Keep a successful helper payload inside its original input line. Parsing an
+/// untagged Incoming/Reply into Value first creates a large temporary tree for
+/// chart samples. Only control messages need the existing dynamic decoder.
+struct JsonResult {
+    line: String,
+    range: std::ops::Range<usize>,
+}
+impl JsonResult {
+    fn get(&self) -> &str {
+        &self.line[self.range.clone()]
+    }
+}
+
+fn reply_range(line: &str) -> Option<(u64, std::ops::Range<usize>)> {
+    let reply: RawReply<'_> = serde_json::from_str(line).ok()?;
+    let start = reply.result.get().as_ptr() as usize - line.as_ptr() as usize;
+    Some((reply.id, start..start + reply.result.get().len()))
+}
+
+#[cfg(test)]
+mod raw_reply_tests {
+    use super::reply_range;
+
+    #[test]
+    fn reply_payload_borrows_original_bytes_in_any_field_order() {
+        let line = r#" {"before":"é", "result":{"points":[{"x":1,"y":2},null],"text":"日本語"}, "id":19} "#;
+        let (id, range) = reply_range(line).unwrap();
+        assert_eq!(id, 19);
+        assert_eq!(&line[range], r#"{"points":[{"x":1,"y":2},null],"text":"日本語"}"#);
+    }
+
+    #[test]
+    fn null_result_is_a_valid_reply_and_control_errors_stay_on_existing_decoder() {
+        let (id, range) = reply_range(r#"{"id":0,"result":null}"#).unwrap();
+        assert_eq!(id, 0);
+        assert_eq!(&r#"{"id":0,"result":null}"#[range], "null");
+        for message in [
+            r#"{"id":1,"error":"nope"}"#,
+            r#"{"id":3,"method":"get_state"}"#,
+            r#"{"method":"invalidate"}"#,
+            r#"{"id":1,"result":[]"#,
+            r#"{"id":1,"result":[]} trailing"#,
+        ] {
+            assert!(reply_range(message).is_none(), "{message}");
+        }
+    }
+}
+
 impl Drop for Live {
     fn drop(&mut self) {
         self.child.kill().ok();
@@ -122,6 +180,7 @@ impl HelperAddon {
             run: Mutex::new(Run::Idle),
             summaries: Mutex::new(HashMap::new()),
             stale: Arc::default(),
+            paused: Arc::default(),
         })
     }
 
@@ -149,6 +208,10 @@ impl HelperAddon {
         *self.lock() = Run::Idle;
     }
 
+    fn paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst) > 0
+    }
+
     /// The section's view, or None while another call holds the plugin, such as an
     /// import or a build, instead of waiting for it to finish.
     pub fn try_view(&self, cx: &Cx, section: &str) -> Option<Result<View>> {
@@ -159,6 +222,9 @@ impl HelperAddon {
         };
         if let Run::Dead(e) = &*run {
             return Some(Ok(self.dead_view(e.clone())));
+        }
+        if self.paused() && !matches!(*run, Run::Live(_)) {
+            return None;
         }
         let call = Call::View {
             section: section.into(),
@@ -184,7 +250,7 @@ impl HelperAddon {
             section: section.into(),
         };
         Some(
-            self.call_with::<Value>(run, cx, call, self.timeouts.quick, None)
+            self.call_with::<serde::de::IgnoredAny>(run, cx, call, self.timeouts.quick, None)
                 .map(drop),
         )
     }
@@ -232,6 +298,12 @@ impl HelperAddon {
             return Err(swofty_addon::Error::Other(e.clone()));
         }
         if matches!(*run, Run::Idle) {
+            if self.paused() {
+                return Err(swofty_addon::Error::Other(format!(
+                    "{} is stopped while the game folder is being put back",
+                    self.name()
+                )));
+            }
             *run = Run::Live(self.start(cx).map_err(|e| self.fail(&mut run, e))?);
         }
         let Run::Live(live) = &mut *run else {
@@ -239,7 +311,7 @@ impl HelperAddon {
         };
         let exchange = self.exchange(live, cx, call, wait, progress);
         match exchange {
-            Ok(Ok(value)) => serde_json::from_value(value)
+            Ok(Ok(value)) => serde_json::from_str(value.get())
                 .map_err(|e| self.fail(&mut run, format!("sent a bad result: {e}"))),
             Ok(Err(e)) => Err(swofty_addon::Error::Other(format!("{}: {e}", self.name()))),
             Err(e) => Err(self.fail(&mut run, e)),
@@ -363,12 +435,16 @@ impl HelperAddon {
             profile: cx.profile.clone(),
             launcher: Some(env!("CARGO_PKG_VERSION").into()),
             host_calls: host_calls(cx),
+            capabilities: vec![
+                swofty_addon::helper::VIEW_CHART.into(),
+                swofty_addon::helper::VIEW_CELL_IMAGE_DATA.into(),
+            ],
         });
         let welcome = self
             .exchange(&mut live, cx, hello, self.timeouts.quick, None)?
             .map_err(|e| format!("refused hello: {e}"))?;
         let welcome: Welcome =
-            serde_json::from_value(welcome).map_err(|e| format!("sent a bad hello: {e}"))?;
+            serde_json::from_str(welcome.get()).map_err(|e| format!("sent a bad hello: {e}"))?;
         if welcome.api != API_VERSION {
             return Err(format!(
                 "speaks launcher API {}; this launcher speaks {API_VERSION}",
@@ -385,7 +461,7 @@ impl HelperAddon {
         call: Call,
         wait: Duration,
         progress: Option<&dyn Progress>,
-    ) -> std::result::Result<std::result::Result<Value, String>, String> {
+    ) -> std::result::Result<std::result::Result<JsonResult, String>, String> {
         if live.profile != *cx.profile && !matches!(call, Call::Hello(_)) {
             live.profile = cx.profile.clone();
             send(
@@ -416,10 +492,20 @@ impl HelperAddon {
             if line.trim().is_empty() {
                 continue;
             }
+            if let Some((got, range)) = reply_range(&line) {
+                if got != id {
+                    return Err("answered a request it was not sent".into());
+                }
+                return Ok(Ok(JsonResult { line, range }));
+            }
             let message: Incoming =
                 serde_json::from_str(&line).map_err(|e| format!("sent a bad message: {e}"))?;
             match message {
-                Incoming::Reply(Reply::Ok { id: got, result }) if got == id => return Ok(Ok(result)),
+                Incoming::Reply(Reply::Ok { id: got, result }) if got == id => {
+                    let line = result.to_string();
+                    let range = 0..line.len();
+                    return Ok(Ok(JsonResult { line, range }));
+                }
                 Incoming::Reply(Reply::Err { id: got, error }) if got == id => return Ok(Err(error)),
                 Incoming::Reply(_) => return Err("answered a request it was not sent".into()),
                 Incoming::Call(Request {
@@ -494,6 +580,7 @@ fn host_calls(cx: &Cx) -> Vec<String> {
     if cx.game.is_some() {
         calls.push(PROFILE_HEADS);
     }
+    calls.push(SAVE_DIR);
     calls.into_iter().map(String::from).collect()
 }
 
@@ -531,6 +618,7 @@ fn host_call(cx: &Cx, call: HostCall) -> std::result::Result<Value, String> {
             serde_json::to_value(status).map_err(|e| swofty_addon::Error::Other(e.to_string()))
         }
         HostCall::SteamSaveDir => Ok(path_value(cx.game.and_then(|g| g.steam_save_dir()))),
+        HostCall::SaveDir => Ok(path_value(cx.game.and_then(|g| g.save_dir(&cx.profile.name)))),
         HostCall::ProfileTracks => match cx.game {
             Some(g) => g
                 .profile_tracks(&cx.profile.name)
@@ -709,7 +797,20 @@ impl Importer for HelperAddon {
 }
 
 #[derive(Default)]
-pub struct Helpers(Mutex<Vec<Arc<HelperAddon>>>);
+pub struct Helpers {
+    all: Mutex<Vec<Arc<HelperAddon>>>,
+    paused: Arc<AtomicUsize>,
+}
+
+/// Keeps every helper program stopped, and unstartable, until it drops.
+#[must_use = "helpers start again when this drops"]
+pub struct Pause(Arc<AtomicUsize>);
+
+impl Drop for Pause {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 impl std::fmt::Debug for Helpers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -719,18 +820,32 @@ impl std::fmt::Debug for Helpers {
 
 impl Helpers {
     pub fn get(&self, manifest: &AddonManifest, dir: &Path) -> Option<Arc<HelperAddon>> {
-        let mut all = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut all = self.all.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(h) = all.iter().find(|h| h.manifest == *manifest && h.dir == dir) {
             return Some(h.clone());
         }
-        let helper = Arc::new(HelperAddon::new(manifest.clone(), dir)?);
+        let mut helper = HelperAddon::new(manifest.clone(), dir)?;
+        helper.paused = self.paused.clone();
+        let helper = Arc::new(helper);
         all.retain(|h| h.manifest.id != manifest.id);
         all.push(helper.clone());
         Some(helper)
     }
 
+    /// Stops every helper program and keeps them from starting until the
+    /// returned guard drops: a helper holds folders the restore must remove.
+    pub fn pause(&self) -> Pause {
+        self.paused.fetch_add(1, Ordering::SeqCst);
+        let pause = Pause(self.paused.clone());
+        let all: Vec<_> = self.all.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        for h in all {
+            h.stop();
+        }
+        pause
+    }
+
     pub fn forget(&self, id: &str) {
-        let mut all = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut all = self.all.lock().unwrap_or_else(|e| e.into_inner());
         for h in all.iter().filter(|h| h.manifest.id == id) {
             h.stop();
         }
@@ -748,6 +863,7 @@ mod tests {
 
     use super::*;
     use crate::import::{Route, route};
+    use crate::profile::Profile;
     use crate::store::Store;
 
     const MANIFEST: &str = r#"{"schema_version":1,"id":"t.helper","name":"Helper","version":"1.0.0","author":"t",
@@ -910,6 +1026,41 @@ read -r l
     }
 
     #[test]
+    fn pausing_stops_helpers_and_keeps_them_from_starting_until_dropped() {
+        let root = tmp("pause");
+        let store = Store::new(root.join("data"));
+        let dir = store.addons_dir().join("t.helper");
+        addon(
+            &dir,
+            r#"read -r l; echo '{"id":0,"result":{"api":1}}'
+while read -r l; do echo '{"id":1,"result":{"subtitle":"s","body":{"blocks":[]}}}'; done
+"#,
+        );
+        let h = store
+            .helpers()
+            .get(&AddonManifest::load(&dir).unwrap(), &dir)
+            .unwrap();
+        let state = Memory::default();
+        let (data, cache) = (root.join("state"), root.join("cache"));
+        std::fs::create_dir_all(&cache).unwrap();
+        let p = profile("default");
+        let cx = Cx::new("t.helper", &p, &data, &cache, None, &state);
+        h.view(&cx, "items").unwrap();
+        assert!(h.running());
+        let pause = store.helpers().pause();
+        assert!(!h.running());
+        assert!(h.view(&cx, "items").is_err());
+        assert!(h.try_view(&cx, "items").is_none());
+        assert!(!h.running());
+        assert!(h.failure().is_none());
+        drop(pause);
+        h.view(&cx, "items").unwrap();
+        assert!(h.running());
+        h.stop();
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
     fn removing_an_addon_stops_its_helper_before_deleting_it() {
         let root = tmp("remove");
         let store = Store::new(root.join("data"));
@@ -989,6 +1140,10 @@ exec sleep 60
         fn steam_save_dir(&self) -> Option<PathBuf> {
             Some(self.0.join("remote"))
         }
+
+        fn save_dir(&self, profile: &str) -> Option<PathBuf> {
+            Some(self.0.join("saves").join(profile))
+        }
     }
 
     const LIVE: &str = r#"
@@ -998,6 +1153,7 @@ answer '{"id":0,"method":"game_dir"}'
 answer '{"id":1,"method":"addon_game_dir"}'
 answer '{"id":2,"method":"game_status"}'
 answer '{"id":3,"method":"steam_save_dir"}'
+answer '{"id":4,"method":"save_dir"}'
 read -r l; echo "$l" >> received
 echo '{"method":"invalidate","params":{"section":"items"}}'
 echo '{"id":1,"result":{"subtitle":"s","body":{"blocks":[]},"tick":true}}'
@@ -1053,7 +1209,7 @@ read -r l
         assert_eq!(received[0]["params"]["launcher"], env!("CARGO_PKG_VERSION"));
         assert_eq!(
             received[0]["params"]["host_calls"],
-            serde_json::json!(["tasks", PROFILE_HEADS])
+            serde_json::json!(["tasks", PROFILE_HEADS, SAVE_DIR])
         );
         let game_dir = root.join("F1 25");
         assert_eq!(received[2]["result"], game_dir.to_string_lossy().as_ref());
@@ -1069,13 +1225,18 @@ read -r l
             received[5]["result"],
             game_dir.join("remote").to_string_lossy().as_ref()
         );
-        assert_eq!(received[6]["method"], "tick");
-        assert_eq!(received[6]["params"]["section"], "items");
+        assert_eq!(
+            received[6]["result"],
+            game_dir.join("saves/default").to_string_lossy().as_ref()
+        );
+        assert_eq!(received[7]["method"], "tick");
+        assert_eq!(received[7]["params"]["section"], "items");
         h.stop();
         let none = Cx::new("t.helper", &p, &data, &cache, None, &state);
         assert_eq!(host_call(&none, HostCall::GameDir).unwrap(), Value::Null);
         assert_eq!(host_call(&none, HostCall::AddonGameDir).unwrap(), Value::Null);
         assert_eq!(host_call(&none, HostCall::ProfileTracks).unwrap(), Value::Null);
+        assert_eq!(host_call(&none, HostCall::SaveDir).unwrap(), Value::Null);
         assert!(host_call(&none, HostCall::Invalidate(Default::default())).is_err());
         let e = host_call(&none, HostCall::Addons).unwrap_err();
         assert!(e.contains("can't be managed"), "{e}");
@@ -1124,7 +1285,7 @@ read -r l
         let p = profile("default");
         let moves = Moves::default();
         let none = Cx::new("t.helper", &p, &data, &cache, None, &state);
-        assert_eq!(host_calls(&none), ["tasks"]);
+        assert_eq!(host_calls(&none), ["tasks", SAVE_DIR]);
         let e = host_call(
             &none,
             HostCall::MoveAddon {
@@ -1143,7 +1304,8 @@ read -r l
                 "set_addon_enabled",
                 "remove_addon",
                 "move_addon",
-                "tasks"
+                "tasks",
+                SAVE_DIR
             ]
         );
         let call: HostCall = serde_json::from_value(
@@ -1391,6 +1553,33 @@ read -r l
     }
 
     #[test]
+    fn a_helper_only_runs_for_a_drop_while_it_is_on() {
+        let root = tmp("off-claims");
+        let store = Store::new(root.join("data"));
+        let dir = store.addons_dir().join("t.helper");
+        let ran = root.join("ran");
+        addon(&dir, &format!("touch '{}'\necho yes", ran.display()));
+        let manifest = MANIFEST.replace(r#""imports":["exmod"]"#, r#""imports":["exmod"],"claims":true"#);
+        std::fs::write(dir.join("swofty.json"), manifest).unwrap();
+        let car = root.join("car.exmod");
+        std::fs::write(&car, "x").unwrap();
+        let reg = store.registry().unwrap();
+
+        let mut off = Profile::new("t");
+        off.set_enabled("t.helper", false).unwrap();
+        for profile in [&off, &Profile::new("absent"), &Profile::vanilla()] {
+            assert_eq!(route(&reg, profile, &car), None);
+            assert!(!ran.exists(), "{} ran the helper", profile.name);
+        }
+
+        let mut on = Profile::new("t");
+        on.set_enabled("t.helper", true).unwrap();
+        assert_eq!(route(&reg, &on, &car), Some(Route::Importer("t.helper".into())));
+        assert!(ran.exists());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
     fn routes_drops_to_a_helper_without_starting_it() {
         let root = tmp("routes");
         let store = Store::new(root.join("data"));
@@ -1401,11 +1590,13 @@ read -r l
         let entry = reg.get("t.helper").unwrap();
         assert!(entry.helper && !entry.declared);
         assert_eq!(entry.addon.sections()[0].id, "items");
+        let mut profile = Profile::new("t");
+        profile.set_enabled("t.helper", true).unwrap();
         assert_eq!(
-            route(&reg, &root.join("car.exmod")),
+            route(&reg, &profile, &root.join("car.exmod")),
             Some(Route::Importer("t.helper".into()))
         );
-        assert_eq!(route(&reg, &root.join("car.txt")), None);
+        assert_eq!(route(&reg, &profile, &root.join("car.txt")), None);
         let again = store.registry().unwrap();
         assert!(std::ptr::addr_eq(
             Arc::as_ptr(&entry.addon),

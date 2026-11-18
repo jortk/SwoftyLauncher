@@ -4,6 +4,7 @@ import Layout from "./Layout.vue";
 import Landing from "./components/Landing.vue";
 import Example from "./components/Example.vue";
 import Split from "./components/Split.vue";
+import DmcaForm from "./components/DmcaForm.vue";
 import "./styles/flash.css";
 import "./styles/docs.css";
 import "./styles/landing.css";
@@ -16,5 +17,6 @@ export default {
     app.component("Landing", Landing);
     app.component("Example", Example);
     app.component("Split", Split);
+    app.component("DmcaForm", DmcaForm);
   },
 } satisfies Theme;

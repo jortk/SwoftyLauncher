@@ -11,8 +11,8 @@ from pathlib import Path
 from . import report
 
 PIN = ["taskset", "-c", "2-7,10,11,14-31", "nice", "-n", "10"]
-DEFAULT_LOCK = "/mnt/work/.f1-game.lock.d"
-DEFAULT_QUEUE = "/mnt/work/.f1-game.queue"
+DEFAULT_LOCK = "/mnt/work/F1/f1-game.lock.d"
+DEFAULT_QUEUE = "/mnt/work/F1/f1-game.queue"
 WHO = "std16-gate2"
 DEFAULT_CAP = 1 << 20
 PROFILE = "compat"

@@ -6,7 +6,9 @@
 //! Integrity and Defender events since the game started, and the antivirus
 //! registered with Windows. Under Proton it is the prefix's override and the
 //! version.dll Wine mapped. Every check is read-only, bounded in time, and a
-//! check that fails says why and the rest go on.
+//! check that fails says why and the rest go on. A loader.log of this launch
+//! that holds the loader's attach line overrules the miss: the loader runs
+//! and waits for the game window.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -15,9 +17,10 @@ use crate::GAME_EXE;
 use crate::baseline::sha256_file;
 use crate::compat::AdminLayer;
 use crate::install::{PROXY, has_override};
+use crate::launch::WINDOW;
 use crate::process::{GameProcess, same_folder};
 use crate::quarantine::{Carrier, Cause, PreferSource};
-use crate::session::LOADER_LOG;
+use crate::session::{LOADER_LOG, written_since};
 
 pub type Probe<T> = std::result::Result<T, String>;
 
@@ -57,6 +60,9 @@ pub struct Findings {
     /// loader.prev.log was written after the game started: the loader ran
     /// and moved the log aside.
     pub rotated: bool,
+    /// The loader's attach line in this launch's loader.log: the loader
+    /// runs in the game, whatever the session's watch made of the log.
+    pub attached: Option<Attached>,
     pub search: Option<Probe<Search>>,
     /// The value names under F1_25.exe's Image File Execution Options key,
     /// where Exploit protection keeps its program settings.
@@ -80,6 +86,36 @@ pub struct Findings {
     pub antivirus: Option<Probe<Vec<String>>>,
     /// Proton: the prefix's user.reg holds the version.dll override.
     pub wine_override: Option<bool>,
+}
+
+/// The loader's last attach line in a loader.log, and what follows it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Attached {
+    pub pid: u32,
+    /// The clock time on the attach line, in the PC's time zone.
+    pub at: Option<String>,
+    /// The loader logged the window stage, where the addons are loaded.
+    pub window: bool,
+    /// From the attach line to the window stage's line.
+    pub window_after: Option<Duration>,
+    /// The log's last line, and how long after the attach line it came.
+    pub last: Option<String>,
+    pub last_after: Option<Duration>,
+    /// How long ago the game was started.
+    pub ran: Option<Duration>,
+    /// What ties the log to this launch.
+    pub proof: Proof,
+}
+
+/// Why a loader.log is this launch's and not one an earlier launch left.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Proof {
+    /// The pid on the attach line is a running F1_25.exe.
+    #[default]
+    Running,
+    /// loader.prev.log and loader.log were both written after the game
+    /// started: the loader moved the old log aside and began this one.
+    Rotated,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -210,9 +246,7 @@ pub fn collect(game: &Path, placed: Option<&str>, since: SystemTime, user_reg: O
         proxy: proxy(&game.join(PROXY), placed),
         exe_size: std::fs::metadata(game.join(GAME_EXE)).ok().map(|m| m.len()),
         created: created_pid(&stub),
-        rotated: std::fs::metadata(log.with_file_name("loader.prev.log"))
-            .and_then(|m| m.modified())
-            .is_ok_and(|t| t >= since),
+        rotated: written_since(&log.with_file_name("loader.prev.log"), since),
         wine_override: user_reg
             .filter(|_| !cfg!(windows))
             .map(|r| std::fs::read_to_string(r).is_ok_and(|t| has_override(&t))),
@@ -220,7 +254,92 @@ pub fn collect(game: &Path, placed: Option<&str>, since: SystemTime, user_reg: O
     };
     let running = crate::process::game_processes();
     platform::fill(&mut f, game, &running, since);
+    let pids: Vec<u32> = running.iter().map(|g| g.pid).collect();
+    let fresh = f.rotated && written_since(&log, since);
+    f.attached = attached(&stub, &pids, fresh).map(|a| Attached {
+        ran: since.elapsed().ok(),
+        ..a
+    });
     f
+}
+
+/// The loader's last attach line in `log`, when the log is this launch's:
+/// the line names one of the `running` games, or the log is `fresh`, begun
+/// by a loader after the game started. An attach line an earlier launch left
+/// names a game that is gone, in a log nothing moved aside.
+pub fn attached(log: &str, running: &[u32], fresh: bool) -> Option<Attached> {
+    let lines: Vec<&str> = log.lines().collect();
+    let (at, pid) = lines.iter().enumerate().rev().find_map(|(i, l)| {
+        if crate::quarantine::attached(l) != Some(true) {
+            return None;
+        }
+        let rest = &l[l.find("attached, pid ")? + "attached, pid ".len()..];
+        let pid = rest.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+        Some((i, pid))
+    })?;
+    let proof = if running.contains(&pid) {
+        Proof::Running
+    } else if fresh {
+        Proof::Rotated
+    } else {
+        return None;
+    };
+    let start = stamp(lines[at]);
+    let after = |l: &str| Some(Duration::from_millis(stamp(l)?.checked_sub(start?)?));
+    let window = lines[at..].iter().find(|l| WINDOW.iter().any(|w| l.contains(w)));
+    let last = lines[at + 1..].iter().rev().find(|l| !l.trim().is_empty());
+    Some(Attached {
+        pid,
+        at: start.and(lines[at].get(11..23)).map(str::to_owned),
+        window: window.is_some(),
+        window_after: window.and_then(|l| after(l)),
+        last: last.map(|l| body(l).chars().take(160).collect()),
+        last_after: last.and_then(|l| after(l)),
+        ran: None,
+        proof,
+    })
+}
+
+/// A loader.log line's `YYYY-MM-DD HH:MM:SS.mmm` stamp as milliseconds, for
+/// the time between two lines; the stamps are in the PC's time zone.
+fn stamp(line: &str) -> Option<u64> {
+    let s = line.get(..23)?.as_bytes();
+    let shape = b"dddd-dd-dd dd:dd:dd.ddd";
+    if !s.iter().zip(shape).all(|(c, k)| match k {
+        b'd' => c.is_ascii_digit(),
+        k => c == k,
+    }) {
+        return None;
+    }
+    let n = |from: usize, to: usize| line[from..to].parse::<u64>().ok();
+    let (y, m, d) = (n(0, 4)?, n(5, 7)?, n(8, 10)?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    // Days since 1 March of year 0, as in the civil-from-days algorithm.
+    let y = if m <= 2 { y.checked_sub(1)? } else { y };
+    let days = 365 * y + y / 4 - y / 100 + y / 400 + (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+    Some((((days * 24 + n(11, 13)?) * 60 + n(14, 16)?) * 60 + n(17, 19)?) * 1000 + n(20, 23)?)
+}
+
+/// A loader.log line without its stamp and thread id.
+fn body(line: &str) -> &str {
+    let line = line.trim_end();
+    if stamp(line).is_none() {
+        return line;
+    }
+    let rest = line[23..].trim_start();
+    match rest.strip_prefix('[').and_then(|r| r.split_once(']')) {
+        Some((tid, text)) if tid.trim().chars().all(|c| c.is_ascii_digit()) => text.trim_start(),
+        _ => rest,
+    }
+}
+
+fn secs(d: Duration) -> String {
+    match d.as_millis() {
+        ms if ms < 10_000 => format!("{:.1} s", d.as_secs_f64()),
+        _ => format!("{} s", d.as_secs()),
+    }
 }
 
 fn proxy(path: &Path, placed: Option<&str>) -> Proxy {
@@ -332,6 +451,9 @@ const HOOKS: &[(&str, &str)] = &[
     ("graphics-hook", "OBS Studio"),
     ("windhawk", "Windhawk"),
 ];
+
+/// In-process modules of security products, by the start of the DLL's name.
+const SECURITY_MODULES: &[&str] = &["mc-sec", "mfehidk", "aswhook", "snxhk", "sf2", "avghook"];
 
 /// Exploit protection's program settings among the Image File Execution
 /// Options value names. MaxLoaderThreads alone is common and changes nothing.
@@ -569,6 +691,22 @@ pub fn antivirus_name(name: &str, state: Option<u32>) -> String {
 }
 
 impl Findings {
+    /// What the player is told when the loader did attach in this launch,
+    /// in place of a "Mods did not load" report.
+    pub fn attached_text(&self) -> Option<&'static str> {
+        let a = self.attached.as_ref()?;
+        Some(match (a.window, a.proof) {
+            (true, _) => "The mod loader started in F1 25 and reached the game window, where the mods load.",
+            (false, Proof::Running) => {
+                "The mod loader is running in F1 25 and is waiting for the game window. The mods load once the \
+                 window opens; if F1 25 never shows one, close it and launch again."
+            }
+            (false, Proof::Rotated) => {
+                "The mod loader started in F1 25 and was waiting for the game window, where the mods load."
+            }
+        })
+    }
+
     /// What kept version.dll out of the game, from the strongest evidence:
     /// a blocking event about it, the game's DLL policy, KnownDLLs, another
     /// copy of it in the game, then Smart App Control being on.
@@ -649,6 +787,18 @@ impl Findings {
         if sac {
             return Some(Cause::SmartAppControl { seen: false });
         }
+        if self
+            .games
+            .iter()
+            .any(|g| matches!(&g.modules, Ok(m) if m.version.iter().any(|p| in_folder(p, game))))
+        {
+            return Some(self.loaded_silently());
+        }
+        if self.games.is_empty() && self.created.is_some() {
+            return Some(Cause::GameEnded {
+                antivirus: self.third_party_antivirus(),
+            });
+        }
         let unreadable = !self.games.is_empty() && self.games.iter().all(|g| g.modules.is_err());
         (unreadable && self.third_party_antivirus().is_empty()).then_some(Cause::Unreadable)
     }
@@ -687,6 +837,35 @@ impl Findings {
         match &self.prefer_from {
             Some(Ok(found)) => found.first().cloned(),
             _ => self.exploit_protection().then_some(PreferSource::Program),
+        }
+    }
+
+    fn loaded_silently(&self) -> Cause {
+        let exec_options = match &self.exec_options {
+            Some(Ok(names)) => names.clone(),
+            _ => Vec::new(),
+        };
+        let layers = match &self.layers {
+            Some(Ok(l)) => l.clone(),
+            _ => Vec::new(),
+        };
+        let mut security: Vec<String> = Vec::new();
+        for g in &self.games {
+            let Ok(m) = &g.modules else { continue };
+            for name in &m.others {
+                if SECURITY_MODULES
+                    .iter()
+                    .any(|p| name.to_lowercase().starts_with(p))
+                    && !security.iter().any(|s| s.eq_ignore_ascii_case(name))
+                {
+                    security.push(name.clone());
+                }
+            }
+        }
+        Cause::LoadedSilently {
+            exec_options,
+            layers,
+            security,
         }
     }
 
@@ -740,6 +919,9 @@ impl Findings {
                 "loader.prev.log was written after the game started: the loader ran and moved its log aside"
                     .into(),
             );
+        }
+        if let Some(a) = &self.attached {
+            out.push(a.line());
         }
         if self.games.is_empty() {
             out.push(format!("game: no {GAME_EXE} is running"));
@@ -959,6 +1141,37 @@ impl Findings {
             None => {}
         }
         out
+    }
+}
+
+impl Attached {
+    fn line(&self) -> String {
+        let mut text = format!(
+            "loader.log: the loader attached{}, pid {} ({}), and {}",
+            self.at.as_ref().map(|t| format!(" at {t}")).unwrap_or_default(),
+            self.pid,
+            match self.proof {
+                Proof::Running => format!("a running {GAME_EXE}"),
+                Proof::Rotated => "in the log it began this launch".to_owned(),
+            },
+            match (self.window, self.window_after) {
+                (true, Some(d)) => format!("reached the window stage {} after it attached", secs(d)),
+                (true, None) => "reached the window stage".to_owned(),
+                (false, _) => "is waiting for the game window: no window stage line yet".to_owned(),
+            }
+        );
+        if let Some(d) = self.ran {
+            text.push_str(&format!("; the game was started {} ago", secs(d)));
+        }
+        if let Some(last) = &self.last {
+            text.push_str(&format!(
+                "; its last line{}: {last}",
+                self.last_after
+                    .map(|d| format!(", {} after it attached", secs(d)))
+                    .unwrap_or_default()
+            ));
+        }
+        text
     }
 }
 
@@ -1808,7 +2021,7 @@ mod tests {
         );
         let loaded = running(&[&format!(r"{GAME}\version.dll"), SYSTEM], Mitigation::default());
         let f = found([audit, core].concat(), vec![loaded]);
-        assert_eq!(f.cause(&game()), None);
+        assert!(matches!(f.cause(&game()), Some(Cause::LoadedSilently { .. })));
     }
 
     #[test]
@@ -2016,6 +2229,54 @@ mod tests {
         assert_eq!(found(Vec::new(), Vec::new()).cause(&game()), None);
     }
 
+    #[test]
+    fn a_game_gone_before_the_look_is_unknown_and_a_loaded_loader_is_not_blocked() {
+        let mut f = found(Vec::new(), Vec::new());
+        f.created = Some(28016);
+        assert_eq!(
+            f.cause(&game()),
+            Some(Cause::GameEnded {
+                antivirus: Vec::new()
+            })
+        );
+        f.antivirus = Some(Ok(vec!["Bitdefender Antivirus (on)".into()]));
+        assert_eq!(
+            f.cause(&game()),
+            Some(Cause::GameEnded {
+                antivirus: vec!["Bitdefender Antivirus".into()]
+            })
+        );
+        let ours = format!(r"{GAME}\version.dll");
+        let f = found(Vec::new(), vec![running(&[ours.as_str()], Mitigation::default())]);
+        assert!(matches!(f.cause(&game()), Some(Cause::LoadedSilently { .. })));
+    }
+
+    #[test]
+    fn silent_loader_names_ifeo_values_and_security_modules() {
+        let ours = format!(r"{GAME}\version.dll");
+        let mut f = found(Vec::new(), vec![running(&[ours.as_str()], Mitigation::default())]);
+        assert_eq!(
+            f.cause(&game()),
+            Some(Cause::LoadedSilently {
+                exec_options: Vec::new(),
+                layers: Vec::new(),
+                security: Vec::new()
+            })
+        );
+        f.exec_options = Some(Ok(vec!["MaxLoaderThreads".into()]));
+        f.layers = Some(Ok(vec!["~ HIGHDPIAWARE (for this user)".into()]));
+        let Ok(m) = &mut f.games[0].modules else { panic!() };
+        m.others = vec!["mc-sec-plugin-x64.dll".into(), "other.dll".into()];
+        assert_eq!(
+            f.cause(&game()),
+            Some(Cause::LoadedSilently {
+                exec_options: vec!["MaxLoaderThreads".into()],
+                layers: vec!["~ HIGHDPIAWARE (for this user)".into()],
+                security: vec!["mc-sec-plugin-x64.dll".into()]
+            })
+        );
+    }
+
     fn system_copy() -> Findings {
         found(Vec::new(), vec![running(&[SYSTEM], Mitigation::default())])
     }
@@ -2218,11 +2479,11 @@ mod tests {
     fn smart_app_control_on_is_the_cause_only_when_nothing_else_is() {
         let ours = format!(r"{GAME}\version.dll");
         let mut f = found(Vec::new(), vec![running(&[&ours, SYSTEM], Mitigation::default())]);
-        assert_eq!(f.cause(&game()), None);
+        assert!(matches!(f.cause(&game()), Some(Cause::LoadedSilently { .. })));
         f.smart_app_control = Some(Ok(Some(1)));
         assert_eq!(f.cause(&game()), Some(Cause::SmartAppControl { seen: false }));
         f.smart_app_control = Some(Ok(Some(2)));
-        assert_eq!(f.cause(&game()), None);
+        assert!(matches!(f.cause(&game()), Some(Cause::LoadedSilently { .. })));
         f.games = vec![running(&[SYSTEM], Mitigation::default())];
         f.smart_app_control = Some(Ok(Some(1)));
         assert!(matches!(f.cause(&game()), Some(Cause::Unexplained { .. })));
@@ -2340,6 +2601,168 @@ mod tests {
                 "pid 7: 3 modules, version.dll from the game folder's (the loader)",
             ]
         );
+    }
+
+    const WAITING: &str = "2026-11-13 19:02:11.120 [ 8124] swofty loader (version.dll proxy) attached, pid 12320\r\n\
+         2026-11-13 19:02:11.121 [ 8124] host: C:\\Games\\F1 25\\F1_25.exe\r\n\
+         2026-11-13 19:02:11.180 [ 8124] trigger armed: game IAT slot USER32.dll!RegisterClassExW at 0x1 (was 0x2)\r\n\
+         2026-11-13 19:02:11.180 [ 8124] trigger armed: game IAT slot USER32.dll!CreateWindowExW at 0x3 (was 0x4)\r\n\
+         2026-11-13 19:02:11.181 [ 8124] trigger armed: game IAT slot KERNEL32.dll!CreateMutexW at 0x5 (was 0x6)\r\n\
+         2026-11-13 19:02:11.420 [ 9940] fallback watcher: waiting for a visible main window if no trigger fires \
+         (timeout 300 s)\r\n";
+
+    fn waiting() -> Findings {
+        let mut f = found(
+            Vec::new(),
+            vec![running(&[&format!(r"{GAME}\version.dll")], Mitigation::default())],
+        );
+        f.games[0].pid = 12320;
+        f.rotated = true;
+        f.attached = attached(WAITING, &[12320], true).map(|a| Attached {
+            ran: Some(Duration::from_secs(46)),
+            ..a
+        });
+        f
+    }
+
+    #[test]
+    fn an_attached_loader_waiting_for_the_window_is_not_a_miss() {
+        let f = waiting();
+        assert_eq!(
+            f.attached,
+            Some(Attached {
+                pid: 12320,
+                at: Some("19:02:11.120".into()),
+                window: false,
+                window_after: None,
+                last: Some(
+                    "fallback watcher: waiting for a visible main window if no trigger fires (timeout 300 s)"
+                        .into()
+                ),
+                last_after: Some(Duration::from_millis(300)),
+                ran: Some(Duration::from_secs(46)),
+                proof: Proof::Running,
+            })
+        );
+        let text = f.attached_text().unwrap();
+        assert!(
+            text.starts_with("The mod loader is running in F1 25 and is waiting for the game window."),
+            "{text}"
+        );
+        assert!(!text.contains("did not load"), "{text}");
+        let lines = f.lines(&game());
+        assert!(
+            lines.contains(
+                &"loader.log: the loader attached at 19:02:11.120, pid 12320 (a running F1_25.exe), and is waiting \
+                  for the game window: no window stage line yet; the game was started 46 s ago; its last line, 0.3 s \
+                  after it attached: fallback watcher: waiting for a visible main window if no trigger fires \
+                  (timeout 300 s)"
+                    .to_owned()
+            ),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn an_attached_loader_past_the_window_stage_says_how_long_it_took() {
+        let log = format!(
+            "{WAITING}2026-11-14 00:00:02.620 [ 8124] stage: window (USER32!CreateWindowExW), addons were loaded \
+             at the early stage\r\n"
+        );
+        let a = attached(&log, &[], true).unwrap();
+        assert_eq!(a.proof, Proof::Rotated);
+        assert!(a.window);
+        assert_eq!(a.window_after, Some(Duration::from_millis(17_871_500)));
+        assert!(
+            a.line()
+                .contains("and reached the window stage 17871 s after it attached"),
+            "{}",
+            a.line()
+        );
+        let f = Findings {
+            attached: Some(a),
+            ..Findings::default()
+        };
+        assert_eq!(
+            f.attached_text(),
+            Some("The mod loader started in F1 25 and reached the game window, where the mods load.")
+        );
+    }
+
+    #[test]
+    fn a_log_with_no_attach_line_is_still_a_miss() {
+        let stub = "18:27:08.903 [stub] [offline] game created (pid 12320)\n\
+                    18:27:09.211 [stub] [offline] game image at 0x140000000, patching\n";
+        assert_eq!(attached(stub, &[12320], true), None);
+        assert_eq!(attached("", &[12320], true), None);
+        let f = found(
+            Vec::new(),
+            vec![running(&[&format!(r"{GAME}\version.dll")], Mitigation::default())],
+        );
+        assert_eq!(f.attached_text(), None);
+        assert!(matches!(f.cause(&game()), Some(Cause::LoadedSilently { .. })));
+    }
+
+    #[test]
+    fn an_attach_line_from_an_earlier_launch_is_still_a_miss() {
+        assert_eq!(attached(WAITING, &[27488], false), None);
+        let appended = format!(
+            "{WAITING}18:27:08.903 [stub] [offline] game created (pid 27488)\n\
+             18:27:09.211 [stub] [offline] game image at 0x140000000, patching\n"
+        );
+        assert_eq!(attached(&appended, &[27488], false), None);
+        let clobbered =
+            ".dll proxy) attached, pid 12316\r\n2026-11-13 19:02:11.121 [ 8124] host: F1_25.exe\r\n";
+        assert_eq!(attached(clobbered, &[27488], false), None);
+        let a = attached(clobbered, &[12316], false).unwrap();
+        assert_eq!((a.pid, a.at, a.last_after), (12316, None, None));
+        assert_eq!(a.last.as_deref(), Some("host: F1_25.exe"));
+    }
+
+    #[test]
+    fn collect_takes_an_attach_line_only_from_a_log_begun_this_launch() {
+        let dir = std::env::temp_dir().join(format!("swofty-loader-attached-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        let game = dir.join("game");
+        std::fs::create_dir_all(game.join("swofty")).unwrap();
+        let log = game.join(LOADER_LOG);
+        let prev = log.with_file_name("loader.prev.log");
+        let touch = |path: &Path, at: SystemTime| {
+            std::fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        };
+        let since = SystemTime::now() - Duration::from_secs(46);
+        let earlier = since - Duration::from_secs(3600);
+        std::fs::write(&log, WAITING).unwrap();
+        touch(&log, earlier);
+        assert_eq!(collect(&game, None, since, None).attached, None);
+        std::fs::write(&prev, "the log before it\n").unwrap();
+        touch(&prev, earlier);
+        std::fs::write(
+            &log,
+            format!("{WAITING}18:27:08.903 [stub] [offline] game created (pid 27488)\n"),
+        )
+        .unwrap();
+        let f = collect(&game, None, since, None);
+        assert!(!f.rotated);
+        assert_eq!(f.attached, None);
+        assert_eq!(f.attached_text(), None);
+        std::fs::write(&prev, "18:27:08.903 [stub] [offline] game created (pid 12320)\n").unwrap();
+        std::fs::write(&log, WAITING).unwrap();
+        let f = collect(&game, None, since, None);
+        assert!(f.rotated);
+        let a = f.attached.as_ref().unwrap();
+        assert_eq!((a.pid, a.proof, a.window), (12320, Proof::Rotated, false));
+        assert!(a.ran.is_some_and(|d| d >= Duration::from_secs(46)));
+        assert_eq!(
+            f.attached_text(),
+            Some("The mod loader started in F1 25 and was waiting for the game window, where the mods load.")
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

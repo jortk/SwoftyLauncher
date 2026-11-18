@@ -79,7 +79,7 @@ A notification that tells the launcher a section's view is out of date:
 
 Career Editor sends it with or without a section:
 
-```rust [addons/career-editor/launcher/src/host.rs]
+```rust [Career Mode Editor: launcher/src/host.rs]
 pub fn invalidate(&mut self, section: Option<&str>) {
     let params = match section {
         Some(s) => json!({ "section": s }),

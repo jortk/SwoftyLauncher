@@ -219,8 +219,9 @@ struct Focus {
 };
 
 // The snapshot an addon sees: the focus holder gets everything; while nobody holds focus every addon
-// gets the cursor and key edges; while another addon holds it, an addon gets nothing.
-inline void view(const Snapshot &s, const Focus &f, const std::string &who, SwoftyInput &out)
+// gets the cursor and key edges (no keys while the game has a text box focused); while another addon holds
+// it, an addon gets nothing.
+inline void view(const Snapshot &s, const Focus &f, const std::string &who, SwoftyInput &out, bool typing = false)
 {
     uint32_t size = out.size;
     memset(&out, 0, sizeof out);
@@ -232,9 +233,11 @@ inline void view(const Snapshot &s, const Focus &f, const std::string &who, Swof
         return;
     out.x = s.x;
     out.y = s.y;
-    memcpy(out.keys_down, s.keys_down, sizeof out.keys_down);
-    memcpy(out.keys_pressed, s.keys_pressed, sizeof out.keys_pressed);
-    memcpy(out.keys_typed, s.keys_typed, sizeof out.keys_typed);
+    if (!typing || mine) {
+        memcpy(out.keys_down, s.keys_down, sizeof out.keys_down);
+        memcpy(out.keys_pressed, s.keys_pressed, sizeof out.keys_pressed);
+        memcpy(out.keys_typed, s.keys_typed, sizeof out.keys_typed);
+    }
     out.pad_connected = s.pad_connected;
     out.pad_buttons = s.pad_buttons;
     out.pad_pressed = s.pad_pressed;

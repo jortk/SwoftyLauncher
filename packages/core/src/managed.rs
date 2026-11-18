@@ -176,7 +176,7 @@ pub fn install_release(
     let file = fetch_package(store, release, progress)?;
     compatible(&file, release, launcher)?;
     progress.report(0.95, &format!("Installing {}", release.tag_name));
-    let installed = store.install_addon_for(&file, launcher).map(|m| m.version);
+    let installed = store.install_managed_release(&file, launcher).map(|m| m.version);
     if installed.is_ok()
         && let Some(dir) = file.parent()
     {

@@ -1,6 +1,7 @@
 //! The DB Editor: the stock game database named and browsable, a draft of
 //! edits saved as data addons, and the friendly modules the launcher draws.
 
+pub mod calendar;
 mod catalog;
 pub mod deps;
 pub mod draft;

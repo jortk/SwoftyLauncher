@@ -57,7 +57,21 @@ The arrow beside **Play** opens a menu. **Use launcher saves** (ticked by defaul
 $ swofty run --steam-saves-once
 ```
 
-If the core can't use launcher saves it closes F1 25 before the title screen, and the play bar says `Launcher saves could not be used, so F1 25 closed before loading a save`, with the same **Play once with your Steam saves**, **Open logs** and **Dismiss**. Nothing was read or written. The EA app copy keeps its own saves, so launcher saves don't apply to it.
+If the core can't use launcher saves it closes F1 25 before the title screen, and the play bar says `Launcher saves could not be used, so F1 25 closed before loading a save`, with the same **Play once with your Steam saves**, **Open logs** and **Dismiss**. Nothing was read or written. The launcher has a save backend for the EA app copy of F1 25. EA app copies of 1.0.145 still run without add-ons.
+
+## Which save Play will use
+
+A line on the play bar names the save the next **Play** uses. With launcher saves in use it reads `Saves: grid launcher save`, with the profile's name. When Play uses the game copy's own save instead, the line turns amber and reads `Saves: Steam's own save (your launcher careers are not used on this run)`, with the reason under it. On the EA app copy it says `the EA app's own save`.
+
+| Reason line | Case |
+|---|---|
+| `Vanilla profile` | The active profile is Vanilla. |
+| `launcher saves are off` | **Use launcher saves** is unticked for the profile. |
+| `this game version is not supported yet` | The game's `F1_25.exe` is a build the launcher doesn't know. This holds for every profile. |
+| `you chose to play once with your Steam saves` | **Play once with your Steam saves** is starting. |
+| `launcher saves are not available on the EA app copy` | The active copy is from the EA app. |
+
+The line is read-only, and `swofty run` makes the same decision. Your launcher careers stay in `saves/<profile>/remote` and are not changed by a run on the Steam save.
 
 ## The first time
 

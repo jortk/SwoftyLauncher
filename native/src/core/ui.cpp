@@ -9,11 +9,15 @@
 
 #include "json.hpp"
 #include "perf.hpp"
+#include "main_menu.hpp"
+#include "services/lap_host.hpp"
 
 namespace runtime {
 std::string hook_error(const safetyhook::MidHook::Error &e);
-void netplay_screen(const char *name);
+void load_stall_screen(const char *name);
+void session_host_screen(const char *name);
 void testagent_screen(const char *name);
+void direct_start_screen(const char *name);
 }
 
 bool ui_vm_init(uintptr_t module_base, const std::wstring &swofty_dir);
@@ -531,9 +535,12 @@ uint64_t open_hook(void *scene, void *screen, void *a3, void *a4)
 {
     static const uint32_t probe = perf::probe("core", "ui screen open");
     perf::Scope p(probe);
-    if (perf::live() && readable(screen, 0x70) &&
-        readable(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68), 10))
-        perf::mark("screen", chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68)));
+    if (readable(screen, 0x70) && readable(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68), 10)) {
+        const char *opened = chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68));
+        runtime::load_stall_screen(opened);
+        if (perf::live())
+            perf::mark("screen", opened);
+    }
     LARGE_INTEGER t0, t1, t2;
     QueryPerformanceCounter(&t0);
     AcquireSRWLockExclusive(&lock);
@@ -561,8 +568,11 @@ uint64_t open_hook(void *scene, void *screen, void *a3, void *a4)
         }
     }
     if (readable(screen, 0x70) && readable(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68), 10)) {
-        runtime::netplay_screen(chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68)));
+        runtime::session_host_screen(chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68)));
+        runtime::main_menu::screen(chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68)));
+        runtime::lap_host::screen(chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68)));
         runtime::testagent_screen(chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68)));
+        runtime::direct_start_screen(chars(*reinterpret_cast<void **>(static_cast<uint8_t *>(screen) + 0x68)));
     }
     if (screen != last_screen) {
         prev_scene = last_scene;

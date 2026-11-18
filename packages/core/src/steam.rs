@@ -22,7 +22,20 @@ impl GameInstall {
     }
 }
 
+/// An explicit isolation root suppresses registry, default-location and drive scans.
+/// This is useful for sandboxed tools and tests that must never inspect host saves.
+fn isolated_root() -> Option<PathBuf> {
+    std::env::var_os("SWOFTY_STEAM_ROOT_ONLY").map(PathBuf::from)
+}
+
 pub fn steam_roots() -> Vec<PathBuf> {
+    if let Some(root) = isolated_root() {
+        return if root.join("steamapps").is_dir() {
+            vec![root]
+        } else {
+            Vec::new()
+        };
+    }
     let mut out: Vec<PathBuf> = Vec::new();
     if let Some(dir) = std::env::var_os("SWOFTY_STEAM_ROOT") {
         out.push(dir.into());
@@ -39,6 +52,7 @@ pub fn steam_roots() -> Vec<PathBuf> {
         out.push(home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"));
         out.push(home.join(".var/app/com.valvesoftware.Steam/data/Steam"));
     }
+    out.extend(registered_roots_cached());
     let mut seen = Vec::new();
     out.retain(|p| {
         let real = p.canonicalize().unwrap_or_else(|_| p.clone());
@@ -47,6 +61,95 @@ pub fn steam_roots() -> Vec<PathBuf> {
         keep
     });
     out
+}
+
+const REGISTERED_KEYS: [(&str, &str); 4] = [
+    (r"HKCU\Software\Valve\Steam", "SteamPath"),
+    (r"HKCU\Software\Valve\Steam", "SteamExe"),
+    (r"HKLM\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
+    (r"HKLM\SOFTWARE\Valve\Steam", "InstallPath"),
+];
+
+/// The Steam folders Windows records: the per-user `SteamPath` and `SteamExe`, and the machine-wide
+/// `InstallPath`. Steam registers where it is installed, not where the game library is.
+pub fn registered_roots(reg: &dyn crate::steam_client::Registry) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    let mut last_key = "";
+    let mut values: Vec<(String, String)> = Vec::new();
+    for (key, name) in REGISTERED_KEYS {
+        if key != last_key {
+            values = reg
+                .query(key)
+                .map(|l| crate::compat::parse_reg_query(&l))
+                .unwrap_or_default();
+            last_key = key;
+        }
+        let Some((_, data)) = values
+            .iter()
+            .find(|(n, d)| n.eq_ignore_ascii_case(name) && !d.trim().is_empty())
+        else {
+            continue;
+        };
+        let path = PathBuf::from(data.trim());
+        let root = match name {
+            "SteamExe" => path.parent().map(Path::to_path_buf),
+            _ => Some(path),
+        };
+        out.extend(root.filter(|r| !out.contains(r)));
+    }
+    out
+}
+
+#[cfg(windows)]
+fn registered_roots_cached() -> Vec<PathBuf> {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    static CACHE: Mutex<Option<(Instant, Vec<PathBuf>)>> = Mutex::new(None);
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, roots)) = cache.as_ref()
+        && at.elapsed() < Duration::from_secs(30)
+    {
+        return roots.clone();
+    }
+    let mut roots = registered_roots(&crate::steam_client::RegExe);
+    roots.extend(
+        crate::process::named_paths("steam.exe")
+            .iter()
+            .filter_map(|p| p.parent().map(Path::to_path_buf)),
+    );
+    *cache = Some((Instant::now(), roots.clone()));
+    roots
+}
+
+#[cfg(not(windows))]
+fn registered_roots_cached() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+/// Where Steam is usually installed on each drive in `drives` (`C:\`, `D:\`, ...), for a Steam that
+/// neither the registry nor a running steam.exe revealed.
+pub fn drive_roots(drives: &[PathBuf]) -> Vec<PathBuf> {
+    drives
+        .iter()
+        .flat_map(|d| {
+            [
+                d.join("Program Files (x86)").join("Steam"),
+                d.join("Program Files").join("Steam"),
+                d.join("Steam"),
+            ]
+        })
+        .filter(|r| r.join("steamapps").is_dir() || r.join("userdata").is_dir())
+        .collect()
+}
+
+#[cfg(windows)]
+fn drives() -> Vec<PathBuf> {
+    ('C'..='Z').map(|c| PathBuf::from(format!("{c}:\\"))).collect()
+}
+
+#[cfg(not(windows))]
+fn drives() -> Vec<PathBuf> {
+    Vec::new()
 }
 
 fn read_vdf(path: &Path) -> Option<Vdf> {
@@ -337,43 +440,103 @@ pub fn find_proton_in(
 
 const STEAMID64_BASE: u64 = 76_561_197_960_265_728;
 
+fn has_files(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|d| d.flatten().any(|e| e.file_type().is_ok_and(|t| t.is_file())))
+}
+
 /// The game's Steam Cloud save folder, `userdata/<steamid3>/<app>/remote`: for the
 /// most recent user in loginusers.vdf, else the user whose folder changed last.
 pub fn save_dir(steam_root: &Path) -> Option<PathBuf> {
-    let remote = |id3: &str| {
-        let dir = steam_root
-            .join("userdata")
-            .join(id3)
-            .join(STEAM_APP_ID.to_string())
-            .join("remote");
-        dir.is_dir().then_some(dir)
+    save_dir_with(steam_root, None, &mut Vec::new())
+}
+
+/// [`save_dir`] that prefers `active_user` (Steam's `ActiveUser`, 0 for nobody) and then the
+/// `MostRecent` account in loginusers.vdf, then the other accounts by sign-in time and folder
+/// change time, and takes the first whose folder holds files, else the first that exists. `tried`
+/// gets one line per folder looked at and why it was rejected.
+pub fn save_dir_with(
+    steam_root: &Path,
+    active_user: Option<u32>,
+    tried: &mut Vec<String>,
+) -> Option<PathBuf> {
+    let userdata = steam_root.join("userdata");
+    let mut order: Vec<(String, &'static str)> = Vec::new();
+    let mut push = |id3: String, why: &'static str| {
+        if !order.iter().any(|(i, _)| *i == id3) {
+            order.push((id3, why));
+        }
     };
-    let recent = read_vdf(&steam_root.join("config/loginusers.vdf")).and_then(|v| {
-        let users = v.get("users")?;
+    if let Some(user) = active_user.filter(|u| *u != 0) {
+        push(user.to_string(), "ActiveUser");
+    }
+    if let Some(v) = read_vdf(&steam_root.join("config/loginusers.vdf"))
+        && let Some(users) = v.get("users")
+    {
         let stamp = |e: &Vdf| {
             e.get("Timestamp")
                 .and_then(Vdf::str)
                 .and_then(|t| t.parse::<u64>().ok())
+                .unwrap_or(0)
         };
-        let best = users.entries().max_by_key(|(_, e)| {
-            let most_recent = e.get("MostRecent").and_then(Vdf::str) == Some("1");
-            (most_recent, stamp(e).unwrap_or(0))
-        })?;
-        let id64: u64 = best.0.parse().ok()?;
-        remote(&id64.checked_sub(STEAMID64_BASE)?.to_string())
-    });
-    recent.or_else(|| {
-        std::fs::read_dir(steam_root.join("userdata"))
-            .ok()?
-            .flatten()
-            .filter_map(|u| {
-                let dir = remote(u.file_name().to_str()?)?;
-                let changed = std::fs::metadata(&dir).and_then(|m| m.modified()).ok();
-                Some((changed, dir))
+        let mut all: Vec<_> = users
+            .entries()
+            .filter_map(|(id, e)| {
+                let id3 = id.parse::<u64>().ok()?.checked_sub(STEAMID64_BASE)?;
+                let most_recent = e.get("MostRecent").and_then(Vdf::str) == Some("1");
+                Some((most_recent, stamp(e), id3.to_string()))
             })
-            .max_by_key(|(changed, _)| *changed)
-            .map(|(_, dir)| dir)
-    })
+            .collect();
+        all.sort_by_key(|u| std::cmp::Reverse((u.0, u.1)));
+        for (most_recent, _, id3) in all {
+            push(
+                id3,
+                match most_recent {
+                    true => "loginusers.vdf MostRecent",
+                    false => "loginusers.vdf",
+                },
+            );
+        }
+    } else {
+        tried.push(format!(
+            "{}: no readable loginusers.vdf",
+            steam_root.join("config/loginusers.vdf").display()
+        ));
+    }
+    let mut folders: Vec<(Option<std::time::SystemTime>, String)> = std::fs::read_dir(&userdata)
+        .map(|d| {
+            d.flatten()
+                .filter_map(|u| {
+                    let name = u.file_name().to_str()?.to_owned();
+                    let remote = u.path().join(STEAM_APP_ID.to_string()).join("remote");
+                    Some((std::fs::metadata(remote).and_then(|m| m.modified()).ok(), name))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if folders.is_empty() {
+        tried.push(format!("{}: no userdata accounts", userdata.display()));
+    }
+    folders.sort_by_key(|f| std::cmp::Reverse(f.0));
+    for (_, id3) in folders {
+        push(id3, "newest userdata folder");
+    }
+    let mut first_existing = None;
+    for (id3, why) in order {
+        let dir = userdata.join(&id3).join(STEAM_APP_ID.to_string()).join("remote");
+        if !dir.is_dir() {
+            tried.push(format!("{} ({why}): rejected, no such folder", dir.display()));
+        } else if has_files(&dir) {
+            tried.push(format!("{} ({why}): chosen, it holds save files", dir.display()));
+            return Some(dir);
+        } else {
+            tried.push(format!(
+                "{} ({why}): rejected, the folder is empty",
+                dir.display()
+            ));
+            first_existing.get_or_insert(dir);
+        }
+    }
+    first_existing
 }
 
 /// The Steam install whose `userdata` holds the saves of the game at `game`
@@ -407,11 +570,121 @@ pub fn root_of_game(game: &Path) -> Option<PathBuf> {
 
 /// save_dir for the Steam install that holds the game, then for every other one.
 pub fn find_save_dir() -> Option<PathBuf> {
-    let game_root = find_game().map(|g| g.steam_root);
-    game_root
-        .into_iter()
-        .chain(steam_roots())
-        .find_map(|root| save_dir(&root))
+    search_save(find_game().map(|g| g.dir).as_deref()).dir
+}
+
+/// The Steam Cloud save folder found, and what was looked at on the way.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SaveSearch {
+    pub dir: Option<PathBuf>,
+    pub tried: Vec<String>,
+}
+
+/// The save folder for the game in `game`. The Steam root comes from the library's own Steam
+/// install, never from the game's path: `userdata` is always under the root, and a library on
+/// another drive has none. Roots come from the library's `libraryfolders.vdf` owner, then the
+/// default folders, the registry and a running steam.exe, and last from the usual folders on every
+/// drive.
+pub fn search_save(game: Option<&Path>) -> SaveSearch {
+    if isolated_root().is_some() {
+        return search_save_in(game, &steam_roots(), &[], None);
+    }
+    search_save_in(game, &steam_roots(), &drive_roots(&drives()), active_user())
+}
+
+pub fn search_save_in(
+    game: Option<&Path>,
+    roots: &[PathBuf],
+    scanned: &[PathBuf],
+    active_user: Option<u32>,
+) -> SaveSearch {
+    let mut tried = Vec::new();
+    let real = |x: &Path| x.canonicalize().unwrap_or_else(|_| x.to_path_buf());
+    let mut order: Vec<(PathBuf, &str)> = Vec::new();
+    let add = |order: &mut Vec<(PathBuf, &str)>, root: PathBuf, why: &'static str| {
+        if !order.iter().any(|(r, _)| real(r) == real(&root)) {
+            order.push((root, why));
+        }
+    };
+    match game {
+        Some(game) => match root_of_game_in(game, roots) {
+            Some(root) => add(
+                &mut order,
+                root,
+                "the Steam install that lists the game's library",
+            ),
+            None => tried.push(format!(
+                "{}: no known Steam root lists this library in libraryfolders.vdf",
+                game.display()
+            )),
+        },
+        None => tried.push("no game folder to find the library of".to_owned()),
+    }
+    for root in roots {
+        add(&mut order, root.clone(), "a known Steam install");
+    }
+    let mut empty: Option<PathBuf> = None;
+    let mut look = |order: &[(PathBuf, &str)], tried: &mut Vec<String>| {
+        for (root, why) in order {
+            tried.push(format!("Steam root {} ({why})", root.display()));
+            if let Some(dir) = save_dir_with(root, active_user, tried) {
+                if has_files(&dir) {
+                    return Some(dir);
+                }
+                empty.get_or_insert(dir);
+            }
+        }
+        None
+    };
+    let mut found = look(&order, &mut tried);
+    if found.is_none() {
+        let mut more = Vec::new();
+        for root in scanned
+            .iter()
+            .filter(|r| !order.iter().any(|(o, _)| real(o) == real(r)))
+        {
+            add(&mut more, root.clone(), "found by looking on every drive");
+        }
+        if more.is_empty() && order.is_empty() {
+            tried.push("no Steam install found in the registry, the default folders or on any drive".into());
+        }
+        found = look(&more, &mut tried);
+    }
+    SaveSearch {
+        dir: found.or(empty),
+        tried,
+    }
+}
+
+#[cfg(windows)]
+pub fn active_user() -> Option<u32> {
+    use crate::steam_client::Registry;
+    let out = crate::steam_client::RegExe.query(crate::steam_client::ACTIVE_PROCESS_KEY)?;
+    crate::compat::reg_dword(&out, "ActiveUser").filter(|u| *u != 0)
+}
+
+#[cfg(not(windows))]
+pub fn active_user() -> Option<u32> {
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    [".steam/registry.vdf", ".local/share/Steam/registry.vdf"]
+        .iter()
+        .find_map(|f| {
+            read_vdf(&home.join(f))?
+                .path(&[
+                    "Registry",
+                    "HKCU",
+                    "Software",
+                    "Valve",
+                    "Steam",
+                    "ActiveProcess",
+                    "ActiveUser",
+                ])?
+                .str()?
+                .trim()
+                .parse::<u32>()
+                .ok()
+        })
+        .filter(|u| *u != 0)
 }
 
 pub fn wrapper_installed(launch_options: &str) -> bool {
@@ -708,6 +981,190 @@ mod tests {
         assert_eq!(at(&update), Some("updating"));
         assert_eq!(log_busy(&dir.join("missing.txt")), None);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    struct FakeReg(Vec<(&'static str, String)>);
+
+    impl crate::steam_client::Registry for FakeReg {
+        fn query(&self, key: &str) -> Option<String> {
+            self.0.iter().find(|(k, _)| *k == key).map(|(_, v)| v.clone())
+        }
+    }
+
+    fn fixture(tag: &str) -> PathBuf {
+        let base = std::env::temp_dir().join(format!("swofty-lib-{tag}-{}", std::process::id()));
+        std::fs::remove_dir_all(&base).ok();
+        base
+    }
+
+    fn save(root: &Path, id3: &str, files: &[&str]) {
+        let remote = root.join("userdata").join(id3).join("3059520/remote");
+        std::fs::create_dir_all(&remote).unwrap();
+        for f in files {
+            std::fs::write(remote.join(f), b"x").unwrap();
+        }
+    }
+
+    fn logins(root: &Path, users: &[(u64, &str, u64)]) {
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        let body: String = users
+            .iter()
+            .map(|(id3, recent, stamp)| {
+                format!(
+                    r#""{}" {{ "MostRecent" "{recent}" "Timestamp" "{stamp}" }} "#,
+                    STEAMID64_BASE + id3
+                )
+            })
+            .collect();
+        std::fs::write(
+            root.join("config/loginusers.vdf"),
+            format!(r#""users" {{ {body} }}"#),
+        )
+        .unwrap();
+    }
+
+    fn library_on_other_drive(base: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let root = base.join("C").join("Program Files (x86)").join("Steamé Ünïcode");
+        let lib = base.join("D").join("SteamLibrary");
+        let game = lib.join("steamapps/common/F1 25");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::create_dir_all(root.join("steamapps")).unwrap();
+        std::fs::write(
+            root.join("steamapps/libraryfolders.vdf"),
+            format!(
+                r#""libraryfolders" {{ "0" {{ "path" "{}" }} "1" {{ "path" "{}" }} }}"#,
+                root.display().to_string().replace('\\', "\\\\"),
+                lib.display().to_string().replace('\\', "\\\\")
+            ),
+        )
+        .unwrap();
+        (root, lib, game)
+    }
+
+    #[test]
+    fn a_library_on_another_drive_finds_the_save_under_the_steam_root() {
+        let base = fixture("drive");
+        let (root, lib, game) = library_on_other_drive(&base);
+        assert!(!lib.join("userdata").exists());
+        logins(&root, &[(11, "0", 900), (22, "1", 100)]);
+        save(&root, "11", &["a.sav"]);
+        save(&root, "22", &["ProfileSave.dat"]);
+        save(&root, "33", &["old.sav"]);
+        let found = search_save_in(Some(&game), std::slice::from_ref(&root), &[], Some(0));
+        assert_eq!(found.dir, Some(root.join("userdata/22/3059520/remote")));
+        let log = found.tried.join("\n");
+        assert!(
+            log.contains("the Steam install that lists the game's library"),
+            "{log}"
+        );
+        assert!(log.contains("loginusers.vdf MostRecent): chosen"), "{log}");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn an_empty_most_recent_folder_is_rejected_for_one_with_saves() {
+        let base = fixture("empty");
+        let root = base.join("Steam");
+        std::fs::create_dir_all(root.join("steamapps")).unwrap();
+        logins(&root, &[(11, "1", 900), (22, "0", 100)]);
+        save(&root, "11", &[]);
+        save(&root, "22", &["ProfileSave.dat"]);
+        let mut tried = Vec::new();
+        assert_eq!(
+            save_dir_with(&root, Some(0), &mut tried),
+            Some(root.join("userdata/22/3059520/remote"))
+        );
+        let log = tried.join("\n");
+        let empty = root.join("userdata").join("11").join("3059520").join("remote");
+        assert!(
+            log.contains(&empty.display().to_string()) && log.contains("rejected, the folder is empty"),
+            "{log}"
+        );
+        assert_eq!(
+            save_dir_with(&root, Some(11), &mut Vec::new()),
+            Some(root.join("userdata/22/3059520/remote")),
+            "ActiveUser first, but only when its folder holds saves"
+        );
+        save(&root, "22", &[]);
+        std::fs::remove_file(root.join("userdata/22/3059520/remote/ProfileSave.dat")).unwrap();
+        assert_eq!(
+            save_dir_with(&root, Some(22), &mut Vec::new()),
+            Some(root.join("userdata/22/3059520/remote")),
+            "no folder holds saves: the first that exists"
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn active_user_leads_over_loginusers() {
+        let base = fixture("active");
+        let root = base.join("Steam");
+        std::fs::create_dir_all(root.join("steamapps")).unwrap();
+        logins(&root, &[(11, "1", 900)]);
+        save(&root, "11", &["a.sav"]);
+        save(&root, "22", &["b.sav"]);
+        assert_eq!(
+            save_dir_with(&root, Some(22), &mut Vec::new()),
+            Some(root.join("userdata/22/3059520/remote"))
+        );
+        assert_eq!(
+            save_dir_with(&root, Some(0), &mut Vec::new()),
+            Some(root.join("userdata/11/3059520/remote")),
+            "ActiveUser 0 means nobody is signed in"
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn the_registry_names_the_steam_root_not_the_library() {
+        let reg = FakeReg(vec![
+            (
+                r"HKCU\Software\Valve\Steam",
+                "    SteamPath    REG_SZ    c:/program files (x86)/steam\r\n    SteamExe    REG_SZ    c:/program files (x86)/steam/steam.exe\r\n".to_owned(),
+            ),
+            (
+                r"HKLM\SOFTWARE\WOW6432Node\Valve\Steam",
+                "    InstallPath    REG_SZ    C:\\Program Files (x86)\\Steam\r\n".to_owned(),
+            ),
+        ]);
+        assert_eq!(
+            registered_roots(&reg),
+            [
+                PathBuf::from("c:/program files (x86)/steam"),
+                PathBuf::from("C:\\Program Files (x86)\\Steam")
+            ]
+        );
+        assert!(registered_roots(&FakeReg(Vec::new())).is_empty());
+    }
+
+    #[test]
+    fn a_steam_nobody_registered_is_found_by_looking_on_the_drives() {
+        let base = fixture("scan");
+        let (root, _, game) = library_on_other_drive(&base);
+        let odd = base.join("E").join("Steam");
+        std::fs::create_dir_all(odd.join("steamapps")).unwrap();
+        save(&odd, "44", &["ProfileSave.dat"]);
+        assert_eq!(
+            drive_roots(&[base.join("E"), base.join("F")]),
+            std::slice::from_ref(&odd)
+        );
+        let found = search_save_in(Some(&game), &[], &drive_roots(&[base.join("E")]), None);
+        assert_eq!(found.dir, Some(odd.join("userdata/44/3059520/remote")));
+        assert!(
+            found
+                .tried
+                .join("\n")
+                .contains("no known Steam root lists this library")
+        );
+        let none = search_save_in(Some(&game), &[], &[], None);
+        assert_eq!(none.dir, None);
+        assert!(
+            none.tried.join("\n").contains("no Steam install found"),
+            "{:?}",
+            none.tried
+        );
+        let _ = root;
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]

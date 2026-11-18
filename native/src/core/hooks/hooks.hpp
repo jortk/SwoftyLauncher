@@ -29,6 +29,7 @@ void declare_game_points(Table &t);
 void declare_session_points(Table &t);
 void declare_car_points(Table &t);
 void arm_session_points();
+int session_control_mode(uint32_t car, uint32_t *mode);
 void arm_car_points();
 void set_records(RecordFn fn);
 void window_stage();

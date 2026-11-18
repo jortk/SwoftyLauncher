@@ -18,7 +18,7 @@ A track is installed by a `track.add` operation: at each build, activation clone
 }
 ```
 
-`source` is a folder in the addon that holds an unpacked [track package](/reference/mods/tracks): `manifest.json`, the track's `.erp`, `mipmaps/` and `ui/`. The Simplified Importer writes this file into every track addon it makes, `mod.<code>`. A data addon can list `track.add` in an `assets` file too ([A track with its own name](/reference/data/track-names)).
+`source` is a folder in the addon that holds an unpacked [track package](/reference/mods/tracks): `manifest.json`, the track's `.erp`, `mipmaps/` and `ui/`. The Simplified Importer writes this file into every track addon it makes ([The addon's id](/reference/mods/tracks#the-addon-s-id)). A data addon can list `track.add` in an `assets` file too ([A track with its own name](/reference/data/track-names)).
 
 ```sh
 swofty build
@@ -49,7 +49,22 @@ How the build handles this depends on the in-game core. When its `features.json`
 - `ai/<vehicle_package>/<team>/<team>` for every AI team folder in the archive;
 - the `worldAssetGroup` of every track layer row (`track_data.track_layers`) whose `[FILENAME]` world lies outside the game's own `environment_package` worlds, such as `<package>/tracks/<code>/wep/<code>_<variant>`, unless an addon registers that group itself.
 
-You can enable any number of tracks this way.
+The game's track lists hold 64 tracks: the 35 stock tracks with a `TrackData` row in some dataset (`madrid` isn't listed) and 29 added ones. A track takes a place when its base track has `TrackData`; a track that replaces a listed stock track takes none. A 65th track stops F1 25 at a black screen after the EA logo. A build keeps the tracks in load order until the lists are full and leaves out the rest:
+
+```text
+warning: Too many tracks: 7 track(s) are left out of this build because the game has room for 64 tracks, 35 of its own and 29 added ones, and more stop it at a black screen after the EA logo: Mugello, Okayama, ... Turn some track addons off to play them
+warning: Mugello (mod.mugello): track Mugello is left out; the game has room for 64 tracks, 35 of its own and 29 added ones, and the track addons before it in the load order fill them. Turn some track addons off to make room for it
+```
+
+Tracks from track records take their places first: the core adds their rows in game.
+
+Play shows the same count and the first four names as a warning titled **Too many tracks**, and the Addons page marks each addon that loses a track with **Left out: the game holds 64 tracks**. The check runs when Play is pressed, so the marker follows the last Play.
+
+A change from any addon to a row of a left-out track is skipped, and the rest of the profile still loads:
+
+```text
+warning: Classic Career: change skipped: track_data.game_setup.TrackDataSet[_metadata_=f1_2026].TrackData[_metadata_=anderst]: no row matches in track_data.game_setup.TrackDataSet_16.TrackData; it changes track Anderstorp, which is left out of this build because the game has room for 64 tracks. Turn some track addons off to make room for it
+```
 
 Otherwise, the build puts the package's whole `<code>.erp` into an existing invitational event slot, `2025_asset_groups/ui_package/texture_arrays/invitational_events/event_images/invitational_image_<n>.erp`, alongside the slot's own pictures. Your profile's tracks take `invitational_image_4`, `_10`, `_13` to `_18` in order. That leaves room for at most eight enabled tracks; a ninth fails the build with `at most 8 tracks can be enabled at once`.
 
@@ -57,9 +72,16 @@ The build also fills gaps in the archive:
 
 - For each variant world the package lacks (`classic`, `f2_previous`, ...), it copies the nearest world the package has as a stand-in.
 - For each such track layer world the archive lacks, it copies the archive's `f1_26_myteam` world (or the nearest world it has) under the layer's `worldEri` name, with `<code>` for `[FILENAME]`. An archive world of the same variant in the track's own `environment_package` folder comes first.
+- For each AI team an addon adds by copying another team's row in `ai.asset_data.<vehicle_package>` (an `add-row`), when no addon supplies that team's group at the track, it copies the archive's `ai/<vehicle_package>/<donor>/` resources as `ai/<vehicle_package>/<team>/`, with the donor's name in them changed to the team's. Without them the game finds no AI data for the team at the track: every tyre lasts 0 laps in practice and qualifying, and no AI car leaves the garage. The build log names each stand-in:
+
+  ```text
+  delhi: AI data for f1_2025_vehicle_package/cater stands in with the track's f1_2025_vehicle_package/lotus
+  ```
+
+  A resource the build can't read as a `!pkg` document is copied as it is. A track with no AI data for the donor gets none for the team either, and the build notes it.
 - It points texture mip paths at `environment_package/tracks/<code>/mipmaps/<file>` and adds the files from the package's `mipmaps/` there.
 - It gives every route of the AI racing line (`<code>_ai_track.aispline`) a change of passing space. F1 25 sorts each gate of a route into space on the left, on the right or on both sides from its white lines and the stock `ai_track_config.space_lines` settings, and crashes when an AI car drives a route without a single change, such as a pit lane drawn at one width. On such a route the build moves one white line at a gate no other route uses.
-- It makes room for the F1 2026 grid if the built database's `f1_2026` grid list holds more cars than the `f1_26_myteam` world (with the common world) has grid slots, garages or pit boxes. The layer holding the last grid slot gets copies of the last slot, garage, in-garage spot and pit box. Each copy goes one row or bay beyond the two before it. Without two slots, garages or boxes to work out the spacing from, the build warns you that a Grand Prix there with that many cars crashes.
+- It makes room for the most cars the track can field if that is more than the `f1_26_myteam` world (with the common world) has grid slots, garages or pit boxes. The count is the larger of the built database's `f1_2026` grid list and the highest `max_entrants` among the entrant setup modes of the game setup modes of the track layer rows whose world the track's archive lacks (values below 1 are ignored). The layer holding the last grid slot gets copies of the last slot, garage, in-garage spot and pit box. Each copy goes one row or bay beyond the two before it. Without two slots, garages or boxes to work out the spacing from, the build warns you that a Grand Prix there with that many cars crashes.
 
 ## The database
 
@@ -67,8 +89,31 @@ The build also fills gaps in the archive:
 - **`tracks.track_resource.TrackResource_<n>`**: the track's resource row is cloned as `swofty_<code>`. On the natural route, its group fields use the 2019 template values with `[FILENAME]` = `<code>`: `iblAssetGroupsRoot` is `asset_groups/environment_package/tracks/<code>/probes/` and `iblKey` is `key_2019.assetgroup`. `trackMapAssetGroup` names the main group. On the slot route, every asset group points to the track's slot. The track row's `track_resource` names the cloned row.
 - **Per-track tables** (per-race DNFs, pit lane splines and slide settings, practice programmes for 2025 and 2026, tyre wear and tyre wear scales, specialist objectives, track trivia, replay hero shots): if your code has no row, it gets a clone of the slot track's row, or the base track's when the slot has none. A new code always needs the per-race DNF row: the game reads it without checking that it exists.
 - **`<datasets>.TrackDataSet_<i>.TrackData_<j>`**: `copy_from_track`, or `copy_slot` when the package has no `copy_from_track`, clones the base track's row and its sub-tables in every dataset that has it; for a new code, the copy is the dataset's last row. The copy's `_metadata_`, `track` and `TrackNameData_0.file_name` become the code. `track_data.game_setup.TrackDataSet[_metadata_=f1_2026].TrackData[_metadata_=<code>]` selects the copy in the `f1_2026` dataset. Your `overrides` apply here, limited to their `datasets`.
+- **`TrackAuthenticWeekendData_<n>.weekend_format`** in those rows: `default`, a normal weekend, in every data set, whatever the base track has. A data set named in `activation.sprint` gets `sprint`. A code that already has a row in the data set keeps that row's format. A data set where the base has no such row gives your track none either, and the game takes the format from the data set's `parent_data_set` (`f1_2026` from `f1`).
 - **Content sets' `available_tracks`**: the code is added wherever the base track is listed, putting your track in the Grand Prix track list.
 - **`track_data.sorted_track_order`**: gets a `TrackRef` row for the code.
+
+A new track row's `statId` is kept in `$DATA/registry/row-ids.json` under `<addon>/tracks.Track/<code>`, the file that keeps the ids of `add-row` copies ([Kept ids](/reference/ops/database#kept-ids)). A career's calendar stores that id, so the track keeps it whichever other tracks are on:
+
+```text
+$ swofty registry row-ids mod.sokol
+mod.sokol: 1 added row(s) keep these stat ids
+  tracks.Track/sokol   48  kept, seeded from a profile's last build or a game session from before 1.6.10
+```
+
+The game reads a track's `statId` as one byte, so at most 255 tracks (stock ones included) are on at once. More can be installed. Telemetry does not depend on the `statId`: an added track reports its [Swofty track id](/reference/std/telemetry#added-tracks-the-swofty-track-packet), the same on every PC.
+
+- A track the file has no id for takes the id the profile's last build gave it (`older-tracks.json`), else the first free id above the table's highest, up to 254, the highest the game reads.
+- A track that is off keeps its id while any id is free. No other track takes it, so a calendar that names it never lands on a different circuit.
+- When every id up to 254 is kept for some track, a new track takes the lowest id kept for a track whose addon is off. A track whose addon is on never gives its id up. The build line names the track that lost its id:
+
+  ```text
+  stat id 37 (every id is kept; this one was tracks.Track/sokol of mod.sokol, whose addon is off)
+  ```
+
+  A saved calendar that named the track that is off shows the new track from then on. The track that is off takes a free id, or another off track's id, when it is turned on again. When every id belongs to a track that is on, the build fails with `tracks have no free statId up to 254`.
+- A kept id that a row of the database now holds moves to the next free id.
+- A career whose calendar holds a track stat id with no row loads into a crash. The crash dialog then names the track addon to turn back on.
 
 Each clone copies all source-row keys listed in `track_tables.json`, plus any keys named by your manifest's overrides. The table's `_<row>_instancecount_` grows by one.
 

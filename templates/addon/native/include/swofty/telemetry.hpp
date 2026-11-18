@@ -8,7 +8,9 @@
 // Typed read access to live car and session state, and an optional shared-memory feed for
 // external tools. Reads reflect the most recent frame and return unavailable outside a running
 // session. The shared feed is a named mapping with a fixed, versioned layout (SwoftyTelemetryFeed)
-// guarded by a seqlock: read while seq is even and unchanged across the copy.
+// guarded by a seqlock: read while seq is even and unchanged across the copy. Car, participant and
+// most session fields are decoded from the game's own UDP telemetry packets, so they fill only while
+// the game's UDP telemetry output is on; session.udp_format is non-zero once a packet has arrived.
 
 namespace swofty::telemetry {
 
@@ -20,6 +22,14 @@ using Participant = SwoftyParticipant;
 using Feed = SwoftyTelemetryFeed;
 
 constexpr uint32_t version = SWOFTY_TELEMETRY_VERSION;
+
+// Events fired on the flow thread (swofty::events::subscribe): a = overtaking car, b = overtaken car;
+// a and b = the two cars; a = car, b = retirement reason.
+namespace event {
+inline constexpr const char *overtake = SWOFTY_EVENT_TELEMETRY_OVERTAKE;
+inline constexpr const char *collision = SWOFTY_EVENT_TELEMETRY_COLLISION;
+inline constexpr const char *retirement = SWOFTY_EVENT_TELEMETRY_RETIREMENT;
+}
 
 namespace detail {
 

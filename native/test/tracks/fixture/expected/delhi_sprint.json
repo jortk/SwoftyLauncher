@@ -1,0 +1,9757 @@
+{
+  "from": "zandvoort",
+  "records": [
+    {
+      "key": "00624e9251fb931e",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "0071766912adde32",
+      "tag": 1,
+      "text": "1.06"
+    },
+    {
+      "key": "00717687ab6ec338",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "008df482dd23b1be",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "00927714040c07fe",
+      "tag": 8,
+      "text": "79.1219,77.1906,75.2783,73.3055,71.46,70.3704,69.4391,68.9968,68.6064,68.1715"
+    },
+    {
+      "key": "00eded8454dfebd0",
+      "tag": 7,
+      "text": "17,30"
+    },
+    {
+      "key": "0129c434c7e40737",
+      "tag": 1,
+      "text": "110"
+    },
+    {
+      "key": "013e0af7ba8ac4ea",
+      "tag": 2,
+      "text": "commentator2"
+    },
+    {
+      "key": "0188572ee94d0f3d",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "01993855c365979e",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "019a2beb3e2ccd55",
+      "tag": 2,
+      "text": "commentator2"
+    },
+    {
+      "key": "01b9ac71db80a340",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "01b9b171db80abbf",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "01c43e71db89efdb",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "01cf5630b7f83e27",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "01d55d568831328a",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "02000f389951d387",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "023a2b4029fd229b",
+      "tag": 1,
+      "text": "4"
+    },
+    {
+      "key": "025c0cbd75944c67",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "026d0256d03bb296",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "02f8359fa9d9f58a",
+      "tag": 1,
+      "text": "33.8"
+    },
+    {
+      "key": "02ff1e9fa9dfed23",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "0302a29fa9e30346",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "0319b021ae63af0a",
+      "tag": 2,
+      "text": "TrackTrivia_13_1"
+    },
+    {
+      "key": "033769e0dd78ba45",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "0391b80baff570fa",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "039b8e530f49a96b",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "03d51c62c0f32172",
+      "tag": 1,
+      "text": "52.3711"
+    },
+    {
+      "key": "04042785da8aee6b",
+      "tag": 0,
+      "text": "31"
+    },
+    {
+      "key": "0416a31002d3d608",
+      "tag": 1,
+      "text": "82.3"
+    },
+    {
+      "key": "041817f3382dc65a",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "0428c265e8b008db",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "044021fbe519c8be",
+      "tag": 1,
+      "text": "0.99"
+    },
+    {
+      "key": "045d570985639915",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "046fc4fe7131a507",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "0498680b03f6caa5",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "04a01435a589548b",
+      "tag": 2,
+      "text": "lng_track_nld_f2_title"
+    },
+    {
+      "key": "050649758b0b86ef",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "051a9e39dc3a9761",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle_small.zandvoort"
+    },
+    {
+      "key": "051e824eb4802e0c",
+      "tag": 2,
+      "text": "temp_highlight"
+    },
+    {
+      "key": "0523ad322a71e3ca",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "057307aa1fb2e9f9",
+      "tag": 1,
+      "text": "15.5"
+    },
+    {
+      "key": "05840aaa1fc16245",
+      "tag": 1,
+      "text": "9.3"
+    },
+    {
+      "key": "058786aa1fc46ad0",
+      "tag": 1,
+      "text": "11.3"
+    },
+    {
+      "key": "058a7ca9ae1e15e9",
+      "tag": 2,
+      "text": "lng_stat_corners"
+    },
+    {
+      "key": "058e5e6bf70ce67d",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "05bd3ef19370148d",
+      "tag": 0,
+      "text": "28"
+    },
+    {
+      "key": "05bf1d49b4b18f17",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "05d8135963bc0588",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "05dba1924fe47eb5",
+      "tag": 1,
+      "text": "3.7"
+    },
+    {
+      "key": "060feff16b72a787",
+      "tag": 4,
+      "text": "harder_sprint"
+    },
+    {
+      "key": "0613b2b112dc9c90",
+      "tag": 2,
+      "text": "asset_groups/environment_package/tracks/delhi/probes/config.ddgi.assetgroup"
+    },
+    {
+      "key": "0621de07d2355209",
+      "tag": 3,
+      "text": "Medium"
+    },
+    {
+      "key": "06404fb88c4035aa",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "066681ae841cf5a7",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "06c60a1fc57ee2a5",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "06d5c98a625189bd",
+      "tag": 7,
+      "text": "8,00"
+    },
+    {
+      "key": "06f2cd69c2453ad8",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "072daa07d39c49ce",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "07313b790498715e",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "073b7421350d2c4b",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "0778f6c37e648b64",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "07a7cf7973aa336a",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "07c67aaf6c77f16c",
+      "tag": 1,
+      "text": "107"
+    },
+    {
+      "key": "07ea4e2c5247e023",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "07f62fd6d8d7059c",
+      "tag": 1,
+      "text": "82.3"
+    },
+    {
+      "key": "080c7c3ac640b111",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "08382ded8f8343b3",
+      "tag": 2,
+      "text": "lng_track_nld_f2_title"
+    },
+    {
+      "key": "083aeb4d17befee4",
+      "tag": 1,
+      "text": "102.2"
+    },
+    {
+      "key": "0844f0a6147f8690",
+      "tag": 8,
+      "text": "0.54,0.62,0.69,0.78,0.89,0.95,1,1,1,1"
+    },
+    {
+      "key": "08766f8ef44b1c7e",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "08aa9f8dea2f192a",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "09497c3051e3ce5e",
+      "tag": 0,
+      "text": "26"
+    },
+    {
+      "key": "094a9ea5f8327275",
+      "tag": 7,
+      "text": "29,40,0"
+    },
+    {
+      "key": "0977e796b0b638f6",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "097f274f7f284ddf",
+      "tag": 1,
+      "text": "82.3"
+    },
+    {
+      "key": "09924ba2b8929fa5",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "09a5044db211b51a",
+      "tag": 1,
+      "text": "61"
+    },
+    {
+      "key": "09b5973da2d42770",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "09c8c6fb662964b8",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "09e51847bc415406",
+      "tag": 2,
+      "text": "hero_cam_02"
+    },
+    {
+      "key": "0a17a7283e704e24",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "0a1a0be3c087d10b",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "0a2b756015263747",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "0a42444fb8296722",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "0a5b37490a91621a",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "0ac738e1c4414262",
+      "tag": 2,
+      "text": "lng_track_nld_subtitle"
+    },
+    {
+      "key": "0ad1d36235f010f5",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "0ade52d3056dd8f1",
+      "tag": 2,
+      "text": "CountryTrivia_13_1"
+    },
+    {
+      "key": "0b005f3876eab989",
+      "tag": 4,
+      "text": "C1"
+    },
+    {
+      "key": "0b1b266400d24ebd",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "0b50a22ee274e1e9",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "0ba113002ce40d50",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "0ba72612316005dc",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "0bba34796bc9dd68",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "0bc6d098d18baf02",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "0bf3f74f273c7e35",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "0bfaa205f173bd04",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "0c06a93b0b2bb919",
+      "tag": 8,
+      "text": "0.195,0.3,0.415,0.55,0.74,0.855,1,1,1,1"
+    },
+    {
+      "key": "0c8244ec846e8ff7",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.987469,0.969925,0.954887"
+    },
+    {
+      "key": "0c824a9cd7f4821e",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "0c8faf93514f3fef",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "0caf10d9dca98983",
+      "tag": 0,
+      "text": "32"
+    },
+    {
+      "key": "0cb5877b67a44532",
+      "tag": 1,
+      "text": "21.2"
+    },
+    {
+      "key": "0cbc907b67aa732b",
+      "tag": 1,
+      "text": "15.4"
+    },
+    {
+      "key": "0cc0147b67ad894e",
+      "tag": 1,
+      "text": "12.6"
+    },
+    {
+      "key": "0cf730b97ebb4b92",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "0d44ce53d72a8e7e",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "0d50c23be5293224",
+      "tag": 0,
+      "text": "32"
+    },
+    {
+      "key": "0d7f2cf3bbeeaa94",
+      "tag": 1,
+      "text": "1.39"
+    },
+    {
+      "key": "0d8d8c26619ee2dc",
+      "tag": 2,
+      "text": "career_hub_first_visit"
+    },
+    {
+      "key": "0dbf93247a0add95",
+      "tag": 0,
+      "text": "23"
+    },
+    {
+      "key": "0dd67c60976de859",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "0ddb6a46eef2c3ad",
+      "tag": 0,
+      "text": "2026"
+    },
+    {
+      "key": "0e251b9a1534243b",
+      "tag": 7,
+      "text": "13,30"
+    },
+    {
+      "key": "0e3c462e11ac3022",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "0e5a401a79eb8a31",
+      "tag": 0,
+      "text": "2015"
+    },
+    {
+      "key": "0e6160d89d7e5e1d",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "0e8b1c9aee3cda70",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "0e8b1d9aee3cdc23",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "0e8b1f9aee3cdf89",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "0e8b239aee3ce655",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "0e8b279aee3ced21",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "0e90f22726d144bd",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "0ea415ef7204a16b",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline_large.zandvoort"
+    },
+    {
+      "key": "0ea93368febd1b60",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "0eb908305303eef4",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "0ee2907a0037d08b",
+      "tag": 4,
+      "text": "balanced_sprint"
+    },
+    {
+      "key": "0efeb3ef9f899b36",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "0f065a8a606e0e59",
+      "tag": 1,
+      "text": "9.1"
+    },
+    {
+      "key": "0f065b8a606e100c",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "0f065c8a606e11bf",
+      "tag": 1,
+      "text": "6.3"
+    },
+    {
+      "key": "0f065e8a606e1525",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "0f06668a606e22bd",
+      "tag": 1,
+      "text": "27.2"
+    },
+    {
+      "key": "0f34cff87b482af7",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "0f5b2e1f1ee778d9",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "0f5eb11f1eea8d49",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "0f5eb41f1eea9262",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "0f82197c7b059e9d",
+      "tag": 8,
+      "text": "0.54,0.62,0.69,0.78,0.89,0.95,1,1,1,1"
+    },
+    {
+      "key": "0fb5b0dbdd3e60a6",
+      "tag": 1,
+      "text": "1.05"
+    },
+    {
+      "key": "0fc775356f8855b5",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "102e4c8cd5ae5ce7",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "10335d7a626ffcee",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle.zandvoort"
+    },
+    {
+      "key": "103784336204b28b",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "104f12ed74707d0e",
+      "tag": 7,
+      "text": "11,35"
+    },
+    {
+      "key": "10530cb844c7e78c",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "105d99b844d12ba8",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "105d9eb844d13427",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "1062dadbb9adc620",
+      "tag": 2,
+      "text": "lng_stat_lap_record"
+    },
+    {
+      "key": "108a4a01b5cf515d",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "10a83f544a0c635a",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "10b8bff5f17531d0",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "10b8c3f5f175389c",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "10b8c5f5f1753c02",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "10b8c6f5f1753db5",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "10b8cbf5f1754634",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "10ca94eca3237b99",
+      "tag": 1,
+      "text": "0.997"
+    },
+    {
+      "key": "111ae147247b4339",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "111fa034205e4a2e",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "11297e49b84dae79",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "112a27a38539e243",
+      "tag": 0,
+      "text": "4259"
+    },
+    {
+      "key": "1151f8c8d31dd1fe",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "11a4ec43e2b2e7a1",
+      "tag": 2,
+      "text": "flag_cam_01"
+    },
+    {
+      "key": "11f25fd7135d7dfb",
+      "tag": 2,
+      "text": "overrides.broadcast_ui_generic.track.zandvoort"
+    },
+    {
+      "key": "126089bbe4685dc8",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "126c11bd9f60c774",
+      "tag": 0,
+      "text": "44"
+    },
+    {
+      "key": "12703cdf10ebbe13",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "127044df10ebcbab",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "127045df10ebcd5e",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "127046df10ebcf11",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "127048df10ebd277",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "12772f7b8686a833",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "12f69095d97203b1",
+      "tag": 0,
+      "text": "5"
+    },
+    {
+      "key": "1309fb0a3fcd4764",
+      "tag": 13,
+      "text": "default_cap,quiet_start"
+    },
+    {
+      "key": "1348050e559078be",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "13d3e52e11715e3e",
+      "tag": 1,
+      "text": "45"
+    },
+    {
+      "key": "13e8bcec8c8fc505",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "13f934f28747bb47",
+      "tag": 1,
+      "text": "1.8"
+    },
+    {
+      "key": "13fff7e4bb629bf7",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:1,0:1,0:1,1:1,1:1"
+    },
+    {
+      "key": "1435061628369952",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "1459ffe701799dfc",
+      "tag": 1,
+      "text": "79.7"
+    },
+    {
+      "key": "147514da26b69ba6",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "151aea59b2b7b7b3",
+      "tag": 0,
+      "text": "5"
+    },
+    {
+      "key": "151eba6b19f309aa",
+      "tag": 4,
+      "text": "HeroShot"
+    },
+    {
+      "key": "152102f18faaec85",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "158910f851466112",
+      "tag": 1,
+      "text": "0.09"
+    },
+    {
+      "key": "15906fb6525a1d37",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "159a62a463e91a6a",
+      "tag": 2,
+      "text": "swofty_delhi"
+    },
+    {
+      "key": "163105a58e0a3c87",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "163426805a528ec7",
+      "tag": 1,
+      "text": "0.75"
+    },
+    {
+      "key": "165357ac09cdbc60",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "167d3390bb5c3417",
+      "tag": 1,
+      "text": "35"
+    },
+    {
+      "key": "171697e2b1f3b752",
+      "tag": 0,
+      "text": "7"
+    },
+    {
+      "key": "173ee7dbdcc75776",
+      "tag": 7,
+      "text": "29,40,0"
+    },
+    {
+      "key": "174a3cadba3be674",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "1763c6c3c5354e69",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "178b5057d8499947",
+      "tag": 1,
+      "text": "4.5334"
+    },
+    {
+      "key": "17bb704a44abdb20",
+      "tag": 1,
+      "text": "0.99"
+    },
+    {
+      "key": "17c3cbbc43f78949",
+      "tag": 1,
+      "text": "60"
+    },
+    {
+      "key": "1805fb13f0a3a7f7",
+      "tag": 1,
+      "text": "27.8"
+    },
+    {
+      "key": "18438b4984a8aa9e",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "189a248dd84fcbff",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "18adcaffe4c4d3d7",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "18b14effe4c7e9fa",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "18c249ffe4d654ae",
+      "tag": 1,
+      "text": "33"
+    },
+    {
+      "key": "18d24e724bfd6066",
+      "tag": 2,
+      "text": "LapRecord"
+    },
+    {
+      "key": "18d9afa946bde8b7",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "194b49a81d621b06",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "19858119aab8a87f",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "198ad58527bec034",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "19b2baae6b4f91d1",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "1a05177a8dab7f38",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "1a224daa3e2c0daf",
+      "tag": 7,
+      "text": "11,35"
+    },
+    {
+      "key": "1a2839991a0f7250",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "1a297a2b3d700e6e",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "1a40a24f2aeded53",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "1a4dfd8390af4780",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "1a6703768929be16",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "1a6708768929c695",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "1a6a8e76892ce01e",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "1a9b58e700f11b90",
+      "tag": 1,
+      "text": "1.03"
+    },
+    {
+      "key": "1b32420073f409ae",
+      "tag": 7,
+      "text": "13,0"
+    },
+    {
+      "key": "1b381d0a53a4605d",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "1b61efb693165828",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.980583,0.956311,0.929612"
+    },
+    {
+      "key": "1b658d95935e8251",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "1b983e7a658c1b25",
+      "tag": 1,
+      "text": "1.055"
+    },
+    {
+      "key": "1bad1df879b53ac5",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:2,0:0.5,0.05540894:0.502364,0.5659589:0.5271876,1:0.5"
+    },
+    {
+      "key": "1baf657d3f406d71",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "1bb1de9aaf6cebdf",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "1bb29b688adfdc66",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_multiline"
+    },
+    {
+      "key": "1bc4c70102492361",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "1bf68b76b8696cd1",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "1c1e02687da51fa8",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "1c460e2a815b9e95",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "1cb85839967bb80c",
+      "tag": 1,
+      "text": "84"
+    },
+    {
+      "key": "1d50db22d0f8e09b",
+      "tag": 1,
+      "text": "35.5"
+    },
+    {
+      "key": "1d55ecf551bf7c52",
+      "tag": 8,
+      "text": "0.29,0.395,0.52,0.645,0.805,0.895,1,1,1,1"
+    },
+    {
+      "key": "1d67a1299e33c6af",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "1d8e6941830928be",
+      "tag": 4,
+      "text": "TyresPerSessionSprintPreset"
+    },
+    {
+      "key": "1dad5aa28abe5311",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "1de1d82915060b11",
+      "tag": 4,
+      "text": "F2_Soft"
+    },
+    {
+      "key": "1dfa84f238b74cbe",
+      "tag": 4,
+      "text": "softer_sprint"
+    },
+    {
+      "key": "1dfb02e6665bc006",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.98263,0.962779,0.942928"
+    },
+    {
+      "key": "1e8f10b768b38222",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "1ec2d59842b50011",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "1ef2946424dd78ce",
+      "tag": 2,
+      "text": "asset_groups/environment_package/tracks/delhi/bake/delhi_light_list.bake.assetgroup"
+    },
+    {
+      "key": "1f2b9c7224e3e943",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "1f31bddfc1e49c99",
+      "tag": 1,
+      "text": "28.9"
+    },
+    {
+      "key": "1f3549dfc1e7c054",
+      "tag": 1,
+      "text": "21.6"
+    },
+    {
+      "key": "1f38ccdfc1ead4c4",
+      "tag": 1,
+      "text": "41.4"
+    },
+    {
+      "key": "1fa50e133ba90d2c",
+      "tag": 4,
+      "text": "TyresPerSessionPreset"
+    },
+    {
+      "key": "1fec5405c5120588",
+      "tag": 1,
+      "text": "45"
+    },
+    {
+      "key": "200d3b90fd0b9156",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "2020fe96e5d5909a",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "2034a3b72e29aa49",
+      "tag": 1,
+      "text": "1.94"
+    },
+    {
+      "key": "20431d2f1f3fe1e1",
+      "tag": 1,
+      "text": "33.8"
+    },
+    {
+      "key": "2054202f1f4e5a2d",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "20579c2f1f5162b8",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "2098ff86e364f4ad",
+      "tag": 0,
+      "text": "2020"
+    },
+    {
+      "key": "20af3d290dcadb13",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "20bbe1d72eedeb0b",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "20ec97c661154c20",
+      "tag": 7,
+      "text": "11,35"
+    },
+    {
+      "key": "217af6b86a3091c9",
+      "tag": 2,
+      "text": "overrides.icons.stats.laps_completed"
+    },
+    {
+      "key": "218074d98580d069",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "218287a2d1b71259",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "21a2c9a20c4607d6",
+      "tag": 0,
+      "text": "25"
+    },
+    {
+      "key": "21f610c348149232",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "22103c193f4718f3",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "221a8d14caea3089",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "222ce22a25fff409",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "227c9bf0afb78a5e",
+      "tag": 2,
+      "text": "lng_calendar_league_event_desc_nld"
+    },
+    {
+      "key": "22869db98ba387b8",
+      "tag": 1,
+      "text": "1.3"
+    },
+    {
+      "key": "22a0dd1c4cae1708",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "2301c31517587b32",
+      "tag": 7,
+      "text": "13,00"
+    },
+    {
+      "key": "231b29214253ab36",
+      "tag": 8,
+      "text": "78.9471,76.9518,74.9805,73.0869,71.1208,70.1765,69.1975,68.9063,68.5845,68.2153"
+    },
+    {
+      "key": "2330783a04cda735",
+      "tag": 1,
+      "text": "0.92"
+    },
+    {
+      "key": "23a6985ca7fe6f80",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "23a6995ca7fe7133",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "23a69b5ca7fe7499",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "23a69f5ca7fe7b65",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "23a6a35ca7fe8231",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "23c28ef87d4d6168",
+      "tag": 1,
+      "text": "28"
+    },
+    {
+      "key": "23cfb2651da45430",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "23d49ddb87ad3389",
+      "tag": 4,
+      "text": "HighDownforce"
+    },
+    {
+      "key": "2438f0e73cf58eef",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "24498bab8da7b4e2",
+      "tag": 1,
+      "text": "0.82"
+    },
+    {
+      "key": "2484c4c08cd657be",
+      "tag": 1,
+      "text": "8.96"
+    },
+    {
+      "key": "2485ec74c95ab51c",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "24e7007cfa876c48",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "250ad0d1e793723b",
+      "tag": 0,
+      "text": "10"
+    },
+    {
+      "key": "2517973ef7e2f6f9",
+      "tag": 7,
+      "text": "14, 0"
+    },
+    {
+      "key": "2526d52158d65d9b",
+      "tag": 4,
+      "text": "F2_Soft"
+    },
+    {
+      "key": "257347a55cbe81e4",
+      "tag": 2,
+      "text": "TrackNameData"
+    },
+    {
+      "key": "258a97d6a6402617",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "25b58ecd67121e7e",
+      "tag": 4,
+      "text": "harder"
+    },
+    {
+      "key": "25c488fc3f1c89d6",
+      "tag": 0,
+      "text": "2023"
+    },
+    {
+      "key": "25de4eb0e140c50b",
+      "tag": 2,
+      "text": "tracks_bg_large"
+    },
+    {
+      "key": "260aa40665a95cbd",
+      "tag": 2,
+      "text": "lng_track_nld_lap_record_holder_f2"
+    },
+    {
+      "key": "26284bf91d5028c3",
+      "tag": 4,
+      "text": "C1"
+    },
+    {
+      "key": "262e6ca99e78d729",
+      "tag": 0,
+      "text": "39"
+    },
+    {
+      "key": "265f1951b520fb93",
+      "tag": 0,
+      "text": "32"
+    },
+    {
+      "key": "2669deb7e0b1115f",
+      "tag": 1,
+      "text": "29.8"
+    },
+    {
+      "key": "2669e2b7e0b1182b",
+      "tag": 1,
+      "text": "11.1"
+    },
+    {
+      "key": "2669e6b7e0b11ef7",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "2669e7b7e0b120aa",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "2669e8b7e0b1225d",
+      "tag": 1,
+      "text": "8.2"
+    },
+    {
+      "key": "2677b7887be9b9b5",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "26b6c60d34103df2",
+      "tag": 7,
+      "text": "12,30"
+    },
+    {
+      "key": "26d39083eb2615ed",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "270ba7499c217d39",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "2797855815cca068",
+      "tag": 2,
+      "text": "career_hub_last_visit"
+    },
+    {
+      "key": "27a343c2a27283df",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "27a34741792e08ff",
+      "tag": 7,
+      "text": "11, 30"
+    },
+    {
+      "key": "280ba0a237049383",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "281bb544d1acd6a1",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "283fdbd98ba61c44",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "28406bdd51a8f19d",
+      "tag": 1,
+      "text": "10"
+    },
+    {
+      "key": "2849ebc685d06bf7",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "284c5011f587f0ff",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "286dd01f23a07319",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "28b2a20f021554c1",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "28bc19fc414109d0",
+      "tag": 0,
+      "text": "31"
+    },
+    {
+      "key": "28bccc0d9e080b3b",
+      "tag": 4,
+      "text": "F2_Hard"
+    },
+    {
+      "key": "2909cf7978df0614",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "29293d7b78dbfa1f",
+      "tag": 7,
+      "text": "16,00"
+    },
+    {
+      "key": "29718727031b4339",
+      "tag": 1,
+      "text": "12.4"
+    },
+    {
+      "key": "29718c27031b4bb8",
+      "tag": 1,
+      "text": "5.2"
+    },
+    {
+      "key": "29718d27031b4d6b",
+      "tag": 1,
+      "text": "6.2"
+    },
+    {
+      "key": "29718f27031b50d1",
+      "tag": 1,
+      "text": "4.1"
+    },
+    {
+      "key": "29719327031b579d",
+      "tag": 1,
+      "text": "8.3"
+    },
+    {
+      "key": "297e7512441fcc2c",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "299228806de56c23",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "29ce3d0190b9636b",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "29f084c48c61b2f6",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "29f9574abccc674f",
+      "tag": 7,
+      "text": "0, 0"
+    },
+    {
+      "key": "29fe7c8bc5ff76e7",
+      "tag": 1,
+      "text": "0.2"
+    },
+    {
+      "key": "2a1d90edc5ee4158",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "2a4c1c6055671f6a",
+      "tag": 4,
+      "text": "balanced"
+    },
+    {
+      "key": "2a5255b56418701e",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "2a67db053305874b",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline.zandvoort"
+    },
+    {
+      "key": "2a874e99270fd978",
+      "tag": 2,
+      "text": "lng_country_trivia_13_netherlands_2"
+    },
+    {
+      "key": "2a8dd783d71e8750",
+      "tag": 0,
+      "text": "26"
+    },
+    {
+      "key": "2a9896aa6c123717",
+      "tag": 1,
+      "text": "59"
+    },
+    {
+      "key": "2aeea48202f6c69d",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "2b27c4a51d0aa716",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "2b27c6a51d0aaa7c",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "2b27c7a51d0aac2f",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "2b27c8a51d0aade2",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "2b27d0a51d0abb7a",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "2b2cdd4add5a870c",
+      "tag": 1,
+      "text": "0.5"
+    },
+    {
+      "key": "2b3bc0874fb42b4a",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "2b5076db79105c74",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "2b63ce1434a7995a",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "2b77393beec60c54",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "2ba32a1bce2ef3ce",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "2ba32f1bce2efc4d",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "2ba6951bce31df76",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "2c09cb6a888683bd",
+      "tag": 0,
+      "text": "32"
+    },
+    {
+      "key": "2c3765f806330177",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "2c472ab026b0843f",
+      "tag": 1,
+      "text": "7"
+    },
+    {
+      "key": "2c47b63cfcb47521",
+      "tag": 2,
+      "text": "lng_track_nld_f2_title"
+    },
+    {
+      "key": "2c54bdba9605a3c6",
+      "tag": 1,
+      "text": "40.7"
+    },
+    {
+      "key": "2c9fbab63799a71a",
+      "tag": 1,
+      "text": "55.8"
+    },
+    {
+      "key": "2ca623b6379ec533",
+      "tag": 1,
+      "text": "39.9"
+    },
+    {
+      "key": "2ca9a7b637a1db56",
+      "tag": 1,
+      "text": "29.8"
+    },
+    {
+      "key": "2cb5cbe04a3964c9",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "2ce28d93fe842570",
+      "tag": 4,
+      "text": "softer_sprint"
+    },
+    {
+      "key": "2cf64c443e98cc83",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "2d16b553682cc605",
+      "tag": 4,
+      "text": "TyresPerSessionPreset"
+    },
+    {
+      "key": "2d75d9a474642d9b",
+      "tag": 7,
+      "text": "13,0"
+    },
+    {
+      "key": "2d87afd1c81aac6e",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "2df2e3f82bdde561",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "2e45765653f9c4cd",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "2e6e3c82a0587f96",
+      "tag": 1,
+      "text": "9.7"
+    },
+    {
+      "key": "2ebc728d87b4d319",
+      "tag": 1,
+      "text": "5"
+    },
+    {
+      "key": "2eca18a6221304f1",
+      "tag": 2,
+      "text": "_2019"
+    },
+    {
+      "key": "2f12733d6b8d9b0f",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:500,miny:0,maxy:50,0:0.08,0:0.16,0.1011437:0.26,0.43:0.52,1:0.802597,1:0.4527185"
+    },
+    {
+      "key": "2f179bf1f72d77ff",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "2f1817c906552b56",
+      "tag": 2,
+      "text": "daylight"
+    },
+    {
+      "key": "2f26e0a25f537ecf",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "2f2c8b90d85291c8",
+      "tag": 0,
+      "text": "41"
+    },
+    {
+      "key": "2f2dfd35af87cd29",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "2f377936911908d2",
+      "tag": 1,
+      "text": "29.8"
+    },
+    {
+      "key": "2f377d3691190f9e",
+      "tag": 1,
+      "text": "11.1"
+    },
+    {
+      "key": "2f377f3691191304",
+      "tag": 1,
+      "text": "8.2"
+    },
+    {
+      "key": "2f378036911914b7",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "2f3781369119166a",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "2f59d4e92c7b3369",
+      "tag": 1,
+      "text": "29.8"
+    },
+    {
+      "key": "2f59d9e92c7b3be8",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "2f59dae92c7b3d9b",
+      "tag": 1,
+      "text": "8.2"
+    },
+    {
+      "key": "2f59dce92c7b4101",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "2f59e0e92c7b47cd",
+      "tag": 1,
+      "text": "11.1"
+    },
+    {
+      "key": "2f746fef9242f09e",
+      "tag": 2,
+      "text": "lng_stat_lap_record_holder"
+    },
+    {
+      "key": "2f762b317b20f493",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:2,0:0.5035462,0.1715041:0.5130022,0.6108158:0.5413721,1:0.5070922"
+    },
+    {
+      "key": "2f971d704a216bd1",
+      "tag": 4,
+      "text": "balanced"
+    },
+    {
+      "key": "2f9dbbbb1d817abd",
+      "tag": 0,
+      "text": "2024"
+    },
+    {
+      "key": "2fbfb65c3e1fde3b",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "2fc015d2d765dd5e",
+      "tag": 1,
+      "text": "15"
+    },
+    {
+      "key": "2fcf87917e14e343",
+      "tag": 4,
+      "text": "softer"
+    },
+    {
+      "key": "2fe46e3d73f56d14",
+      "tag": 8,
+      "text": "120.0"
+    },
+    {
+      "key": "2fed171d51d1282c",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "30123cabdbff9bbc",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "303589b14ad49d1a",
+      "tag": 4,
+      "text": "TyresPerSessionSprintPreset"
+    },
+    {
+      "key": "3045444d1bdfe668",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "304db6ad9ab00e66",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "3091e5e915e43274",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "30cab74a6054395a",
+      "tag": 8,
+      "text": "78.9471,76.9518,74.9805,73.0869,71.1208,70.1765,69.1975,68.9063,68.5845,68.2153"
+    },
+    {
+      "key": "311ad60a4422f5d7",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "31469a1627d20e83",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "3165b72916420b0c",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "318365a4e1f488ae",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "31b40adc8f4d8e80",
+      "tag": 11,
+      "text": ""
+    },
+    {
+      "key": "31b40bdc8f4d9033",
+      "tag": 11,
+      "text": "-2960686"
+    },
+    {
+      "key": "31b40cdc8f4d91e6",
+      "tag": 11,
+      "text": "-35808"
+    },
+    {
+      "key": "31b91cb10526142c",
+      "tag": 2,
+      "text": "CountryTrivia_13_4"
+    },
+    {
+      "key": "31be6a1d37721e14",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "31f37b6d6078efaf",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "320fa96e0c298785",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline.zandvoort"
+    },
+    {
+      "key": "32ac7aa391ef2a33",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "32b5074a1fc433c5",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "32c255394517e3fe",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "32d35079a4f4c8c6",
+      "tag": 0,
+      "text": "20"
+    },
+    {
+      "key": "332c9a38f2d4374d",
+      "tag": 7,
+      "text": "11,35"
+    },
+    {
+      "key": "3339464e7ff471d5",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "337ad3cdb3e43778",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "340b9f268828c9ef",
+      "tag": 7,
+      "text": "72, 72, 72"
+    },
+    {
+      "key": "341e2f8dfca48c34",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "342594122cd04baf",
+      "tag": 1,
+      "text": "61"
+    },
+    {
+      "key": "345aea920e17c039",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "349847331f5f9511",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "34a948f9e8b16b36",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "34fd545bcfcef8a9",
+      "tag": 7,
+      "text": "18,30"
+    },
+    {
+      "key": "350ad2720ce8d2e0",
+      "tag": 0,
+      "text": "45"
+    },
+    {
+      "key": "3536ffd7ef8d8ae0",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "353cb9a90f643066",
+      "tag": 7,
+      "text": "40,29, 26"
+    },
+    {
+      "key": "354852cf197be485",
+      "tag": 4,
+      "text": "F2_Medium"
+    },
+    {
+      "key": "354a341b94ee858b",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "35b101b264d89a92",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "35e172654b2bbedb",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "35e365d2137a954b",
+      "tag": 2,
+      "text": "TrackTextures"
+    },
+    {
+      "key": "35f08c3f28db0036",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "3603f9039f393d21",
+      "tag": 1,
+      "text": "0.001"
+    },
+    {
+      "key": "3618240ce7924ca6",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:1,0:1,0:1,1:1,1:1"
+    },
+    {
+      "key": "362e02fb53df3c06",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "36438f17b9ccf59f",
+      "tag": 0,
+      "text": "28"
+    },
+    {
+      "key": "36585e3b30766481",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "365d7febf618e876",
+      "tag": 1,
+      "text": "49"
+    },
+    {
+      "key": "366f2004a7b1d5f9",
+      "tag": 2,
+      "text": "lng_track_nld_f2_title"
+    },
+    {
+      "key": "367d5a56aacb112a",
+      "tag": 1,
+      "text": "2.2"
+    },
+    {
+      "key": "369f43a4179df42c",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "36b7977be3fb2861",
+      "tag": 2,
+      "text": "eaid://environment_package/tracks/[FILENAME]/wep/[FILENAME]_common.wep"
+    },
+    {
+      "key": "36bbf66f36485c53",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "36dbadb369986df1",
+      "tag": 2,
+      "text": "LapRecordHolder"
+    },
+    {
+      "key": "36f1a4b751687a4b",
+      "tag": 2,
+      "text": "overrides.broadcast_ui_generic.track.zandvoort"
+    },
+    {
+      "key": "37349278739cec48",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "373b6aeeae6e0327",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "3760cdcaad4ff56d",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_26.zandvoort"
+    },
+    {
+      "key": "3782c5c6f7737fd1",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "378a7d416879c143",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "37f2b9f02665122a",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "3829b6bfd475598a",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "383d25d5763ab70e",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "383f85dc38aafb46",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "3934418358e1e190",
+      "tag": 2,
+      "text": "TrackTextures"
+    },
+    {
+      "key": "395f372e553fa55b",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "396abe9b5ccc8645",
+      "tag": 1,
+      "text": "0.2"
+    },
+    {
+      "key": "397c5e1d462fea86",
+      "tag": 1,
+      "text": "60"
+    },
+    {
+      "key": "39835d84f92b3cd3",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "3aa08a887464765c",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "3aa8042a330f561c",
+      "tag": 2,
+      "text": "lng_stat_nld_lap_record"
+    },
+    {
+      "key": "3ab9d9bbfdbf3e5f",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "3aedc2cf1b318991",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "3af6206dfcf07a59",
+      "tag": 7,
+      "text": "17,30"
+    },
+    {
+      "key": "3b2121f35ffbf125",
+      "tag": 0,
+      "text": "30"
+    },
+    {
+      "key": "3b368dd6701f9557",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:2,0:0.5,0:0.5,1:0.9054376,1:0.5"
+    },
+    {
+      "key": "3b52f2d812aef08c",
+      "tag": 1,
+      "text": "30.000000"
+    },
+    {
+      "key": "3b8e1f45aada08f0",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "3b900813e0ddc2b7",
+      "tag": 4,
+      "text": "default"
+    },
+    {
+      "key": "3b92ad46d19f80a8",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "3b9b3e6d80c75fd5",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.980583,0.956311,0.929612"
+    },
+    {
+      "key": "3bb8b10fad7ba2c2",
+      "tag": 1,
+      "text": "0.94"
+    },
+    {
+      "key": "3bbbb688688378c0",
+      "tag": 8,
+      "text": "89.6953,87.517,85.2237,82.9905,80.9396,79.7828,78.6698,78.2688,77.9117,77.5374"
+    },
+    {
+      "key": "3c0278ce77a4c50a",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "3c1aea0b8aceb376",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "3cda43f0ee867f7f",
+      "tag": 1,
+      "text": "10"
+    },
+    {
+      "key": "3cf51b8ac2f2b665",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "3d1748ee90da60cf",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "3d41e576d9a0655b",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "3d471d63ec75a220",
+      "tag": 2,
+      "text": "flag_rectangle_small"
+    },
+    {
+      "key": "3d484a7595c66864",
+      "tag": 7,
+      "text": "18,30"
+    },
+    {
+      "key": "3d72a93d325b195d",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "3d930b4dffabe254",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "3dd91eedbaf9720d",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "3e49708a304fe65a",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "3ea8d3f4825527c4",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "3ead637c8727e256",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "3ec06d947ae70f61",
+      "tag": 1,
+      "text": "50"
+    },
+    {
+      "key": "3edb27d2c50379d7",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "3f0a1eefd4274e2f",
+      "tag": 1,
+      "text": "30"
+    },
+    {
+      "key": "3f221ba41e567ff1",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "3f3815534fbfac90",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "3f7deb818099e5ad",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "3f9c7d29661564fd",
+      "tag": 7,
+      "text": "12,30"
+    },
+    {
+      "key": "3f9d3ab22ac083e8",
+      "tag": 4,
+      "text": "F2_Medium"
+    },
+    {
+      "key": "3fa3c3d192a91e5a",
+      "tag": 2,
+      "text": "DifficultyNew"
+    },
+    {
+      "key": "3fb79b46172d8f91",
+      "tag": 4,
+      "text": "F2_Medium"
+    },
+    {
+      "key": "3fde6932ec7de78b",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "3ff079fdd8c8504a",
+      "tag": 2,
+      "text": "eaid://environment_package/tracks/[FILENAME]/crowd/[FILENAME].crowdplacement"
+    },
+    {
+      "key": "40083aaf5287d3f0",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "4081b947bb6e025c",
+      "tag": 4,
+      "text": "TyresPerSessionPreset"
+    },
+    {
+      "key": "4090a209c0aaf861",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "4090a509c0aafd7a",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "40942809c0ae11ea",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "40a0ada413d845af",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "40bff5b5d153ee32",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "40deac1b8bd9d122",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "410e83a4b97850eb",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "4110736e24bf94f0",
+      "tag": 1,
+      "text": "43.5"
+    },
+    {
+      "key": "4124fc6e24d126c5",
+      "tag": 1,
+      "text": "31.9"
+    },
+    {
+      "key": "4128786e24d42f50",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "413cced82dba15ef",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "415c34850f855609",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "423c4b5de9959222",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "424e36dda7e2a537",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "427d6d0a58db8075",
+      "tag": 0,
+      "text": "2023"
+    },
+    {
+      "key": "429159edb3cfd87e",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "42cc413fffa0dd0e",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle_small.zandvoort"
+    },
+    {
+      "key": "430c6ec8f056aadc",
+      "tag": 1,
+      "text": "1.055"
+    },
+    {
+      "key": "43164cdb7603e1a1",
+      "tag": 0,
+      "text": "7"
+    },
+    {
+      "key": "432dd466c01bf98d",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "437bf7375d3eac59",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "437dcadbe53d1dec",
+      "tag": 1,
+      "text": "1.2"
+    },
+    {
+      "key": "43b35a33d27ae709",
+      "tag": 3,
+      "text": "high"
+    },
+    {
+      "key": "440d87a9d3df9592",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "44378c76759bb794",
+      "tag": 1,
+      "text": "0.002"
+    },
+    {
+      "key": "44ebfbe55d63acb2",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "45192f65ee66a7d5",
+      "tag": 1,
+      "text": "12.4"
+    },
+    {
+      "key": "45193365ee66aea1",
+      "tag": 1,
+      "text": "8.3"
+    },
+    {
+      "key": "45193465ee66b054",
+      "tag": 1,
+      "text": "5.2"
+    },
+    {
+      "key": "45193565ee66b207",
+      "tag": 1,
+      "text": "6.2"
+    },
+    {
+      "key": "45193765ee66b56d",
+      "tag": 1,
+      "text": "4.1"
+    },
+    {
+      "key": "4537f029dc74c693",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "4539b4ce9639ff17",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle.zandvoort"
+    },
+    {
+      "key": "45c215218cc85c6f",
+      "tag": 7,
+      "text": "16,00"
+    },
+    {
+      "key": "45f534240e05826c",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks.zandvoort"
+    },
+    {
+      "key": "461722dca53cd436",
+      "tag": 2,
+      "text": "TrackPitData"
+    },
+    {
+      "key": "463f9cc815274f03",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "464cc220725b2962",
+      "tag": 1,
+      "text": "16"
+    },
+    {
+      "key": "4669f51b4848ec9b",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "466ae621bedd5d46",
+      "tag": 8,
+      "text": "0.215,0.32,0.435,0.585,0.74,0.86,1,1,1,1"
+    },
+    {
+      "key": "46a0be6e19d28907",
+      "tag": 1,
+      "text": "0.6"
+    },
+    {
+      "key": "46a44d1650925306",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "46cb0438f32bd523",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "46e9b1d39a79b0b3",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "46f31e8a6e9e5dca",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "46ffb6537d147457",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "4751220f03f57048",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "47de0a85c5d5313b",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "47e1b69e95382d8a",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "47e4c09c34443bdd",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "47ea41b32f95637f",
+      "tag": 0,
+      "text": "2023"
+    },
+    {
+      "key": "484964dcf29dad4e",
+      "tag": 4,
+      "text": "softer_sprint"
+    },
+    {
+      "key": "484f8cdea7060c00",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "48c6f6b1f6c85fa8",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "48e09bbc60cc2271",
+      "tag": 13,
+      "text": "melbourne,suzuka,austria,silverstone,spa_francorchamps,hungaroring,zandvoort,monza,baku,singapore,texas,mexico,shanghai,brazil,las_vegas,losail,abu_dhabi,bahrain,silverstone_reverse,jeddah,austria_reverse,zandvoort_reverse,madrid,miami,imola,monaco,catalunya,montreal,delhi"
+    },
+    {
+      "key": "48faee38ba9b475a",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "490bdaf7ef29cffa",
+      "tag": 2,
+      "text": "hero_cam_06"
+    },
+    {
+      "key": "492fa390079624fc",
+      "tag": 2,
+      "text": "asset_groups/environment_package/tracks/delhi/bake/delhi_radiance.bake.assetgroup"
+    },
+    {
+      "key": "4989bedecb17dad5",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "498dcb330f4c0d73",
+      "tag": 2,
+      "text": "overrides.icons.stats.objectives_exceeded"
+    },
+    {
+      "key": "4a2469e0ebc5fcc4",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "4a3e2cf7e1c56f14",
+      "tag": 0,
+      "text": "20"
+    },
+    {
+      "key": "4ae3da6f74d25dab",
+      "tag": 2,
+      "text": "TrackNameData"
+    },
+    {
+      "key": "4b1253e63e309672",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "4b61fc0ecd77f58f",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "4b62f367f1dbd87a",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "4b65000ecd7a3232",
+      "tag": 1,
+      "text": "31.9"
+    },
+    {
+      "key": "4b79810ecd8bb66f",
+      "tag": 1,
+      "text": "43.5"
+    },
+    {
+      "key": "4b8e4c870699bdd9",
+      "tag": 7,
+      "text": "13,0"
+    },
+    {
+      "key": "4ba308a9ff60f6ff",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.98005,0.962593,0.942643"
+    },
+    {
+      "key": "4ba491fcc79024a5",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "4bcf8b4db05f752a",
+      "tag": 1,
+      "text": "0.05"
+    },
+    {
+      "key": "4bdb2ac82083515f",
+      "tag": 0,
+      "text": "5"
+    },
+    {
+      "key": "4bf496c4304300c4",
+      "tag": 0,
+      "text": "5"
+    },
+    {
+      "key": "4c018b0b3c52266d",
+      "tag": 7,
+      "text": "12,30"
+    },
+    {
+      "key": "4c06a64837db56ca",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "4c45537a5043cfdb",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "4ca241c3ff5cdfc3",
+      "tag": 1,
+      "text": "27.2"
+    },
+    {
+      "key": "4ca249c3ff5ced5b",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "4ca24ac3ff5cef0e",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "4ca24bc3ff5cf0c1",
+      "tag": 1,
+      "text": "6.3"
+    },
+    {
+      "key": "4ca24dc3ff5cf427",
+      "tag": 1,
+      "text": "9.1"
+    },
+    {
+      "key": "4cbbb265a621264f",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "4cf57e68703436f0",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "4d0019fe6e2207b9",
+      "tag": 1,
+      "text": "0.81"
+    },
+    {
+      "key": "4d161101bd4331a2",
+      "tag": 7,
+      "text": "16,30"
+    },
+    {
+      "key": "4d2f52808ea9ccc7",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "4d8d811b1a49731f",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "4dacafeb1c9ff1c7",
+      "tag": 1,
+      "text": "1.0275"
+    },
+    {
+      "key": "4def85743d0cc898",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "4dfe1640c84c794c",
+      "tag": 0,
+      "text": "32"
+    },
+    {
+      "key": "4e1aa731fd9df9d6",
+      "tag": 8,
+      "text": "120.0"
+    },
+    {
+      "key": "4e3c9e591a433a91",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "4e4314ba0a135bc0",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "4e4315ba0a135d73",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "4e4316ba0a135f26",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "4e431aba0a1365f2",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "4e431eba0a136cbe",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "4e9cd7c18a9505e7",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "4ea6a4681a7a8711",
+      "tag": 1,
+      "text": "0.29"
+    },
+    {
+      "key": "4ea775678699dd29",
+      "tag": 1,
+      "text": "16"
+    },
+    {
+      "key": "4f27f078084f339f",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "4f3a633b315c6f1d",
+      "tag": 2,
+      "text": "overrides.icons.stats.lap_record_holder"
+    },
+    {
+      "key": "4f987b12f9f942a2",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_26"
+    },
+    {
+      "key": "4fa9c7c6b0f29953",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "5021d8804437acde",
+      "tag": 1,
+      "text": "82.3"
+    },
+    {
+      "key": "5028a2a0dfa5c77c",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "50b4e61b1f0dbf74",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "50f65431ddf80c83",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "50fc2ba8bd976b06",
+      "tag": 2,
+      "text": "overrides.icons.stats.objectives_exceeded"
+    },
+    {
+      "key": "5104d5a290a23f2b",
+      "tag": 1,
+      "text": "0.9"
+    },
+    {
+      "key": "5112741ef45aa084",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "5117b140b4fafb4b",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "5123ead989727747",
+      "tag": 2,
+      "text": "lng_stat_nld_num_laps"
+    },
+    {
+      "key": "51392d9a94f57199",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "514aa4e5fb9ccf0d",
+      "tag": 1,
+      "text": "1.055"
+    },
+    {
+      "key": "518a2d54a239ec00",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "518cbbc3114aa646",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline_large.zandvoort"
+    },
+    {
+      "key": "51943cb1f83d51c2",
+      "tag": 2,
+      "text": "TrackTextures"
+    },
+    {
+      "key": "51cf31d83e1ae5cd",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "51e37307968202f1",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "51ef05feaa9df626",
+      "tag": 2,
+      "text": "overrides.tracks.flags_circle.zandvoort"
+    },
+    {
+      "key": "521d8c2ae1a1f18a",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "5234cf2ed6dce214",
+      "tag": 7,
+      "text": "24, 72, 72"
+    },
+    {
+      "key": "524a390b3d03d3d2",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "525373028fc03a17",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "52eb7597da23cc37",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "52f04719e5581aaf",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "5302681566f597e0",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "5306d8337a14f69b",
+      "tag": 8,
+      "text": "120.0"
+    },
+    {
+      "key": "53164e5248506315",
+      "tag": 1,
+      "text": "0.3"
+    },
+    {
+      "key": "531cf56e895037fc",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "5348f831d2ef2203",
+      "tag": 1,
+      "text": "61"
+    },
+    {
+      "key": "534fce387076c6cf",
+      "tag": 0,
+      "text": "2015"
+    },
+    {
+      "key": "535e54d89657dc09",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "537cb34f62b177a9",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle.zandvoort"
+    },
+    {
+      "key": "53b6e751386bfb84",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_bg.zandvoort"
+    },
+    {
+      "key": "53d8eb3c951976da",
+      "tag": 0,
+      "text": "26"
+    },
+    {
+      "key": "541e65923042723e",
+      "tag": 0,
+      "text": "2015"
+    },
+    {
+      "key": "5430d57400c1f0a1",
+      "tag": 1,
+      "text": "0.002"
+    },
+    {
+      "key": "545ad94ca3db6339",
+      "tag": 4,
+      "text": "C4"
+    },
+    {
+      "key": "546363b88d9de165",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "5466e9b88da0faee",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "5466eeb88da1036d",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "547827b7ec8bd476",
+      "tag": 0,
+      "text": "5"
+    },
+    {
+      "key": "54a5005b734a92b0",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "550fbd8f70088270",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "552bcab928e0f271",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "5554ab931c57e8a6",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "55a20781874b34b3",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "55a208a50ed05871",
+      "tag": 7,
+      "text": "11,35"
+    },
+    {
+      "key": "55ce80930d517249",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "55d7c9aabce3e705",
+      "tag": 0,
+      "text": "43"
+    },
+    {
+      "key": "55f701555f258c32",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "561c0348a58d0b66",
+      "tag": 2,
+      "text": "TrackAuthenticWeekendData"
+    },
+    {
+      "key": "5629f3f465676025",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "563cbc078ffaab03",
+      "tag": 7,
+      "text": "13,0"
+    },
+    {
+      "key": "564b4d38e3a3bc28",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "5659f4a4767d6fa8",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "56759d68f3e020ea",
+      "tag": 2,
+      "text": "overrides.tracks.flags_circle.zandvoort"
+    },
+    {
+      "key": "573c565f60afd780",
+      "tag": 3,
+      "text": "Medium"
+    },
+    {
+      "key": "5762fd87b8f1ed9c",
+      "tag": 0,
+      "text": "32"
+    },
+    {
+      "key": "5777e1c83619e8d3",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "577c221d775b887f",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "57aab3b6b549c152",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "57e9b17b38d59b4c",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_short"
+    },
+    {
+      "key": "583d5339f6b3afbd",
+      "tag": 4,
+      "text": "HeroShot"
+    },
+    {
+      "key": "586c7aae3b54a93c",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "588cc1ef17f00d9e",
+      "tag": 1,
+      "text": "86"
+    },
+    {
+      "key": "58ab3bf7f6bc5c73",
+      "tag": 1,
+      "text": "0.82"
+    },
+    {
+      "key": "58be69f7060731c9",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "58c1058335859b8f",
+      "tag": 1,
+      "text": "15"
+    },
+    {
+      "key": "58c14d00e1832210",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "58c1ecf7060a4639",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "58c1eff7060a4b52",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "58d274539270ecf8",
+      "tag": 1,
+      "text": "0.001"
+    },
+    {
+      "key": "5908229f0c0bda9d",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "59a06f8ea1b81c0a",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "59bd467b642996ce",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "59c45d6d02304486",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "59d6802f387ed4da",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "59ee1a7f12d8af1f",
+      "tag": 2,
+      "text": "TrackAudioData"
+    },
+    {
+      "key": "5a78220cdec41d57",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "5a8152883e4fa996",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "5a9c5a6770e617a2",
+      "tag": 1,
+      "text": "0.5"
+    },
+    {
+      "key": "5ace3d7a9c212a43",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "5afd5a3ac9462e5f",
+      "tag": 2,
+      "text": "overrides.icons.stats.lap_record_holder"
+    },
+    {
+      "key": "5b61685bac1cd21f",
+      "tag": 1,
+      "text": "5"
+    },
+    {
+      "key": "5b9de440d2dfd4c1",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "5ba4ca212d785931",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "5bc0fe3f4a1c87b7",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "5bedc58c421780f8",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "5c0c4cf616320fa6",
+      "tag": 4,
+      "text": "Europe"
+    },
+    {
+      "key": "5c235908aa888280",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "5c3d9a49062eb06a",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "5c5617d9e3cb82b1",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "5c9c7fefc48fd59c",
+      "tag": 1,
+      "text": "12.6"
+    },
+    {
+      "key": "5c9c83efc48fdc68",
+      "tag": 1,
+      "text": "11.1"
+    },
+    {
+      "key": "5c9c87efc48fe334",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "5c9c89efc48fe69a",
+      "tag": 1,
+      "text": "8.2"
+    },
+    {
+      "key": "5c9c8aefc48fe84d",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "5cbc29bc086865d6",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "5d00236669568797",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "5d3361e4ca98ad62",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "5d6b12afeca9ccc0",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "5d6f20735394e6f0",
+      "tag": 1,
+      "text": "6.3"
+    },
+    {
+      "key": "5d6f21735394e8a3",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "5d6f22735394ea56",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "5d6f26735394f122",
+      "tag": 1,
+      "text": "9.1"
+    },
+    {
+      "key": "5d6f2a735394f7ee",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "5d82d769675bd157",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "5da4645f10b88e98",
+      "tag": 8,
+      "text": "0.4,0.5,0.625,0.74,0.855,0.925,1,1,1,1"
+    },
+    {
+      "key": "5def1e815eb13d00",
+      "tag": 2,
+      "text": "TrackTextures"
+    },
+    {
+      "key": "5e374e1f5fa974b8",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "5e693a81b9e697fb",
+      "tag": 8,
+      "text": "0.285,0.41,0.515,0.615,0.775,0.86,1,1,1,1"
+    },
+    {
+      "key": "5e9214b90d10e512",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "5ebf75adc4fb7cf9",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:2,0:0.5,0:0.5,0.6622632:0.5224628,1:0.5"
+    },
+    {
+      "key": "5ebfd6fbb31600c0",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "5ed27f15bbc76063",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "5ee8ae9599262e59",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "5eebc5a52ea767a3",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "5ef54db8d538a0e0",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "5f0f7130ab0c284f",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "5f2d4fabd2dc072f",
+      "tag": 4,
+      "text": "harder"
+    },
+    {
+      "key": "5f388de4816c12f2",
+      "tag": 2,
+      "text": "lng_track_trivia_13_netherlands_3"
+    },
+    {
+      "key": "5f39d64d7d7e31a1",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "5f445c90592278ad",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "5f47c29059255bd6",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "5f47c79059256455",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "5f7e5180cd6f2841",
+      "tag": 1,
+      "text": "33"
+    },
+    {
+      "key": "5fa3b64deba8203f",
+      "tag": 0,
+      "text": "26"
+    },
+    {
+      "key": "5fd8365d4b985be9",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "5ffb2434650e0035",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "600ea447a3a7a8d6",
+      "tag": 1,
+      "text": "0.27"
+    },
+    {
+      "key": "60950804de044e0c",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "60a664b130d66c72",
+      "tag": 1,
+      "text": "38.5"
+    },
+    {
+      "key": "60bddb4d7e201864",
+      "tag": 0,
+      "text": "2026"
+    },
+    {
+      "key": "60d2987d4438272c",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "60fa2da5651de72c",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "615acc26e31e9027",
+      "tag": 1,
+      "text": "38.5"
+    },
+    {
+      "key": "61654847ea8a8391",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "6174830c31fabc66",
+      "tag": 1,
+      "text": "3.06"
+    },
+    {
+      "key": "61ae71dee1730135",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "61d8d66b46d01a6b",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "621a2ff724422e1f",
+      "tag": 4,
+      "text": "harder"
+    },
+    {
+      "key": "6222a2c973aa2b40",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "627488267909fa25",
+      "tag": 1,
+      "text": "0.5"
+    },
+    {
+      "key": "62b0b6092c909753",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "62f109f5c23b9eb2",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "630de8c02e25c3b0",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "6345776bf552aff0",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "6345796bf552b356",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "63457a6bf552b509",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "63457b6bf552b6bc",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "63457f6bf552bd88",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "6389d25a590d9a56",
+      "tag": 7,
+      "text": "17,30"
+    },
+    {
+      "key": "638b2a92842ea7ac",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "63921289da002ff9",
+      "tag": 1,
+      "text": "1.05"
+    },
+    {
+      "key": "63c5982754dac27e",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "63e513f234d558c1",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "63eb4b7f7c9a3c82",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "63f90378904689f7",
+      "tag": 0,
+      "text": "31"
+    },
+    {
+      "key": "641404537a4d7a4a",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "6456af5ffd074740",
+      "tag": 4,
+      "text": "harder_sprint"
+    },
+    {
+      "key": "6463cc30e1440237",
+      "tag": 1,
+      "text": "1.03"
+    },
+    {
+      "key": "647e996fcda801af",
+      "tag": 0,
+      "text": "25"
+    },
+    {
+      "key": "64881e91e3ccdc1a",
+      "tag": 1,
+      "text": "1.04"
+    },
+    {
+      "key": "64dd21338b0a85da",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "6512efc1f221db0a",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "655e6e048fd058c9",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "659db8187f2eeab7",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "659eb11a86790a93",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "65a48d14b6fa17ac",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "65d57cec57605c19",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "663b7a02e05d2d2d",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "667364b9320e4f22",
+      "tag": 4,
+      "text": "balanced_sprint"
+    },
+    {
+      "key": "6679f1dde3f4aaee",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "6679fe5aacef5399",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "66a24718e940124d",
+      "tag": 2,
+      "text": "lng_stat_lap_record_holder"
+    },
+    {
+      "key": "66a6b907fe3e5965",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "66c9365e85d3651b",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:1,0:1,0:1,1:1,1:1"
+    },
+    {
+      "key": "66d96aefb6d80132",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977041,0.954082,0.933674"
+    },
+    {
+      "key": "66f10bfc53621540",
+      "tag": 0,
+      "text": "14"
+    },
+    {
+      "key": "670c5663606f7bb0",
+      "tag": 2,
+      "text": "environment_package/tracks/[FILENAME]/probes"
+    },
+    {
+      "key": "6713f646c62cdcd6",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "671a693c1ff86e7f",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "672ee86ca589e0fb",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline.zandvoort"
+    },
+    {
+      "key": "67356769cece8096",
+      "tag": 4,
+      "text": "F2_Soft"
+    },
+    {
+      "key": "6735fa7436a17f4f",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "67414497d7cd82ae",
+      "tag": 4,
+      "text": "TyresPerSessionSprintPreset"
+    },
+    {
+      "key": "67453b1a03906ba1",
+      "tag": 1,
+      "text": "1.44"
+    },
+    {
+      "key": "6774beb25c1fda77",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "677f79700f917e6f",
+      "tag": 0,
+      "text": "2015"
+    },
+    {
+      "key": "67b85f79af20c065",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "67e3c2aa1d6b25a8",
+      "tag": 2,
+      "text": "TrackAuthenticWeekendData"
+    },
+    {
+      "key": "680eafeff857e3f8",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:2,0:0.5,0:0.5,0.2612137:0.527187,1:0.5"
+    },
+    {
+      "key": "682082f23de9b2a6",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "683f01f49ca42b40",
+      "tag": 0,
+      "text": "7"
+    },
+    {
+      "key": "684341962efeb12a",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "68438d00c4e40eaa",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "6849d07f18b4994b",
+      "tag": 2,
+      "text": "TrackTrivia_13_2"
+    },
+    {
+      "key": "68756129731b81a9",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "6876dfcdbb299cd8",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "68bcd954291e0501",
+      "tag": 8,
+      "text": "0.205,0.32,0.465,0.61,0.775,0.88,1,1,1,1"
+    },
+    {
+      "key": "68de389250497b32",
+      "tag": 2,
+      "text": "lng_track_nld_tla"
+    },
+    {
+      "key": "68e7c81d41c5d2a2",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "692b6c925c84ecd1",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "693cb0cda39ce781",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:1,0:1,0.5778374:0.9267148,0.949867:0.4066249,1:0.3924405"
+    },
+    {
+      "key": "69f5fbf42e562eab",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "6a0a3979cd80eae6",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "6a2fc91a0ec870a1",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "6a505742fe0a976b",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "6a95fe08939015d4",
+      "tag": 1,
+      "text": "1.0325"
+    },
+    {
+      "key": "6aface84942e79bc",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "6afbf88f5c337abe",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "6b123c583615d65b",
+      "tag": 4,
+      "text": "C1"
+    },
+    {
+      "key": "6b1bcc65060ec725",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "6b2f0649a0dd2246",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "6b3b523d082429bc",
+      "tag": 1,
+      "text": "1.5"
+    },
+    {
+      "key": "6b4e716272884c78",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "6b4ee17f7f58b4c7",
+      "tag": 7,
+      "text": "14,00"
+    },
+    {
+      "key": "6b86bf1d18f42a1b",
+      "tag": 0,
+      "text": "39"
+    },
+    {
+      "key": "6bb60713b0c47bdd",
+      "tag": 2,
+      "text": "asset_groups/environment_package/tracks/delhi/bake/delhi_ao.bake.assetgroup"
+    },
+    {
+      "key": "6c3ae89df2f14c30",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "6c70a0f10a16ccba",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "6c735f3a2620f955",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "6c8ab3caaf77d481",
+      "tag": 2,
+      "text": "CircuitLength_kilometers"
+    },
+    {
+      "key": "6c9a16ed880dc182",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "6c9b97a7fba31ec0",
+      "tag": 0,
+      "text": "2023"
+    },
+    {
+      "key": "6c9f4d0c524aa5ba",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_multiline_26"
+    },
+    {
+      "key": "6ca43d72a813a52c",
+      "tag": 8,
+      "text": "88.5866,86.4708,84.1896,82.0888,79.881,78.8129,77.7238,77.2336,76.7675,76.3455"
+    },
+    {
+      "key": "6cd5bc2dd4517311",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "6ce6ba771b4a36b4",
+      "tag": 13,
+      "text": "bahrain,jeddah,austria,hungaroring,spa_francorchamps,zandvoort,monza,singapore,suzuka,texas,mexico,melbourne,brazil,abu_dhabi,portimao,shanghai,losail,las_vegas,imola,miami,catalunya,monaco,baku,montreal,silverstone,delhi"
+    },
+    {
+      "key": "6d47260627058f4c",
+      "tag": 0,
+      "text": "39"
+    },
+    {
+      "key": "6d7b6c3c3a8f6bb7",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "6d7ff9c0b50e8190",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "6d85a9a9fc06703b",
+      "tag": 2,
+      "text": "hero_cam_05"
+    },
+    {
+      "key": "6d95f88e00290c27",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "6db66c82596f69ba",
+      "tag": 13,
+      "text": "melbourne,suzuka,austria,silverstone,spa_francorchamps,hungaroring,zandvoort,monza,baku,singapore,texas,mexico,shanghai,brazil,las_vegas,losail,abu_dhabi,bahrain,silverstone_reverse,jeddah,austria_reverse,zandvoort_reverse,miami,imola,monaco,catalunya,montreal,delhi"
+    },
+    {
+      "key": "6dc21690d264ef1a",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "6dddce9efcf2c978",
+      "tag": 1,
+      "text": "61"
+    },
+    {
+      "key": "6dee2e9edb28e04f",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "6df38e7c126f8fd2",
+      "tag": 1,
+      "text": "3.7"
+    },
+    {
+      "key": "6dff39f385b87358",
+      "tag": 13,
+      "text": "melbourne,suzuka,austria,silverstone,spa_francorchamps,hungaroring,zandvoort,monza,baku,singapore,texas,mexico,shanghai,brazil,las_vegas,losail,abu_dhabi,bahrain,jeddah,miami,imola,monaco,catalunya,montreal,delhi"
+    },
+    {
+      "key": "6e0c237da53be192",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "6e552383406edeb3",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "6ea1ff69cfe2ab0f",
+      "tag": 1,
+      "text": "29.64"
+    },
+    {
+      "key": "6eb57536b63404f9",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle.zandvoort"
+    },
+    {
+      "key": "6efd2359548a7f94",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "6efd4ad705164899",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "6f11bfa4067a82e7",
+      "tag": 1,
+      "text": "0.0015"
+    },
+    {
+      "key": "6f370282b55dfd48",
+      "tag": 4,
+      "text": "harder"
+    },
+    {
+      "key": "6f69f83b554aa81d",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "6f84d62d7e82a77d",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "6fbfb79715545a92",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "6fc14f420bdf5cf3",
+      "tag": 1,
+      "text": "1.94"
+    },
+    {
+      "key": "6fe62a8786c4b2a1",
+      "tag": 1,
+      "text": "0.975"
+    },
+    {
+      "key": "6ff89ef5b7f7b7d1",
+      "tag": 2,
+      "text": "TrackAudioCommentatorOverride"
+    },
+    {
+      "key": "701c8504cf4e44a9",
+      "tag": 7,
+      "text": "16,00"
+    },
+    {
+      "key": "702762730dab1a07",
+      "tag": 1,
+      "text": "31.9"
+    },
+    {
+      "key": "702ae6730dae302a",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "7036d1122a933603",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "703be1730dbc9ade",
+      "tag": 1,
+      "text": "43.5"
+    },
+    {
+      "key": "704433f9ab7688c2",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "7058469d526f57f1",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "70e9c747b27be80b",
+      "tag": 7,
+      "text": "0, 0"
+    },
+    {
+      "key": "70ead0cd456b9cab",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "712f1028852a29ac",
+      "tag": 1,
+      "text": "82.3"
+    },
+    {
+      "key": "715e1f9cf3df2ced",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "7192ecfcbbe15563",
+      "tag": 1,
+      "text": "0.001"
+    },
+    {
+      "key": "724bbabe86c76eb7",
+      "tag": 2,
+      "text": "hero_cam_01"
+    },
+    {
+      "key": "7293710f59529df1",
+      "tag": 1,
+      "text": "66.102"
+    },
+    {
+      "key": "72d9750867983566",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "7301950617886054",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "7350a4fa359ad9d3",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "73a09ca831c2b5a9",
+      "tag": 1,
+      "text": "0.15"
+    },
+    {
+      "key": "73b2ca31301827ba",
+      "tag": 7,
+      "text": "15,0"
+    },
+    {
+      "key": "741fca4fc1336064",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "745a590c96b69a4c",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "7472c74a16347eae",
+      "tag": 3,
+      "text": "Medium"
+    },
+    {
+      "key": "7475edeed7fec7fd",
+      "tag": 4,
+      "text": "C1"
+    },
+    {
+      "key": "750bcef12d376500",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "75433a8ad560ba7f",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "756e2dca2d51a210",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "757d236868e50548",
+      "tag": 1,
+      "text": "1.94"
+    },
+    {
+      "key": "7585b4ae78b7820c",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "75e5c0cd7c913873",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "75e8e311c7dddd22",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "766681895e2504f9",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "767cb83635932246",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "768ebb17d82dde25",
+      "tag": 7,
+      "text": "13,15"
+    },
+    {
+      "key": "769652e1867b9900",
+      "tag": 1,
+      "text": "5"
+    },
+    {
+      "key": "7698f3ade70c658c",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "769eea9adee63130",
+      "tag": 1,
+      "text": "16"
+    },
+    {
+      "key": "76bd09f89c23533c",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "772103f3417c3a77",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "776f9001a836ca26",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "777f377f9fcd0bdb",
+      "tag": 1,
+      "text": "49"
+    },
+    {
+      "key": "77b82d92434a980f",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "77edbb2de933f6e3",
+      "tag": 1,
+      "text": "0.35"
+    },
+    {
+      "key": "77f8435368274a73",
+      "tag": 2,
+      "text": "lng_stat_lap_record"
+    },
+    {
+      "key": "7841318c0a812ee1",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_bg.zandvoort"
+    },
+    {
+      "key": "784377b2824006eb",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "786229798c355559",
+      "tag": 0,
+      "text": "44"
+    },
+    {
+      "key": "7872456bebd2aa33",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "787e57fd7c8b796d",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "7883b1fa17ad4c63",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "78c4f92ad94b25c6",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "78cd38e0e18c97d8",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "7902174de160a31a",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "79685eef9cf2d9c0",
+      "tag": 1,
+      "text": "1.045"
+    },
+    {
+      "key": "799504f2c6cfb8f7",
+      "tag": 8,
+      "text": "79.8087,77.8538,75.8776,73.91,72.0264,71.0007,70.0013,69.5913,69.1452,68.7669"
+    },
+    {
+      "key": "799dd4f526b00107",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "799ff86550a94c69",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "79ed458a3050c940",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "7a08d6d3e91fb525",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "7a2044fe26c82486",
+      "tag": 0,
+      "text": "23"
+    },
+    {
+      "key": "7a28b3f5a533dd32",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "7a6792c3206f0120",
+      "tag": 1,
+      "text": "30"
+    },
+    {
+      "key": "7a81fcde0a7bd2e3",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "7ae28d0409fe2e8a",
+      "tag": 0,
+      "text": "26"
+    },
+    {
+      "key": "7b191b247ada6862",
+      "tag": 0,
+      "text": "13"
+    },
+    {
+      "key": "7bf9156269e30f7b",
+      "tag": 4,
+      "text": "HeroShot"
+    },
+    {
+      "key": "7c01108a3cf4bc85",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "7c2f54e2831933be",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "7c662ebe2079c7d9",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_short"
+    },
+    {
+      "key": "7cc02c7625146095",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "7ce5a616f54ac6e4",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "7d3141cfdbf7e417",
+      "tag": 2,
+      "text": "LapRecordHolder"
+    },
+    {
+      "key": "7d33ff2278f5d1fb",
+      "tag": 1,
+      "text": "0.002"
+    },
+    {
+      "key": "7e3303b60daf7413",
+      "tag": 13,
+      "text": "melbourne,suzuka,austria,silverstone,spa_francorchamps,hungaroring,zandvoort,monza,baku,singapore,texas,mexico,shanghai,brazil,las_vegas,losail,abu_dhabi,bahrain,silverstone_reverse,jeddah,austria_reverse,zandvoort_reverse,miami,imola,monaco,catalunya,montreal,delhi"
+    },
+    {
+      "key": "7ea208ca809c042a",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "7ea5a0d624888752",
+      "tag": 4,
+      "text": "F2_Medium"
+    },
+    {
+      "key": "7eac78796980d44c",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "7ef1d01034fb5df0",
+      "tag": 7,
+      "text": "0, 0"
+    },
+    {
+      "key": "7f225a82a653784d",
+      "tag": 4,
+      "text": "harder_sprint"
+    },
+    {
+      "key": "7f2d747a1a4c3085",
+      "tag": 1,
+      "text": "0.99"
+    },
+    {
+      "key": "7f34ca846d2e7428",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "7f740398786e7d75",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "7f863fbb37ad3308",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "7f99366b10d27d57",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "7f9d636d82170fc7",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "7fa0c35c39747d16",
+      "tag": 2,
+      "text": "CountryTrivia_13_2"
+    },
+    {
+      "key": "7fbe0b48267c25a4",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "7fc82c8b1f0176f9",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "7fd4672f431e698d",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "7fe9a33f78da73a5",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "80006cf0272809ce",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "800fceaa57d61d80",
+      "tag": 1,
+      "text": "1.045"
+    },
+    {
+      "key": "802ae1024574e83a",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "8083223b50ca46f3",
+      "tag": 1,
+      "text": "0.1"
+    },
+    {
+      "key": "8100f6e4d682b2fb",
+      "tag": 2,
+      "text": "TrackPitData"
+    },
+    {
+      "key": "8108aacfc10e1052",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "81169aff7524e3f8",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "817926adbe40dbde",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "819bad3f7f82ec08",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "82114d88fc8cc95a",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:1,0:1,0:1,1:1,1:1"
+    },
+    {
+      "key": "824498777a2ee166",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "824ddf7fc780798f",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "82660e3771ef3ecb",
+      "tag": 1,
+      "text": "10"
+    },
+    {
+      "key": "826d563753c443ba",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "82863e8159a8769c",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "829561e6178e5a4e",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "82d0e08ad5c6b6bb",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "82f1e0af111ad918",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "830b89ac65114b01",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "834541dacee7299c",
+      "tag": 7,
+      "text": "11,30"
+    },
+    {
+      "key": "838a2f6b318ae2c6",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "83901afc78bcaf38",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "83a4b5244619d669",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "84140ac38b99dcce",
+      "tag": 1,
+      "text": "102.2"
+    },
+    {
+      "key": "84692ad49b472b0b",
+      "tag": 1,
+      "text": "1.03"
+    },
+    {
+      "key": "8491e1f307f8f15f",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "84b78a298c7f61a5",
+      "tag": 1,
+      "text": "1.0375"
+    },
+    {
+      "key": "84ee7d55fffd6eb4",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "8505302de67f5301",
+      "tag": 1,
+      "text": "35"
+    },
+    {
+      "key": "850d2acd439cca74",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.981579,0.960526,0.939474"
+    },
+    {
+      "key": "855e3db439888396",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline.zandvoort"
+    },
+    {
+      "key": "855f3f5fe72fe9ee",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "858727a06c972cb5",
+      "tag": 2,
+      "text": "lng_track_trivia_13_netherlands_2"
+    },
+    {
+      "key": "85e9093a7692ff81",
+      "tag": 4,
+      "text": "balanced"
+    },
+    {
+      "key": "85ea45b2127311a0",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "8649ceafec1b2ffb",
+      "tag": 2,
+      "text": "lng_track_nld_tla"
+    },
+    {
+      "key": "865dfa40cf1cb123",
+      "tag": 7,
+      "text": "16,40"
+    },
+    {
+      "key": "8661496e91e20ec3",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "8664206849d8db5a",
+      "tag": 1,
+      "text": "0.8"
+    },
+    {
+      "key": "867d0c4815522135",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "86aaf75b28f898eb",
+      "tag": 7,
+      "text": "16,55"
+    },
+    {
+      "key": "86b6f0e85319468b",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "86b84dc7906d77ef",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "86be9a73865541e9",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "86df48ea7df316c1",
+      "tag": 0,
+      "text": "44"
+    },
+    {
+      "key": "86e6d9138cabe260",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "86e6dd138cabe92c",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "86e6df138cabec92",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "86e6e0138cabee45",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "86e6e5138cabf6c4",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "87007fefa16dd2c8",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_multiline"
+    },
+    {
+      "key": "870f186f9eff075f",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "871a9ed295c76bf5",
+      "tag": 1,
+      "text": "43"
+    },
+    {
+      "key": "873cae4a47615818",
+      "tag": 1,
+      "text": "23.7"
+    },
+    {
+      "key": "8747204a476a6e53",
+      "tag": 1,
+      "text": "13.4"
+    },
+    {
+      "key": "8747234a476a736c",
+      "tag": 1,
+      "text": "18.6"
+    },
+    {
+      "key": "8760f9ae60723770",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "8760feae60723fef",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "876b0bae607aaa8b",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "8781c7398821017a",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "87dc05bef6c5e452",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "884136c67bc66af2",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "886148f7623c13f3",
+      "tag": 1,
+      "text": "5"
+    },
+    {
+      "key": "8879564400e38cff",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "8909a5ced52a59df",
+      "tag": 7,
+      "text": "0, 0"
+    },
+    {
+      "key": "895140c7b290b5d7",
+      "tag": 7,
+      "text": "17,30"
+    },
+    {
+      "key": "8971b1adc210b2dc",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "89def77d6e482170",
+      "tag": 2,
+      "text": "Corners"
+    },
+    {
+      "key": "8a3e5c81a2176d1e",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "8a429d39f6b2f17c",
+      "tag": 7,
+      "text": "13,0"
+    },
+    {
+      "key": "8a6dcc148a69b430",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "8ab07757f8051757",
+      "tag": 0,
+      "text": "13"
+    },
+    {
+      "key": "8ab887869a58b3f5",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "8ab88b869a58bac1",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "8ab88c869a58bc74",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "8ab88d869a58be27",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "8ab88f869a58c18d",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "8ab8eaa4d74d9021",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "8abc56a4d7507d7c",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "8ac35fa4d756ab75",
+      "tag": 1,
+      "text": "33.8"
+    },
+    {
+      "key": "8aeec271cda0833f",
+      "tag": 7,
+      "text": "29,40,0"
+    },
+    {
+      "key": "8b0aa93affb6d80c",
+      "tag": 3,
+      "text": "asset_groups/crowd_package/mild/config/config.assetgroup"
+    },
+    {
+      "key": "8b6d6c6151511215",
+      "tag": 1,
+      "text": "15"
+    },
+    {
+      "key": "8b73f5a433193d5f",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "8b8537da6496462f",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "8bfd72b4a9688419",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "8c118a49f542be81",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "8c5852aa957e8d4a",
+      "tag": 2,
+      "text": "track_highlights"
+    },
+    {
+      "key": "8c63a5f3630ecd00",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "8cbb6f618ab9719c",
+      "tag": 2,
+      "text": "LapRecordHolder"
+    },
+    {
+      "key": "8ccd7ae14bd01206",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "8d17e6bfaedcbc68",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "8d1ad86b7ef5db1e",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_multiline_previous"
+    },
+    {
+      "key": "8d590fe1dd93e4db",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "8dd1ae464ebfd036",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "8dd7c6cabe0a8416",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "8dfe487b2d64c740",
+      "tag": 2,
+      "text": "weather"
+    },
+    {
+      "key": "8e11bee2d24cda65",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "8e1cdb79c317fa4c",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "8e3f6a36831a608e",
+      "tag": 1,
+      "text": "0.001"
+    },
+    {
+      "key": "8e4587d981a74fe1",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "8e4647cb8b05e231",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "8e4e51401ed2b01b",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "8e5d1cb429bfcd68",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "8e71981143ea1d70",
+      "tag": 2,
+      "text": "overrides.tracks.flags_circle.zandvoort"
+    },
+    {
+      "key": "8e7e78b8f5793eed",
+      "tag": 2,
+      "text": "lng_track_nld_subtitle"
+    },
+    {
+      "key": "8e92b9a1e39326e3",
+      "tag": 1,
+      "text": "44"
+    },
+    {
+      "key": "8e963ca1e3963b53",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "8e99c0a1e3995176",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "8ef8704e0be077dd",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks.zandvoort"
+    },
+    {
+      "key": "8f1fae900b39b013",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "8f2468e2424de51a",
+      "tag": 0,
+      "text": "31"
+    },
+    {
+      "key": "8f3c186172374e7f",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "8f3e3897f6c19077",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "8f416156e44e5e26",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "8f4a99a08d5aa1ea",
+      "tag": 1,
+      "text": "110"
+    },
+    {
+      "key": "8f594f88313d5831",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "8f8661e4d1244fb9",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "8f9508199af43afd",
+      "tag": 2,
+      "text": "textures"
+    },
+    {
+      "key": "8fd908b239bb1159",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "8ff7dae9ccf40f5c",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "903dde8af922e49c",
+      "tag": 2,
+      "text": "lng_stat_circuitlength"
+    },
+    {
+      "key": "9054d96b793fd291",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "9058456b7942bfec",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "905bc86b7945d45c",
+      "tag": 1,
+      "text": "33.8"
+    },
+    {
+      "key": "90aa8497a8f34502",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_multiline"
+    },
+    {
+      "key": "90be03b50fa43f99",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "90ebcb5cc848e53f",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "911a64025e0c55b9",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "911ea122b02df498",
+      "tag": 13,
+      "text": "melbourne,suzuka,austria,silverstone,spa_francorchamps,hungaroring,zandvoort,monza,baku,singapore,texas,mexico,shanghai,brazil,las_vegas,losail,abu_dhabi,bahrain,silverstone_reverse,jeddah,austria_reverse,zandvoort_reverse,madrid,miami,imola,monaco,catalunya,montreal,delhi"
+    },
+    {
+      "key": "915146a67c4dd67d",
+      "tag": 2,
+      "text": "lng_aero_bias_zandvoort"
+    },
+    {
+      "key": "9178592235cf6f21",
+      "tag": 7,
+      "text": "11,30"
+    },
+    {
+      "key": "91791116961907ee",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "91ee94f3d2eeded1",
+      "tag": 1,
+      "text": "43.5"
+    },
+    {
+      "key": "91ff97f3d2fd571d",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "920313f3d3005fa8",
+      "tag": 1,
+      "text": "31.9"
+    },
+    {
+      "key": "922bd8a3c05b016a",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "928495717557c810",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "928ea77175603b2b",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "928eaa7175604044",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "931176c5a20613cb",
+      "tag": 2,
+      "text": "lng_country_trivia_13_netherlands_1"
+    },
+    {
+      "key": "9342fa7f8ce8e049",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "9364b3088b882b9d",
+      "tag": 7,
+      "text": "05,10"
+    },
+    {
+      "key": "939906aea2e1a97e",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "93e77fe5326050dc",
+      "tag": 1,
+      "text": "8"
+    },
+    {
+      "key": "93f8226eb28784fe",
+      "tag": 7,
+      "text": "11,30"
+    },
+    {
+      "key": "940b7a6681da8ca6",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "943e366f5af71dd7",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "9480551e530a5018",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "94acaa0b2aaa9217",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "94b0c30aeae76cd1",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "94b0c60aeae771ea",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "94b4490aeaea865a",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "94cec04c4a5d6def",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "94d181bd0e3d6629",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "94fad54d1bb94e8c",
+      "tag": 2,
+      "text": "lng_stat_lap_record_holder"
+    },
+    {
+      "key": "95213816399a5494",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "95348023155c4f47",
+      "tag": 2,
+      "text": "CountryTrivia_13_3"
+    },
+    {
+      "key": "954e2888a3498eb7",
+      "tag": 1,
+      "text": "0.01"
+    },
+    {
+      "key": "9560be05ccda6d94",
+      "tag": 7,
+      "text": "16,0"
+    },
+    {
+      "key": "9561eadb2f848a44",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "956bcd940ef95eb6",
+      "tag": 0,
+      "text": "30"
+    },
+    {
+      "key": "95707d9241dc8a18",
+      "tag": 0,
+      "text": "20"
+    },
+    {
+      "key": "95d31f0d2d4baf52",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "95fe1874716ef7ca",
+      "tag": 1,
+      "text": "1.3"
+    },
+    {
+      "key": "9649f09ddc9e1d8c",
+      "tag": 1,
+      "text": "1.94"
+    },
+    {
+      "key": "966f99dd4d3b0596",
+      "tag": 7,
+      "text": "13,15"
+    },
+    {
+      "key": "96dd0384caf4a94c",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "96f2711adb7070f4",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "96fc0021f8290064",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "9716949442a68392",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "972e7c9584a67aa0",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "9732e5635cb1e762",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "974e69505e4b70b5",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "9764a461ec18fb9f",
+      "tag": 2,
+      "text": "lng_track_nld_tla"
+    },
+    {
+      "key": "97852b3142d37d9b",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "978d9e5ae7195ae7",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "97d9860d6d16db5c",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "98195abf7ca73af2",
+      "tag": 9,
+      "text": "@v2@minx:5,maxx:25,miny:15,maxy:60,0:0,0.3333333:0.3333333,0.6666667:0.6666666,1:1"
+    },
+    {
+      "key": "9820159ecb9c98a3",
+      "tag": 7,
+      "text": "16,30"
+    },
+    {
+      "key": "98476f16a43a952a",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "9858938c9db54493",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "98e43c62b6ce51cc",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "990a097f23650dcb",
+      "tag": 1,
+      "text": "0.142"
+    },
+    {
+      "key": "99178da291aa374e",
+      "tag": 2,
+      "text": "asset_groups/environment_package/tracks/delhi/wep/delhi_common.assetgroup"
+    },
+    {
+      "key": "993a7608b5874786",
+      "tag": 1,
+      "text": "49"
+    },
+    {
+      "key": "9962f5eedcdaaa6e",
+      "tag": 1,
+      "text": "58"
+    },
+    {
+      "key": "99a46ca6f7c7904a",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "99c50bae8a6a94c9",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "99f06b4b859c9e48",
+      "tag": 2,
+      "text": "overrides.broadcast_ui_generic.track.zandvoort"
+    },
+    {
+      "key": "9a588787fbfe2785",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "9a642a050bae43c4",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "9aace544f7029612",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "9ae53f18b9552dbd",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "9b006387f61b1959",
+      "tag": 2,
+      "text": "lng_stat_lap_record"
+    },
+    {
+      "key": "9b024e4e3778a538",
+      "tag": 0,
+      "text": "27"
+    },
+    {
+      "key": "9b068f64bcbae365",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "9b251aa0cf9c1923",
+      "tag": 4,
+      "text": "TyresPerSessionSprintPreset"
+    },
+    {
+      "key": "9b44ecb4fa34c52d",
+      "tag": 2,
+      "text": "lng_stat_nld_circuit_length"
+    },
+    {
+      "key": "9b4d0611f688d3fa",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "9baf5d1c3223a92c",
+      "tag": 1,
+      "text": "12.4"
+    },
+    {
+      "key": "9baf611c3223aff8",
+      "tag": 1,
+      "text": "8.3"
+    },
+    {
+      "key": "9baf651c3223b6c4",
+      "tag": 1,
+      "text": "4.1"
+    },
+    {
+      "key": "9baf671c3223ba2a",
+      "tag": 1,
+      "text": "6.2"
+    },
+    {
+      "key": "9baf681c3223bbdd",
+      "tag": 1,
+      "text": "5.2"
+    },
+    {
+      "key": "9bb9f614b1dbf6a0",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "9bcd5a4d63723207",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "9bfc8b99dce2b31a",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "9bfd7cbff11d4a9d",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "9c093b5ada12531e",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "9c0aafeee2129768",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "9c23a67e5bd50790",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "9c33a0d7fc652c28",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "9c3b515ef63b8efd",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "9c41806367a669da",
+      "tag": 4,
+      "text": "Low"
+    },
+    {
+      "key": "9c5a317b815c71bb",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "9c76d88a3d152a18",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "9c928dd07e78b6d0",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "9cc909b1b5ec4772",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "9cc927b579abda75",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "9cd0e164be2433d4",
+      "tag": 1,
+      "text": "59"
+    },
+    {
+      "key": "9d38b97b2ff43321",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "9d769a951ce9b8c1",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "9d7e3e8a7d834a21",
+      "tag": 1,
+      "text": "3.7"
+    },
+    {
+      "key": "9dc89e6588842112",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "9de7ea53ae1a7498",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "9e50b162408afa19",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "9e5a4470824e8385",
+      "tag": 1,
+      "text": "0.246"
+    },
+    {
+      "key": "9e5f9f15d3642767",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "9e9379ded5e8ff5c",
+      "tag": 1,
+      "text": "3.7"
+    },
+    {
+      "key": "9ee8f5d0bd7a164f",
+      "tag": 8,
+      "text": "77.7667,75.8362,73.965,72.0011,70.163,69.1464,68.2081,67.8183,67.3931,66.9654"
+    },
+    {
+      "key": "9f052e2a200bd9ca",
+      "tag": 2,
+      "text": "tracks_spline_large"
+    },
+    {
+      "key": "9f1cdcdb675e4d98",
+      "tag": 4,
+      "text": "F2_Soft"
+    },
+    {
+      "key": "9f30140164ddb430",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "9f400074b46879b5",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "9f469b5aafdef334",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "9f5cb7695e2f5ebd",
+      "tag": 4,
+      "text": "C1"
+    },
+    {
+      "key": "9fd5ab14c09dd048",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "9fe199fc565c18d5",
+      "tag": 4,
+      "text": "F2_Medium"
+    },
+    {
+      "key": "a001204ec4081206",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "a042524a56982260",
+      "tag": 1,
+      "text": "110"
+    },
+    {
+      "key": "a04fed4348ad2073",
+      "tag": 4,
+      "text": "softer"
+    },
+    {
+      "key": "a063eea082af4fd5",
+      "tag": 1,
+      "text": "35.5"
+    },
+    {
+      "key": "a07f730e39652aec",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:2,0:0.5,0:0.5,0.5131925:0.5295516,1:0.5"
+    },
+    {
+      "key": "a0bacc7b477092bf",
+      "tag": 7,
+      "text": "13,15"
+    },
+    {
+      "key": "a0c1989b2554c7c3",
+      "tag": 1,
+      "text": "18.8"
+    },
+    {
+      "key": "a0c49b9b255702b3",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "a0c81f9b255a18d6",
+      "tag": 1,
+      "text": "13.3"
+    },
+    {
+      "key": "a0f67e048caaed3a",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "a0fd7460f6918c5c",
+      "tag": 1,
+      "text": "10"
+    },
+    {
+      "key": "a14b9744590146e7",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "a15229b80560ed1d",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "a15a9f5b7acbc460",
+      "tag": 2,
+      "text": "TrackTrivia_13_3"
+    },
+    {
+      "key": "a197f8f0b1121753",
+      "tag": 1,
+      "text": "1.1"
+    },
+    {
+      "key": "a1adb61f5e2bd578",
+      "tag": 1,
+      "text": "52.2"
+    },
+    {
+      "key": "a1c23f1f5e3d674d",
+      "tag": 1,
+      "text": "36.9"
+    },
+    {
+      "key": "a1c53b1f5e3f9658",
+      "tag": 1,
+      "text": "27.2"
+    },
+    {
+      "key": "a206ca7fb36a66dc",
+      "tag": 2,
+      "text": "hero_cam_04"
+    },
+    {
+      "key": "a212f5e7107c1cb9",
+      "tag": 4,
+      "text": "harder_sprint"
+    },
+    {
+      "key": "a2138c4af37c92dd",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "a231d8e9fba57f39",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "a23c5470a2b48b07",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "a241ad9662666129",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "a270ef6632394bf9",
+      "tag": 2,
+      "text": "lng_country_trivia_13_netherlands_3"
+    },
+    {
+      "key": "a27e7da0c59aeaba",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "a286d210d3038387",
+      "tag": 4,
+      "text": "C4"
+    },
+    {
+      "key": "a287b2e541928471",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "a29a65d59231afc1",
+      "tag": 4,
+      "text": "softer"
+    },
+    {
+      "key": "a34fa584b0a75a6d",
+      "tag": 2,
+      "text": "LapRecord"
+    },
+    {
+      "key": "a36c85cf55e1b2a5",
+      "tag": 1,
+      "text": "3.7"
+    },
+    {
+      "key": "a3c4b711ed8b0f1a",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "a3f747140c70031f",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "a40cc277ac870394",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "a410c84c5baeb9cd",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "a4379924d83983c0",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "a44321f76b587b25",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "a4447cc9c153cbc4",
+      "tag": 8,
+      "text": "0.285,0.41,0.515,0.615,0.775,0.86,1,1,1,1"
+    },
+    {
+      "key": "a4a3654b4c4f89c2",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "a4f9aa49b9be6db5",
+      "tag": 7,
+      "text": "16,40"
+    },
+    {
+      "key": "a509a9541779788c",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "a53aa66cb447ea1d",
+      "tag": 7,
+      "text": "11, 30"
+    },
+    {
+      "key": "a53e3b5d3bd4c809",
+      "tag": 13,
+      "text": "installation_lap,installation_lap_2,sprint_shootout_1,sprint_shootout_2,sprint_shootout_3,practice_long,practice_medium,practice_short,practice_hotlap,qualifying_1,qualifying_2,qualifying_3"
+    },
+    {
+      "key": "a53ed929042974e2",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "a548fc211f2159c5",
+      "tag": 1,
+      "text": "5"
+    },
+    {
+      "key": "a54dc5ba0c4335b9",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "a55151ba0c465974",
+      "tag": 1,
+      "text": "13.3"
+    },
+    {
+      "key": "a557daba0c4baded",
+      "tag": 1,
+      "text": "18.8"
+    },
+    {
+      "key": "a5aee22eb1dbdde1",
+      "tag": 7,
+      "text": "13,0"
+    },
+    {
+      "key": "a5d9496d0d4a27ae",
+      "tag": 8,
+      "text": "0.29,0.395,0.52,0.645,0.805,0.895,1,1,1,1"
+    },
+    {
+      "key": "a5da0e329d375fd6",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "a5e19521c818cd61",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "a5f5d060d8f48a91",
+      "tag": 7,
+      "text": "72, 72, 72"
+    },
+    {
+      "key": "a62150553cdc23a3",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "a668385e12e98066",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "a6aaefc7fe41d683",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.987469,0.969925,0.954887"
+    },
+    {
+      "key": "a6c95d5080228402",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "a6c9d0db771603b1",
+      "tag": 2,
+      "text": "flag_rectangle"
+    },
+    {
+      "key": "a6d24aba8507fcf4",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "a6defacef39b10f5",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "a6e462a1624c0c12",
+      "tag": 3,
+      "text": "Mandatory"
+    },
+    {
+      "key": "a70d1b56a5de315b",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline_large.zandvoort"
+    },
+    {
+      "key": "a73b12f3e972977a",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "a7a50843ad841bdb",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.979592,0.959184,0.936224"
+    },
+    {
+      "key": "a7edfa9ffa1593f0",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "a7fe73e85d6ff120",
+      "tag": 1,
+      "text": "43.5"
+    },
+    {
+      "key": "a812fce85d8182f5",
+      "tag": 1,
+      "text": "31.9"
+    },
+    {
+      "key": "a815f8e85d83b200",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "a823c0996da8fb74",
+      "tag": 1,
+      "text": "0.81"
+    },
+    {
+      "key": "a84fc55e90bd56a7",
+      "tag": 2,
+      "text": "key_2019.assetgroup"
+    },
+    {
+      "key": "a853de1a0f5d419f",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "a86c45d64aa34e63",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "a87ac928649457e3",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "a887b721de5815d7",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "a8c4f11f5671b13f",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.982843,0.965686,0.946078"
+    },
+    {
+      "key": "a8da5d6b4ef1a11d",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "a8f37f2731234de1",
+      "tag": 1,
+      "text": "82.3"
+    },
+    {
+      "key": "a91035b9a1239505",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "a94e1879b4627604",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "a980d02d267ea073",
+      "tag": 2,
+      "text": "lng_track_nld_lap_record_holder"
+    },
+    {
+      "key": "a9b1955aaa5acba0",
+      "tag": 1,
+      "text": "0.48415"
+    },
+    {
+      "key": "aa0b56f643878424",
+      "tag": 7,
+      "text": "12,30"
+    },
+    {
+      "key": "aa4365fef52e90e0",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "aa615ddb550efb4a",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "aa68e462efb86777",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "aa941eccd323c4f3",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "aafb90d209f747f6",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "ab638fd3823e4598",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "abaa39562aeb5346",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "abc1698a22129470",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "abe614589f6e607d",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle.zandvoort"
+    },
+    {
+      "key": "ac5183ccb146934a",
+      "tag": 1,
+      "text": "16"
+    },
+    {
+      "key": "ac7dbbb4d49549a2",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle_small.zandvoort"
+    },
+    {
+      "key": "ac91314595682afa",
+      "tag": 1,
+      "text": "1.94"
+    },
+    {
+      "key": "ac9a856217821600",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "ac9a8d6217822398",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "ac9a8f62178226fe",
+      "tag": 1,
+      "text": "6.3"
+    },
+    {
+      "key": "ac9a9062178228b1",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "ac9a916217822a64",
+      "tag": 1,
+      "text": "9.1"
+    },
+    {
+      "key": "ac9f6a59fab46181",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "acc237ab6af70c86",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "acfab8a543f143df",
+      "tag": 1,
+      "text": "35"
+    },
+    {
+      "key": "acfecd3b8378d769",
+      "tag": 2,
+      "text": "tyres"
+    },
+    {
+      "key": "ad26e2e5bbfbd138",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "ad2a1c14656a69be",
+      "tag": 8,
+      "text": "79.0481,76.9625,75.0894,73.1967,71.3006,70.2358,69.2663,68.8586,68.4528,68.0298"
+    },
+    {
+      "key": "ad5765376ab84c9d",
+      "tag": 2,
+      "text": "overrides.broadcast_ui_generic.track.zandvoort"
+    },
+    {
+      "key": "ad9643286a0df42e",
+      "tag": 4,
+      "text": "C4"
+    },
+    {
+      "key": "ada2cf0795ecc50e",
+      "tag": 8,
+      "text": "1"
+    },
+    {
+      "key": "ae1e2d99bc429b49",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "ae93db5b38190863",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "ae93e35b381915fb",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "ae93e45b381917ae",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "ae93e55b38191961",
+      "tag": 1,
+      "text": "9"
+    },
+    {
+      "key": "ae93e75b38191cc7",
+      "tag": 1,
+      "text": "13"
+    },
+    {
+      "key": "aea0a2e8aa148501",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "aeb2704ecb474872",
+      "tag": 2,
+      "text": "stats"
+    },
+    {
+      "key": "aeb702609270b444",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "aebfbfe932afdb83",
+      "tag": 1,
+      "text": "18.6"
+    },
+    {
+      "key": "aebfc2e932afe09c",
+      "tag": 1,
+      "text": "13.4"
+    },
+    {
+      "key": "aec9d4e932b853b7",
+      "tag": 1,
+      "text": "23.7"
+    },
+    {
+      "key": "af162758120c48fe",
+      "tag": 1,
+      "text": "45"
+    },
+    {
+      "key": "af4e1cb16c3a073b",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "af68f8d6adbfaa16",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "af8a2cbf067ce077",
+      "tag": 4,
+      "text": "balanced"
+    },
+    {
+      "key": "af9e7384b926a0e7",
+      "tag": 1,
+      "text": "1.4"
+    },
+    {
+      "key": "afea4d90aa39779f",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "aff9a8592247b166",
+      "tag": 1,
+      "text": "0.5"
+    },
+    {
+      "key": "afff6d0d0da7c393",
+      "tag": 1,
+      "text": "0.99"
+    },
+    {
+      "key": "b00898b0e8da8d3b",
+      "tag": 4,
+      "text": "softer_sprint"
+    },
+    {
+      "key": "b02246380c0dee19",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "b043e4d2a0b0209b",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "b0708bfea00f9c37",
+      "tag": 1,
+      "text": "29.8"
+    },
+    {
+      "key": "b0740ffea012b25a",
+      "tag": 1,
+      "text": "39.9"
+    },
+    {
+      "key": "b08810fea0235d17",
+      "tag": 1,
+      "text": "55.8"
+    },
+    {
+      "key": "b0aaa3f492ab53c9",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "b0aaf4dd354a37c3",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "b0c1fbe6e460006f",
+      "tag": 8,
+      "text": "0.44,0.53,0.635,0.735,0.84,0.905,1,1,1,1"
+    },
+    {
+      "key": "b0db7febc59833ea",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "b114b21146f7d108",
+      "tag": 4,
+      "text": "C1"
+    },
+    {
+      "key": "b168042ddab46c9a",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "b16db4bfc5056ca9",
+      "tag": 0,
+      "text": "30"
+    },
+    {
+      "key": "b183b5715f669e6c",
+      "tag": 4,
+      "text": "balanced"
+    },
+    {
+      "key": "b19f8b7334ccf5ba",
+      "tag": 8,
+      "text": "0.365,0.475,0.565,0.675,0.795,0.88,1,1,1,1"
+    },
+    {
+      "key": "b1b3c5cd7beeac5c",
+      "tag": 1,
+      "text": "0.35"
+    },
+    {
+      "key": "b1c3cb938abaaf8c",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "b1ee98a0f4db36d1",
+      "tag": 1,
+      "text": "9.7"
+    },
+    {
+      "key": "b1f546beeab14b98",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "b226e596b8a627b3",
+      "tag": 2,
+      "text": "crowds"
+    },
+    {
+      "key": "b22d0da1a6c4d2e0",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "b22d0fa1a6c4d646",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "b22d10a1a6c4d7f9",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "b22d11a1a6c4d9ac",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "b22d15a1a6c4e078",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "b2bb2735294e3a69",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "b2cb502689e185a9",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "b2de883eae75a933",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "b2e0ba1cd9c51638",
+      "tag": 7,
+      "text": "11,30"
+    },
+    {
+      "key": "b2e195338b3a2179",
+      "tag": 8,
+      "text": "80.7241,78.4506,76.1859,73.9833,71.8208,70.6631,69.6629,69.2518,68.7966,68.4285"
+    },
+    {
+      "key": "b2e759a1341531de",
+      "tag": 1,
+      "text": "0.3"
+    },
+    {
+      "key": "b3174292da5adec7",
+      "tag": 1,
+      "text": "197"
+    },
+    {
+      "key": "b337c373e3fec910",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "b35f2896074b793d",
+      "tag": 1,
+      "text": "58"
+    },
+    {
+      "key": "b3920c2536735228",
+      "tag": 8,
+      "text": "81.6372,79.6656,77.5877,75.6588,73.6754,72.5714,71.607,71.1722,70.7866,70.3044"
+    },
+    {
+      "key": "b3953057184c6aa0",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "b39d460eb521fd8b",
+      "tag": 0,
+      "text": "45"
+    },
+    {
+      "key": "b3abe6478aa898e4",
+      "tag": 0,
+      "text": "5"
+    },
+    {
+      "key": "b3b094efa5260152",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "b3c58e389986e183",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "b3ccc85cc9eff0b6",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "b3cdf7e131aadc5a",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "b473c20d56a23b0b",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "b49198d8c791724c",
+      "tag": 0,
+      "text": "21"
+    },
+    {
+      "key": "b4ada6d8c7aa04ce",
+      "tag": 0,
+      "text": "12"
+    },
+    {
+      "key": "b4cd4816a719195b",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "b54644956bfb70be",
+      "tag": 2,
+      "text": "lng_stat_nld_corners"
+    },
+    {
+      "key": "b547b7f7bdeb4ce3",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "b55c67fb22923867",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "b595049ef5161aad",
+      "tag": 1,
+      "text": "1.045"
+    },
+    {
+      "key": "b5bd161b1c79568b",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "b5df6336a210ea6d",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "b5ea41ee4d542411",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:200,miny:0,maxy:2,0:0.4,0:0.4,0.6543546:0.4432623,1:0.6,1:0.6"
+    },
+    {
+      "key": "b5ee4c33eb543f4f",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle_small.zandvoort"
+    },
+    {
+      "key": "b5fc77731767a6d6",
+      "tag": 1,
+      "text": "0.2"
+    },
+    {
+      "key": "b613cd08f1801f1a",
+      "tag": 4,
+      "text": "balanced"
+    },
+    {
+      "key": "b6171ff32c035506",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "b62479d6789939b9",
+      "tag": 1,
+      "text": "7.82"
+    },
+    {
+      "key": "b65e6744846fa560",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "b68c70b71a7e26e4",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "b6a03f748ba719a5",
+      "tag": 2,
+      "text": "TrackStats"
+    },
+    {
+      "key": "b6edca5a3b081c5e",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "b719d1ac349d13bd",
+      "tag": 2,
+      "text": "broadcast_ui_track"
+    },
+    {
+      "key": "b734e154f0c166a4",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "b73bd840338dc87c",
+      "tag": 4,
+      "text": "sprint"
+    },
+    {
+      "key": "b741e2a0dca0512d",
+      "tag": 0,
+      "text": "6"
+    },
+    {
+      "key": "b7c7d4f0e0cfee0a",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "b7c7f8a117df4d99",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "b7db461e7651be58",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_multiline_previous"
+    },
+    {
+      "key": "b7f0c5f232283581",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "b849e3b6f838a630",
+      "tag": 7,
+      "text": "15,0"
+    },
+    {
+      "key": "b84dbbe6772f3c61",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "b8b10fadd390ce19",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "b8b5647108e7452c",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "b90fb67512abd9a5",
+      "tag": 1,
+      "text": "61"
+    },
+    {
+      "key": "b9156c990cc36f41",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "b921393f3dcc0c17",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "b9446136327fd19b",
+      "tag": 2,
+      "text": "lng_track_nld_subtitle"
+    },
+    {
+      "key": "b969577e9e30a35b",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "b9730d4b6cd56e1c",
+      "tag": 1,
+      "text": "0.31"
+    },
+    {
+      "key": "b9c807b1c98b8eb2",
+      "tag": 1,
+      "text": "0.001"
+    },
+    {
+      "key": "b9f459090fc18178",
+      "tag": 7,
+      "text": "24, 72, 72"
+    },
+    {
+      "key": "b9ffb12ee4b717d0",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "ba03a400a4054df6",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "ba0884d0f60e6432",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "ba458afe15897785",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "ba52929bad9b53ea",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "ba8f8ebd3ac40920",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "baa224cad5bdf460",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "bb0c25d82698a71b",
+      "tag": 4,
+      "text": "balanced_sprint"
+    },
+    {
+      "key": "bb384157c496ea0c",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "bb6c72bbb26493c1",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "bbc6b28b71f554ef",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "bc34a7228a2dc2bc",
+      "tag": 1,
+      "text": "0.6"
+    },
+    {
+      "key": "bc78a5955aa2ce7b",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "bc89810750157f11",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "bc97b44579fc1234",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "bcac870eb5666f88",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "bcaf01266a392014",
+      "tag": 4,
+      "text": "TyresPerSessionSprintPreset"
+    },
+    {
+      "key": "bcc418b327ebc191",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "bcf4ed7dc4e7ddc3",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "bcfb679b608bb6f5",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "bd30334bdd0ff850",
+      "tag": 2,
+      "text": "overrides.icons.stats.objectives_exceeded"
+    },
+    {
+      "key": "bd591cda882137f4",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:1,0:1,0:1,1:1,1:1"
+    },
+    {
+      "key": "bda193e474b8b9c6",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "bda87050e5d5150f",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "bda87450e5d51bdb",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "bda87850e5d522a7",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "bda87950e5d5245a",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "bda87a50e5d5260d",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "bdaa9688ce9fceba",
+      "tag": 2,
+      "text": "lng_track_nld_lap_record_holder"
+    },
+    {
+      "key": "bdb1d98a66b1a5d7",
+      "tag": 2,
+      "text": "TrackAuthenticWeekendData"
+    },
+    {
+      "key": "bdc29480162ab5f7",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "bdd7995dd93b8966",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "bdd9f0fa34884968",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "bddf6def79318140",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "bde0cde96ebb2c5f",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "bde1789ed4c2dfdd",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "bdfb1a96ff7efebe",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "be18def75417a7bc",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "be5566482388b8f6",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "be611f0052a007f1",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "be61220052a00d0a",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "be64a50052a3217a",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "be80906b1167bc84",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "beb4c38cfece73ee",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.980583,0.958738,0.936893"
+    },
+    {
+      "key": "beb932dbe5fc146e",
+      "tag": 7,
+      "text": "16,00"
+    },
+    {
+      "key": "bec6fa3ee962bd70",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "bec8107c07a90977",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "befe9754e959897f",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "bf351aa9f302c3cc",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "bf43dd4d2d3e80f7",
+      "tag": 8,
+      "text": "0.195,0.3,0.415,0.55,0.74,0.855,1,1,1,1"
+    },
+    {
+      "key": "bf90403254c75fa1",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977041,0.954082,0.933674"
+    },
+    {
+      "key": "bfa94bbcbdd621aa",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "bfb461d8388548e5",
+      "tag": 7,
+      "text": "16,00"
+    },
+    {
+      "key": "bfb6ed58d6b67b2f",
+      "tag": 1,
+      "text": "35"
+    },
+    {
+      "key": "bfe417972a5fb3d6",
+      "tag": 2,
+      "text": "tracks_bg"
+    },
+    {
+      "key": "bff44e28a52defaa",
+      "tag": 1,
+      "text": "2.06"
+    },
+    {
+      "key": "c04377baea0135f3",
+      "tag": 1,
+      "text": "35.7"
+    },
+    {
+      "key": "c053bcd51d48baa0",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "c089791f3f64a3a3",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "c09ac3fa50472c4a",
+      "tag": 1,
+      "text": "12"
+    },
+    {
+      "key": "c0b08c30e3c4aee9",
+      "tag": 0,
+      "text": "26"
+    },
+    {
+      "key": "c0c493ec7a30d80a",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "c0e1b435c86f5afa",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "c113fa19d8936289",
+      "tag": 7,
+      "text": "16,55"
+    },
+    {
+      "key": "c124a6e71bed33c1",
+      "tag": 4,
+      "text": "safety_car_aml"
+    },
+    {
+      "key": "c162212a0bd07927",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_26.zandvoort"
+    },
+    {
+      "key": "c16dbc947a8bff69",
+      "tag": 2,
+      "text": "overrides.tracks.flags_circle.zandvoort"
+    },
+    {
+      "key": "c177ca4c0f4e7229",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "c1821ab86c9518f3",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "c1a47cec22263e6a",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "c1fec322fc0d8c08",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "c23447ddc08c5a40",
+      "tag": 0,
+      "text": "13"
+    },
+    {
+      "key": "c25e3312ad9a8987",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "c268d125b8a23098",
+      "tag": 4,
+      "text": "Medium"
+    },
+    {
+      "key": "c274815e0ecd9fba",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_short"
+    },
+    {
+      "key": "c28fac2b82c9522c",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "c2b3479ca1862fcb",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "c2e9efc6354e93ac",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "c30d45222314d55a",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "c3999a9d25b3432f",
+      "tag": 1,
+      "text": "30"
+    },
+    {
+      "key": "c39d0ffe62ce593e",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "c3c340ed5a28654d",
+      "tag": 3,
+      "text": "Medium"
+    },
+    {
+      "key": "c3c913d34275cf74",
+      "tag": 1,
+      "text": "15"
+    },
+    {
+      "key": "c3d27829815e2839",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "c3e373bf7787d7ec",
+      "tag": 2,
+      "text": "flag_circle"
+    },
+    {
+      "key": "c3f8ef5fbc7b20c2",
+      "tag": 4,
+      "text": "swofty_delhi"
+    },
+    {
+      "key": "c3fc4836f18befd5",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "c3fd7c6b8aa67061",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "c454b8adee1b0f0e",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "c46adb277e6a0303",
+      "tag": 1,
+      "text": "11.1"
+    },
+    {
+      "key": "c46adf277e6a09cf",
+      "tag": 1,
+      "text": "3.000000"
+    },
+    {
+      "key": "c46ae0277e6a0b82",
+      "tag": 1,
+      "text": "4.35"
+    },
+    {
+      "key": "c46ae1277e6a0d35",
+      "tag": 1,
+      "text": "8.2"
+    },
+    {
+      "key": "c46ae7277e6a1767",
+      "tag": 1,
+      "text": "12.6"
+    },
+    {
+      "key": "c50d281bedc10ed3",
+      "tag": 1,
+      "text": "33.8"
+    },
+    {
+      "key": "c510ab1bedc42343",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "c513af1bedc65fe6",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "c546caa6657bb464",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "c582632799c6e258",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "c58861dc794cfcb0",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "c5aac8979302714e",
+      "tag": 2,
+      "text": "lng_stat_nld_lap_record_f2"
+    },
+    {
+      "key": "c5cf536b8f3eb146",
+      "tag": 2,
+      "text": "TrackAudioData"
+    },
+    {
+      "key": "c63f2fd1c4ee32ee",
+      "tag": 1,
+      "text": "62"
+    },
+    {
+      "key": "c66bb854ab237d37",
+      "tag": 3,
+      "text": "lng_direction_cw"
+    },
+    {
+      "key": "c67d05ae95b78aba",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "c68d95f6690c0ec2",
+      "tag": 2,
+      "text": "TrackNameData"
+    },
+    {
+      "key": "c6bb0189e21dee91",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "c6cf47d2e2981c68",
+      "tag": 1,
+      "text": "33"
+    },
+    {
+      "key": "c6fa09e7d2e2a94b",
+      "tag": 4,
+      "text": "F2_Medium"
+    },
+    {
+      "key": "c77af79800e7f5f8",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "c78ac1f97fd91059",
+      "tag": 2,
+      "text": "#overrides.broadcast_ui_generic.icons.track_highlight"
+    },
+    {
+      "key": "c7a4dee2b37df15b",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "c7b19184fb8a250e",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "c7d58f50fc8b573e",
+      "tag": 4,
+      "text": "C3"
+    },
+    {
+      "key": "c7f534a705f9d49f",
+      "tag": 1,
+      "text": "0.94"
+    },
+    {
+      "key": "c82538c50f2c65cf",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "c82f6482f6a0ca10",
+      "tag": 1,
+      "text": "9"
+    },
+    {
+      "key": "c82f6582f6a0cbc3",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "c82f6682f6a0cd76",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "c82f6a82f6a0d442",
+      "tag": 1,
+      "text": "13"
+    },
+    {
+      "key": "c82f6e82f6a0db0e",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "c882bc15752f1ed1",
+      "tag": 2,
+      "text": "overrides.tracks.flags_rectangle_small.zandvoort"
+    },
+    {
+      "key": "c8b0f6edcb0fd261",
+      "tag": 1,
+      "text": "31.9"
+    },
+    {
+      "key": "c8b462edcb12bfbc",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "c8b7e5edcb15d42c",
+      "tag": 1,
+      "text": "43.5"
+    },
+    {
+      "key": "c8c735fddab78818",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "c8cbdb306d85e261",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "c8e197fedc9cfd21",
+      "tag": 4,
+      "text": "Soft"
+    },
+    {
+      "key": "c8f471bd4361d73e",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "c908cd540d93c241",
+      "tag": 8,
+      "text": "89.9554,87.6316,85.4781,83.303,81.062,79.9605,78.8744,78.4141,77.9369,77.4662"
+    },
+    {
+      "key": "c916c5889e990ef1",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "c95192301c4c8da8",
+      "tag": 0,
+      "text": "45"
+    },
+    {
+      "key": "c9557089133a8de9",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "c9587389133cc8d9",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "c9587689133ccdf2",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "c9c2bd16b3c6cd9f",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "c9c9a67f05f5fc12",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "ca8887523d34b3a2",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "caa1222aecfc50ac",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "cacab1ec6f61beaf",
+      "tag": 2,
+      "text": "overrides.icons.stats.circuit_length"
+    },
+    {
+      "key": "caf722aba538b71c",
+      "tag": 1,
+      "text": "0.8"
+    },
+    {
+      "key": "cbbb65d9280d0b60",
+      "tag": 2,
+      "text": "overrides.icons.stats.perfect_corner"
+    },
+    {
+      "key": "cbfd275b6dc51e17",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "cc4f7022354fbd3c",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "cc642223d1a9b4e2",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "cc8f4f35971b4839",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "cca7eecf42baa514",
+      "tag": 0,
+      "text": "30"
+    },
+    {
+      "key": "ccc1e5adf2229678",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "ccc1eaadf2229ef7",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "cccb00af0cc1d8aa",
+      "tag": 4,
+      "text": "softer_sprint"
+    },
+    {
+      "key": "cccbd7adf22ad333",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "cce9e3b1f7eb3b2a",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "ccffc703f0640e90",
+      "tag": 1,
+      "text": "1.42"
+    },
+    {
+      "key": "cd002e7006d14f75",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "cd09624bf815256e",
+      "tag": 1,
+      "text": "5"
+    },
+    {
+      "key": "cd1e98937ea6d113",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "cd40ebc543955131",
+      "tag": 1,
+      "text": "18.3"
+    },
+    {
+      "key": "cd4457c543983e8c",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "cd4b60c5439e6c85",
+      "tag": 1,
+      "text": "33.8"
+    },
+    {
+      "key": "cd57fa3bdef65960",
+      "tag": 2,
+      "text": "LapRecord"
+    },
+    {
+      "key": "cd5af547ca50fd02",
+      "tag": 1,
+      "text": "0.002"
+    },
+    {
+      "key": "cd5f0e3a44dc575b",
+      "tag": 4,
+      "text": "TyresPerSessionPreset"
+    },
+    {
+      "key": "cd93a7b4c74b8e63",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "cdbf2654d0d80c04",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "ce719b09bd848134",
+      "tag": 0,
+      "text": "8"
+    },
+    {
+      "key": "ce80f104414ff245",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "ceabd6c3822e1b62",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "cec175aa9d94ea5c",
+      "tag": 4,
+      "text": "C4"
+    },
+    {
+      "key": "cec46be00ac8f79b",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "cf018bdba76a13a7",
+      "tag": 7,
+      "text": "24, 72, 72"
+    },
+    {
+      "key": "cf1ce32ea7766370",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "cf1e3112d5e0cebb",
+      "tag": 0,
+      "text": "31"
+    },
+    {
+      "key": "cf2cff6b1e46e584",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "cf2fd8eba5fa6ca9",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "cf333301a05fabb7",
+      "tag": 1,
+      "text": "36.9"
+    },
+    {
+      "key": "cf36b701a062c1da",
+      "tag": 1,
+      "text": "27.2"
+    },
+    {
+      "key": "cf47b201a0712c8e",
+      "tag": 1,
+      "text": "52.2"
+    },
+    {
+      "key": "cf66215e5390edc2",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "cf7c1e08eb6596dc",
+      "tag": 7,
+      "text": "29,40,0"
+    },
+    {
+      "key": "cfbd1e0c758e2725",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "cfbeb9aa65e2d3bc",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "cfd7a08456f133f2",
+      "tag": 2,
+      "text": "overrides.icons.stats.recommended_diff"
+    },
+    {
+      "key": "d00886e4a21bad05",
+      "tag": 0,
+      "text": "44"
+    },
+    {
+      "key": "d013fb651e1d3e7a",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "d02be9084185b1ae",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "d02ccbadeec91381",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "d02e99fd1cc5bc7c",
+      "tag": 1,
+      "text": "1.94"
+    },
+    {
+      "key": "d053c3b2653f1ab4",
+      "tag": 1,
+      "text": "0.001"
+    },
+    {
+      "key": "d055b10690c6218d",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "d07c16051d3314f5",
+      "tag": 1,
+      "text": "34"
+    },
+    {
+      "key": "d0846d34187db9ec",
+      "tag": 1,
+      "text": "23.7"
+    },
+    {
+      "key": "d08e7a3418862488",
+      "tag": 1,
+      "text": "18.6"
+    },
+    {
+      "key": "d08e7f3418862d07",
+      "tag": 1,
+      "text": "13.4"
+    },
+    {
+      "key": "d0b2d0b1ce1effcd",
+      "tag": 1,
+      "text": "9.7"
+    },
+    {
+      "key": "d0d31ccb2785212b",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "d10ceec957054c98",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "d13bde61a560757d",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "d14b3b33a9dceb52",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "d14fe65db7a4ccdc",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "d152ff0cb36d7faf",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "d16ebcc49885045e",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title"
+    },
+    {
+      "key": "d1900adf25bf815a",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "d1989ed41b8c1a85",
+      "tag": 2,
+      "text": "trophy_open_e"
+    },
+    {
+      "key": "d1e8ccb105db028a",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "d263c017b77d85df",
+      "tag": 1,
+      "text": "1.3"
+    },
+    {
+      "key": "d26a35ddc7f90a07",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "d2843bb94bbabe2e",
+      "tag": 4,
+      "text": "C2"
+    },
+    {
+      "key": "d2a045807c1dad9f",
+      "tag": 2,
+      "text": "lng_stat_difficulty_new"
+    },
+    {
+      "key": "d2e2f91c652b7ca4",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "d2f92421bab5d699",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "d318715c214012f6",
+      "tag": 4,
+      "text": "sprint"
+    },
+    {
+      "key": "d34fabcf196e0ae7",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "d385fa5b68cc0fdd",
+      "tag": 2,
+      "text": "lng_track_nld_tla"
+    },
+    {
+      "key": "d3c09fc95cf47f7d",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "d3c3467189c164f3",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "d3caa88add3f1389",
+      "tag": 0,
+      "text": "2023"
+    },
+    {
+      "key": "d3e8ccf9c1c1f87d",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "d40702597ec2231a",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "d435c2fd44bbf6fb",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "d453317b3f845540",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "d4b39de4d21a5a06",
+      "tag": 7,
+      "text": "24, 72, 72"
+    },
+    {
+      "key": "d516f85f7288a03e",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "d518715431771f09",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline_large.zandvoort"
+    },
+    {
+      "key": "d555ad85e4b3675f",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "d59acafa18035b71",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "d5b2e8366e677330",
+      "tag": 1,
+      "text": "79.7"
+    },
+    {
+      "key": "d600eccd58fd2386",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:2,0:0.5,0:0.5,0.444591:0.5224595,1:0.5"
+    },
+    {
+      "key": "d62c31cdcc2b70cd",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "d6719ba7f069148a",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "d67ace5a927f0780",
+      "tag": 1,
+      "text": "41.4"
+    },
+    {
+      "key": "d688876f183fd7e4",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "d68f4e8e9598b7be",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_short"
+    },
+    {
+      "key": "d68f575a92909955",
+      "tag": 1,
+      "text": "28.9"
+    },
+    {
+      "key": "d692d35a9293a1e0",
+      "tag": 1,
+      "text": "21.6"
+    },
+    {
+      "key": "d7956e4cbecc7c31",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "d7a062e15d372b48",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "d7b9f62015a5ba31",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "d7c81028223f0df2",
+      "tag": 0,
+      "text": "46"
+    },
+    {
+      "key": "d7cb8686e888fe6d",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.984733,0.969466,0.951654"
+    },
+    {
+      "key": "d7ea886fd31297ea",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "d87d8a55ac5de790",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "d8e9f806328fcbdd",
+      "tag": 1,
+      "text": "10"
+    },
+    {
+      "key": "d901ffbe0573e9ca",
+      "tag": 1,
+      "text": "0.7820001"
+    },
+    {
+      "key": "d99cd035332a5d97",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "d9bcc54511b3ea7a",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "d9c3825b0d7daf9c",
+      "tag": 4,
+      "text": "DefaultType"
+    },
+    {
+      "key": "da1a597a7d1b5d20",
+      "tag": 1,
+      "text": "196"
+    },
+    {
+      "key": "da2fd74a147bc904",
+      "tag": 3,
+      "text": "Medium"
+    },
+    {
+      "key": "da357e2bbefa9eb0",
+      "tag": 2,
+      "text": "asset_groups/environment_package/tracks/delhi/probes/"
+    },
+    {
+      "key": "da414b52d8e7a748",
+      "tag": 4,
+      "text": "F2_Soft"
+    },
+    {
+      "key": "da4ea13fd678f861",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "da7f6c51c8664630",
+      "tag": 4,
+      "text": "HeroShot"
+    },
+    {
+      "key": "da8df542e6cfde84",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "daeeb3ea80e29636",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "daf39069af33a882",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "db0fc19fa2aefc05",
+      "tag": 1,
+      "text": "24.1"
+    },
+    {
+      "key": "db0fc59fa2af02d1",
+      "tag": 1,
+      "text": "14.4"
+    },
+    {
+      "key": "db0fc69fa2af0484",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "db0fc79fa2af0637",
+      "tag": 1,
+      "text": "10.5"
+    },
+    {
+      "key": "db0fc99fa2af099d",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "db1c3b6ecf5fb889",
+      "tag": 1,
+      "text": "39.9"
+    },
+    {
+      "key": "db1fc76ecf62dc44",
+      "tag": 1,
+      "text": "29.8"
+    },
+    {
+      "key": "db234a6ecf65f0b4",
+      "tag": 1,
+      "text": "55.8"
+    },
+    {
+      "key": "db74dd70beb57009",
+      "tag": 7,
+      "text": "12,30"
+    },
+    {
+      "key": "dbb2b842edd61a62",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "dbc3e8de8bfbb432",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "dc2f059db5a3b650",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "dc6d80469a348f86",
+      "tag": 2,
+      "text": "lng_country_trivia_13_netherlands_4"
+    },
+    {
+      "key": "dc7e06505efa3c77",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "dc9ae8b6e50ff7f0",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title"
+    },
+    {
+      "key": "dca7726e15eedf1b",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "dcbfbe4e8437fee7",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "dcdd44742e66d7f5",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "dceb2b358898c5c9",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "dd2dd18e6512d59b",
+      "tag": 2,
+      "text": "NumLaps"
+    },
+    {
+      "key": "dd3e757fbd721b33",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "dd5b4779ea469652",
+      "tag": 1,
+      "text": "30"
+    },
+    {
+      "key": "dd6a341d4db3644c",
+      "tag": 7,
+      "text": "29,40,0"
+    },
+    {
+      "key": "dd95b866455ad01e",
+      "tag": 1,
+      "text": "0.5"
+    },
+    {
+      "key": "dda8666fc620ad19",
+      "tag": 2,
+      "text": "lng_track_nld_subtitle"
+    },
+    {
+      "key": "ddb2e3857bf15148",
+      "tag": 7,
+      "text": "24, 72, 72"
+    },
+    {
+      "key": "ddb71a7c00bef2e6",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "ddbe3fc6d647d290",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "ddce68ecbd88f94f",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "ddf46d377d3cb808",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks.zandvoort"
+    },
+    {
+      "key": "de117aeecdb10817",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_bg.zandvoort"
+    },
+    {
+      "key": "de34c203d6adc22a",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "de58b3439508e699",
+      "tag": 2,
+      "text": "overrides.broadcast_ui_generic.track.zandvoort"
+    },
+    {
+      "key": "df2da3e94a2f472b",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "df2da6e94a2f4c44",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "df3798e94a3788ff",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "df55ee08781b384c",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.979275,0.953368,0.932642"
+    },
+    {
+      "key": "df9b7d8a1e44dcc2",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "dfb5bb56d108ad53",
+      "tag": 7,
+      "text": "13,15"
+    },
+    {
+      "key": "dfcd785a55cdcceb",
+      "tag": 1,
+      "text": "1.06"
+    },
+    {
+      "key": "dfe61391c7dad1cb",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "e01f25442f42e259",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "e0335d74413376cc",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "e03ba41ba0a8efad",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "e0584111d7e742e4",
+      "tag": 2,
+      "text": "overrides.icons.stats.lap_record_holder"
+    },
+    {
+      "key": "e0717965c8d190c2",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "e072d71edb83b738",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "e078dc48c0400cc8",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "e0a721acd89a7839",
+      "tag": 4,
+      "text": "balanced_sprint"
+    },
+    {
+      "key": "e0c1fc5b245aa7d0",
+      "tag": 9,
+      "text": "@v2@minx:0,maxx:1,miny:0,maxy:1,0:1,0:1,1:1,1:1"
+    },
+    {
+      "key": "e113935f04046d86",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "e159890e3d41a396",
+      "tag": 4,
+      "text": "HeroShot"
+    },
+    {
+      "key": "e15d6fabd5a8e0f4",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "e16af1ffd88ac0cb",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "e16e57f3d66acd77",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "e1a8316f6d6db9a8",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "e1b7298ed0c45344",
+      "tag": 2,
+      "text": "trophy_open_a"
+    },
+    {
+      "key": "e1df39a8124dfc98",
+      "tag": 2,
+      "text": "track_map/zandvoort.bk2"
+    },
+    {
+      "key": "e1ebcabfb744d803",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline.zandvoort"
+    },
+    {
+      "key": "e208387c949947f9",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "e20d3725d9413adc",
+      "tag": 4,
+      "text": "F2_Soft"
+    },
+    {
+      "key": "e211e8f851455982",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "e232ea018ce82fd6",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "e2422cc2a6454c74",
+      "tag": 4,
+      "text": "safety_car_mercedes"
+    },
+    {
+      "key": "e2530e21983768ea",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "e260ca9cb2f8fa10",
+      "tag": 1,
+      "text": "1.58"
+    },
+    {
+      "key": "e2997a78a24f96fe",
+      "tag": 1,
+      "text": "33"
+    },
+    {
+      "key": "e2a166989f84fba2",
+      "tag": 2,
+      "text": "broadcast_video"
+    },
+    {
+      "key": "e2f5fd693d84008e",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "e31097ca59d5ba5d",
+      "tag": 4,
+      "text": "harder_sprint"
+    },
+    {
+      "key": "e3268815684807ab",
+      "tag": 4,
+      "text": "TyresPerSessionPreset"
+    },
+    {
+      "key": "e33a15d403aa209a",
+      "tag": 1,
+      "text": "0.0"
+    },
+    {
+      "key": "e36058675b36b798",
+      "tag": 4,
+      "text": "softer"
+    },
+    {
+      "key": "e39f39c93b9c08f6",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "e3abb48c9e81d19e",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "e3d0786df5c9f957",
+      "tag": 2,
+      "text": "TrackSafetyCarData"
+    },
+    {
+      "key": "e3dd41e0ce50d08b",
+      "tag": 0,
+      "text": "41"
+    },
+    {
+      "key": "e3fa8627c3aa7612",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "e3fefd9582c7c4ad",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "e467a195f90a01d2",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "e46a49e6dcb475b7",
+      "tag": 4,
+      "text": "balanced_sprint"
+    },
+    {
+      "key": "e471742287f4aa41",
+      "tag": 1,
+      "text": "1.0"
+    },
+    {
+      "key": "e478a1971714ef1f",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "e4b0404d492045e1",
+      "tag": 2,
+      "text": "Session Start Times"
+    },
+    {
+      "key": "e4b5e82740338b91",
+      "tag": 4,
+      "text": "SuperSoft"
+    },
+    {
+      "key": "e4e3b26a225e4718",
+      "tag": 4,
+      "text": "harder"
+    },
+    {
+      "key": "e544dfe8fc2cf055",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "e57316fdef4fc03a",
+      "tag": 1,
+      "text": "21.8"
+    },
+    {
+      "key": "e592cad59f0dd3eb",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "e62dda33f698c059",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "e632c138081d157b",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "e632c438081d1a94",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "e63d105005d59206",
+      "tag": 8,
+      "text": "0.405,0.53,0.61,0.71,0.84,0.905,1,1,1,1"
+    },
+    {
+      "key": "e63d3638082630cf",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "e66148b81d9c4edb",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "e6682e36a1fbb248",
+      "tag": 1,
+      "text": "100"
+    },
+    {
+      "key": "e6ad39912791bfed",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "e6c8e4920f490f0d",
+      "tag": 8,
+      "text": "81.6372,79.6656,77.5877,75.6588,73.6754,72.5714,71.607,71.1722,70.7866,70.3044"
+    },
+    {
+      "key": "e6dfb9291d27720c",
+      "tag": 1,
+      "text": "0.5"
+    },
+    {
+      "key": "e6e120f267af8ef1",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "e6fc2d488f50a109",
+      "tag": 8,
+      "text": "77.7667,75.8362,73.965,72.0011,70.163,69.1464,68.2081,67.8183,67.3931,66.9654"
+    },
+    {
+      "key": "e7150c965eb5b946",
+      "tag": 0,
+      "text": "2024"
+    },
+    {
+      "key": "e74cdbf10af32ae6",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "e75a865c3b3a5528",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "e75d4c5c703e05c0",
+      "tag": 2,
+      "text": "overrides.tracks.flags_circle.zandvoort"
+    },
+    {
+      "key": "e784df6b6b95122d",
+      "tag": 1,
+      "text": "0.5"
+    },
+    {
+      "key": "e78eeba9a8c062f9",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "e80198ca928d2229",
+      "tag": 2,
+      "text": "lng_stat_nld_lap_record"
+    },
+    {
+      "key": "e80971fbebcf0a20",
+      "tag": 1,
+      "text": "1.44"
+    },
+    {
+      "key": "e80f64e610886955",
+      "tag": 1,
+      "text": "0.800000"
+    },
+    {
+      "key": "e8219fd97a0cb5bb",
+      "tag": 7,
+      "text": "17,30"
+    },
+    {
+      "key": "e82fa4b77e868024",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "e83c4bfb89b08de9",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "e8609218a257f5fc",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "e92c558b12bfa903",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "e9d862b2b73884b6",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "ea08d024956f3f6c",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "ea0a559d8d1aa573",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "ea1912cfa638c24f",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "ea32b10eda0691a2",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "ea7ab0240d0598d8",
+      "tag": 7,
+      "text": "15,00"
+    },
+    {
+      "key": "ea9e619366ab0717",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "eabedca2cbba910b",
+      "tag": 3,
+      "text": "lng_medium"
+    },
+    {
+      "key": "eacf715a82020b0d",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "ead335416f64fddc",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "eadd42416f6d6878",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "eadd47416f6d70f7",
+      "tag": 1,
+      "text": "23"
+    },
+    {
+      "key": "eaf7857330a07415",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "eb390c4fcd95aedc",
+      "tag": 2,
+      "text": "lng_track_nld_city_name"
+    },
+    {
+      "key": "eb63595f1e49f75e",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "eb9ba8955ceec243",
+      "tag": 7,
+      "text": "16,00"
+    },
+    {
+      "key": "ebba1f06e5d32d3a",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "ebf8fe8c5711a3dd",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "ec05214c6d49b1ce",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "ec17c9e0a1fd2d3b",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "ec1a764ee4b50049",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "ec5d635cdbc7b878",
+      "tag": 1,
+      "text": "1.045"
+    },
+    {
+      "key": "ec8a5cef54237b5d",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "eca6b119a06d1ab2",
+      "tag": 8,
+      "text": "120.0"
+    },
+    {
+      "key": "ecc164dc5f449bc0",
+      "tag": 0,
+      "text": "3"
+    },
+    {
+      "key": "ed040d2d129fac5b",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "ed52ab3bb8b2bb5c",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.98263,0.962779,0.942928"
+    },
+    {
+      "key": "ed8d2c6b04f8ea07",
+      "tag": 2,
+      "text": "tracks_spline"
+    },
+    {
+      "key": "edaabf762a9a6c8a",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "edbf546722cff58f",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "edca4c8ed309a9ea",
+      "tag": 1,
+      "text": "3"
+    },
+    {
+      "key": "edddfd6b007ebab3",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "edde006b007ebfcc",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "ede8926b00880c67",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "edeee8c28e65e5f5",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "edf7155315bac69a",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "ee497be8f0c9a022",
+      "tag": 0,
+      "text": "0"
+    },
+    {
+      "key": "ee5c615d3c512290",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "ee65acc6f2acfa34",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "ee6744791974c7b4",
+      "tag": 5,
+      "text": "False"
+    },
+    {
+      "key": "eeaefb6864070167",
+      "tag": 1,
+      "text": "0.04"
+    },
+    {
+      "key": "ef64b1ad8abc0557",
+      "tag": 1,
+      "text": "0.3"
+    },
+    {
+      "key": "ef893196ea3e0c19",
+      "tag": 0,
+      "text": "2023"
+    },
+    {
+      "key": "f00dc69519d31b85",
+      "tag": 7,
+      "text": "0,0"
+    },
+    {
+      "key": "f037f4fa2b5eec87",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "f063f12dc72a57e3",
+      "tag": 8,
+      "text": "88.5866,86.4708,84.1896,82.0888,79.881,78.8129,77.7238,77.2336,76.7675,76.3455"
+    },
+    {
+      "key": "f0996491cdcb33f4",
+      "tag": 2,
+      "text": "lng_track_trivia_13_netherlands_1"
+    },
+    {
+      "key": "f0c443834c68f8da",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "f0d6ff949d063924",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "f0dfbf6ab6e37ea0",
+      "tag": 2,
+      "text": "lng_stat_nld_difficulty"
+    },
+    {
+      "key": "f0e91f369566b008",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f0f39136956fc643",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f0f39436956fcb5c",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f132f07f024af780",
+      "tag": 7,
+      "text": "29,40,0"
+    },
+    {
+      "key": "f17fab49ccfcdea9",
+      "tag": 8,
+      "text": "0.37,0.45,0.57,0.69,0.8,0.905,1,1,1,1"
+    },
+    {
+      "key": "f18b36a3bf75feea",
+      "tag": 7,
+      "text": "12,30"
+    },
+    {
+      "key": "f2463f1c1ce930ad",
+      "tag": 2,
+      "text": "hero_cam_03"
+    },
+    {
+      "key": "f29b263bbcbf5d3f",
+      "tag": 4,
+      "text": "HeroShot"
+    },
+    {
+      "key": "f2c9202d581b7350",
+      "tag": 1,
+      "text": "3.7"
+    },
+    {
+      "key": "f30a3db4f68f3355",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "f30c52794fe9674a",
+      "tag": 7,
+      "text": "12,0"
+    },
+    {
+      "key": "f33b2737392b05bf",
+      "tag": 3,
+      "text": "Medium"
+    },
+    {
+      "key": "f33bdb42d166dac0",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "f3466d42d170275b",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "f3467042d1702c74",
+      "tag": 1,
+      "text": "19"
+    },
+    {
+      "key": "f356452ae20285aa",
+      "tag": 1,
+      "text": "0.600000"
+    },
+    {
+      "key": "f3c7f0f2f29d0802",
+      "tag": 0,
+      "text": "2"
+    },
+    {
+      "key": "f3e8bebb3b3554f9",
+      "tag": 1,
+      "text": "1.44"
+    },
+    {
+      "key": "f3f20a9b9bbf3ee6",
+      "tag": 4,
+      "text": "F2_Soft"
+    },
+    {
+      "key": "f3fd2408bd557bf7",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_26_bg.zandvoort"
+    },
+    {
+      "key": "f44693070dbfcbe0",
+      "tag": 2,
+      "text": "TyreData"
+    },
+    {
+      "key": "f448e3b7ad08a86e",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "f4ab0c48a3b271f2",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "f4dd3b7bada3b9b8",
+      "tag": 0,
+      "text": "33"
+    },
+    {
+      "key": "f4ec715119143a79",
+      "tag": 4,
+      "text": "harder"
+    },
+    {
+      "key": "f5098e013e057ab0",
+      "tag": 2,
+      "text": "commentator2_alt1"
+    },
+    {
+      "key": "f5120cd658cfdbaa",
+      "tag": 2,
+      "text": "lng_stat_num_laps"
+    },
+    {
+      "key": "f54b796e536e03a8",
+      "tag": 7,
+      "text": "13,15"
+    },
+    {
+      "key": "f5571b20834541a1",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "f563e2aee54205fd",
+      "tag": 4,
+      "text": "delhi"
+    },
+    {
+      "key": "f57ac6946df74d7c",
+      "tag": 2,
+      "text": "TrackStats"
+    },
+    {
+      "key": "f5835869e91c15b6",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "f5ddc821db0595f4",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f5de5db460c03b75",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "f5e7b521db0dca30",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f5e7ba21db0dd2af",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f5f37ab85fb006e3",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "f652e50cc8c63230",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652e60cc8c633e3",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652ed0cc8c63fc8",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652ee0cc8c6417b",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652ef0cc8c6432e",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652f00cc8c644e1",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652f10cc8c64694",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652f20cc8c64847",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652f30cc8c649fa",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f652f40cc8c64bad",
+      "tag": 5,
+      "text": "True"
+    },
+    {
+      "key": "f6a5698f8ef8e139",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "f6db54762e6509a2",
+      "tag": 2,
+      "text": "Race2"
+    },
+    {
+      "key": "f6ef0f3f1eebf0b0",
+      "tag": 1,
+      "text": "45"
+    },
+    {
+      "key": "f711cc72ccf743a6",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f711d172ccf74c25",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f7155772ccfa65ae",
+      "tag": 1,
+      "text": "29"
+    },
+    {
+      "key": "f74e720a180468e9",
+      "tag": 1,
+      "text": "21.2"
+    },
+    {
+      "key": "f75f750a1812e135",
+      "tag": 1,
+      "text": "12.6"
+    },
+    {
+      "key": "f762710a18151040",
+      "tag": 1,
+      "text": "15.4"
+    },
+    {
+      "key": "f76d8903f98a52b1",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_26_bg.zandvoort"
+    },
+    {
+      "key": "f7b3303eeb83b66d",
+      "tag": 2,
+      "text": "TrackNameData"
+    },
+    {
+      "key": "f7bb68ec1837b6ff",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "f7ebdbaa0876e1d9",
+      "tag": 1,
+      "text": "110"
+    },
+    {
+      "key": "f829a9616db3caa6",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "f845fcca6a732088",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "f84920a43f920a55",
+      "tag": 7,
+      "text": "15,30"
+    },
+    {
+      "key": "f86c89f51bcd44d5",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "f87c59c252549dc8",
+      "tag": 1,
+      "text": "50"
+    },
+    {
+      "key": "f88d0ea360807313",
+      "tag": 1,
+      "text": "6.8"
+    },
+    {
+      "key": "f8976fc2526b8ae2",
+      "tag": 1,
+      "text": "40"
+    },
+    {
+      "key": "f89c379300ce757a",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "f8b1df2e82cd7b33",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "f8c62f648ef53bb0",
+      "tag": 2,
+      "text": "overrides.fe_world.tracks_spline_large.zandvoort"
+    },
+    {
+      "key": "f91750f33b61a38f",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "f91e6d15c6ab5ff5",
+      "tag": 1,
+      "text": "85"
+    },
+    {
+      "key": "f9824d788e7f4cef",
+      "tag": 1,
+      "text": "1"
+    },
+    {
+      "key": "f987acdc697e6c99",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "f995adbaad991296",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "f9b59629e971aba8",
+      "tag": 4,
+      "text": "softer"
+    },
+    {
+      "key": "f9e16c4cf09484df",
+      "tag": 0,
+      "text": "40"
+    },
+    {
+      "key": "f9fcd32e7bdbd77e",
+      "tag": 0,
+      "text": "27"
+    },
+    {
+      "key": "fa0804f0764bbfff",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "fa0f71bc3140efb2",
+      "tag": 2,
+      "text": "Race1"
+    },
+    {
+      "key": "fa1119d35dd5d478",
+      "tag": 1,
+      "text": "0"
+    },
+    {
+      "key": "fa1282101e68dc04",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "fa20d659190ccc11",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "fa578413faa34aa8",
+      "tag": 0,
+      "text": "4"
+    },
+    {
+      "key": "fa5c0608feec17b9",
+      "tag": 2,
+      "text": ""
+    },
+    {
+      "key": "faa44a4e5c82ba06",
+      "tag": 8,
+      "text": "1,1,1,1,1,1,1,0.977387,0.957286,0.942211"
+    },
+    {
+      "key": "fab7edd12b28f809",
+      "tag": 0,
+      "text": "100"
+    },
+    {
+      "key": "fac7c5545bb5314b",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "fae8a9633c226280",
+      "tag": 2,
+      "text": "lng_track_nld_title"
+    },
+    {
+      "key": "faf2e59eb363c1b0",
+      "tag": 2,
+      "text": "netherlands"
+    },
+    {
+      "key": "faf76914d13738a3",
+      "tag": 4,
+      "text": ""
+    },
+    {
+      "key": "fb3ac5e7240d24e2",
+      "tag": 1,
+      "text": "45"
+    },
+    {
+      "key": "fb57537965283409",
+      "tag": 8,
+      "text": "77.8433,75.9416,74.0268,72.097,70.2011,69.2311,68.2716,67.8281,67.4384,67.0507"
+    },
+    {
+      "key": "fb5bd898d4abdf25",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "fb5e70c405311ca0",
+      "tag": 1,
+      "text": "7"
+    },
+    {
+      "key": "fb7c160e139b55f2",
+      "tag": 8,
+      "text": "88.4396,86.2793,84.1405,81.9054,79.8391,78.7003,77.59,77.1143,76.682,76.1986"
+    },
+    {
+      "key": "fb84bd908b85e2b8",
+      "tag": 1,
+      "text": "25.000000"
+    },
+    {
+      "key": "fbe4e99193a96ec2",
+      "tag": 2,
+      "text": "TrackFuelSettings"
+    },
+    {
+      "key": "fbecae268eef2543",
+      "tag": 13,
+      "text": "F1/F2"
+    },
+    {
+      "key": "fc0e739fe2923442",
+      "tag": 7,
+      "text": "10,00"
+    },
+    {
+      "key": "fc21a9e38e0267da",
+      "tag": 4,
+      "text": "TyresPerSessionPreset"
+    },
+    {
+      "key": "fc559304c383fd1a",
+      "tag": 2,
+      "text": "TrackGeneralData"
+    },
+    {
+      "key": "fc574d4e1c791174",
+      "tag": 1,
+      "text": "35"
+    },
+    {
+      "key": "fc5a08211ad6e891",
+      "tag": 1,
+      "text": "5.1"
+    },
+    {
+      "key": "fc7fcb578809430a",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "fcba9e19d38fdc33",
+      "tag": 1,
+      "text": "61"
+    },
+    {
+      "key": "fcc1bc7f17f8c564",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "fcd315f6eb32d720",
+      "tag": 0,
+      "text": "13"
+    },
+    {
+      "key": "fce0d6aea3bffe37",
+      "tag": 1,
+      "text": "0.8"
+    },
+    {
+      "key": "fcef4133a75d1d31",
+      "tag": 1,
+      "text": "2"
+    },
+    {
+      "key": "fd1299046cb0d713",
+      "tag": 1,
+      "text": "0.4"
+    },
+    {
+      "key": "fd46444c8af19ce7",
+      "tag": 2,
+      "text": "asset_groups/environment_package/tracks/delhi/delhi.assetgroup"
+    },
+    {
+      "key": "fd7f4b8bcb16cd8a",
+      "tag": 1,
+      "text": "1.39"
+    },
+    {
+      "key": "fd8dfdd502077c6a",
+      "tag": 4,
+      "text": "softer"
+    },
+    {
+      "key": "fddeae1d22d17ee8",
+      "tag": 2,
+      "text": "delhi"
+    },
+    {
+      "key": "fe17cb6146bc6a77",
+      "tag": 1,
+      "text": "45"
+    },
+    {
+      "key": "fe55fe8f6fbdee1c",
+      "tag": 8,
+      "text": "0.335,0.43,0.555,0.695,0.825,0.9,1,1,1,1"
+    },
+    {
+      "key": "fe5722b72dcd3bc8",
+      "tag": 1,
+      "text": "6"
+    },
+    {
+      "key": "ff1f4446d7709171",
+      "tag": 0,
+      "text": "22"
+    },
+    {
+      "key": "ff7c18755ff6eaa7",
+      "tag": 0,
+      "text": "110"
+    },
+    {
+      "key": "ff871596ccc18b6d",
+      "tag": 0,
+      "text": "1"
+    },
+    {
+      "key": "ff959f488cb2f90a",
+      "tag": 1,
+      "text": "0.0025"
+    },
+    {
+      "key": "ffa801c9cf09ec0b",
+      "tag": 2,
+      "text": "lng_track_nld_gp_title_short"
+    },
+    {
+      "key": "ffccd267e2f08197",
+      "tag": 1,
+      "text": "18"
+    }
+  ],
+  "slot": null,
+  "track": "delhi"
+}

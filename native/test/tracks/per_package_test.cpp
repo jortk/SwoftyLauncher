@@ -74,6 +74,96 @@ int main()
     plan = trk::plan_box_fuel(base, e, {&set}, "");
     expect(plan.empty(), "a track whose fuel rows don't read as fuel is not written");
 
+    set.tracks[0].fuel.count = 1;
+    set.tracks[0].fuel.burn = 1.74f;
+    std::vector<trk::FuelWrite> data_plan;
+    std::map<std::string, std::string> seeded_only;
+    if (trk::burn_from_addon(seeded_only))
+        trk::plan_burn(data_plan, set, "melbourne", 1.30f, "game/melbourne/f1_2026");
+    expect(data_plan.empty(), "a seeded track.data record no addon changed plans no burn write over another writer's value");
+    std::map<std::string, std::string> changed = {{"/fuel/burn_per_lap", "mod.hockenheim"}};
+    if (trk::burn_from_addon(changed))
+        trk::plan_burn(data_plan, set, "melbourne", 1.62f, "game/melbourne/f1_2026");
+    expect(data_plan.size() == 1 && data_plan[0].after.burn > 1.61f && data_plan[0].before.burn > 1.73f,
+           "a record an addon changed still writes its burn");
+    expect(trk::burn_from_addon({{"", "a"}}) && trk::burn_from_addon({{"/fuel", "a"}}) &&
+               !trk::burn_from_addon({{"/laps", "a"}}),
+           "an origin on the record, its fuel or the burn counts; one on another field does not");
+    expect(trk::burn_from_addon({}, "mod.okayama") && !trk::burn_from_addon({}, "game"),
+           "an addon's own track.data record counts with no origins; the game's seeded one does not");
+
+    // pit.speed_limit per box (pre-1994 boxes: no limit, written as a high value)
+    std::vector<std::pair<std::string, Value>> precs = {
+        {"cs/f1_1960/melbourne", Value::object({{"pit", Value::object({{"speed_limit", Value(300)}})}})},
+        {"cs/f1_1960/monaco", Value::object({{"pit", Value::object({{"speed_limit", Value(0)}})}})}};
+    trk::Entries pe = trk::resolve_entries(base, precs);
+    expect(pe.of("game/melbourne")->pit_speed && *pe.of("game/melbourne")->pit_speed == 300.f && !pe.of("game/monaco")->pit_speed,
+           "pit.speed_limit is read per entry; 0 or out of range writes nothing");
+    std::map<uintptr_t, float> mem = {{0x1000 + trk::kPitSpeed, 80.f}, {0x2000 + trk::kPitSpeed, 60.f}};
+    auto rd = [&](uintptr_t at, float &v) {
+        auto it = mem.find(at);
+        if (it == mem.end())
+            return false;
+        v = it->second;
+        return true;
+    };
+    trk::fuel::Set set2 = set;
+    std::vector<trk::PitWrite> pplan = trk::plan_box_pit(base, pe, {&set, &set2}, "", rd);
+    expect(pplan.size() == 1 && pplan[0].object == 0x1000 && pplan[0].before == 80.f && pplan[0].after == 300.f,
+           "the box's pit speed limit goes to its track once per track object, keeping the game's value");
+    expect(trk::plan_box_pit(base, pe, {&set}, "monaco", rd).empty(), "only the session's track when it is known");
+    mem[0x1000 + trk::kPitSpeed] = 300.f;
+    expect(trk::plan_box_pit(base, pe, {&set}, "", rd).empty(), "a track already at the box's limit is not written");
+    mem[0x1000 + trk::kPitSpeed] = -1.f;
+    expect(trk::plan_box_pit(base, pe, {&set}, "", rd).empty(), "a value that is not a pit speed limit is left alone");
+
+    // laps per box: TrackDataTrack +0xe0 -> value slot -> record; the record's int list (begin +0x10, end +0x18)
+    std::vector<std::pair<std::string, Value>> lrecs = {
+        {"cs/f1_1950/melbourne", Value::object({{"laps", Value(90)}})},
+        {"cs/f1_1950/monaco", Value::object({{"laps", Value(0)}})}};
+    trk::Entries le = trk::resolve_entries(base, lrecs);
+    expect(le.of("game/melbourne")->laps == 90 && !le.of("game/monaco")->laps && !trk::laps_of(Value(1000)) &&
+               !trk::laps_of(Value("58")) && trk::laps_of(Value(1)) == 1,
+           "laps is read per entry; 0, above 999 or not a whole number writes nothing");
+    std::map<uintptr_t, uintptr_t> ptrs = {{0x1000 + trk::kLapsSlot, 0x5000}, {0x5000, 0x6000},
+                                           {0x6000 + trk::kListBegin, 0x7000}, {0x6000 + trk::kListEnd, 0x700c}};
+    std::map<uintptr_t, int32_t> ints = {{0x7000, 58}, {0x7004, 58}, {0x7008, 30}};
+    auto rp = [&](uintptr_t at, uintptr_t &v) {
+        auto it = ptrs.find(at);
+        if (it == ptrs.end())
+            return false;
+        v = it->second;
+        return true;
+    };
+    auto ri = [&](uintptr_t at, int32_t &v) {
+        auto it = ints.find(at);
+        if (it == ints.end())
+            return false;
+        v = it->second;
+        return true;
+    };
+    trk::fuel::Set dset = set, dset2 = set, sprint = set;
+    dset.formats = dset2.formats = 1u << trk::fuel::kFormatDefault;
+    sprint.formats = 1u << trk::fuel::kFormatSprint;
+    std::vector<trk::LapsWrite> lplan = trk::plan_box_laps(base, le, {&dset, &dset2, &sprint}, "", rp, ri);
+    expect(lplan.size() == 2 && lplan[0].at == 0x7000 && lplan[1].at == 0x7004 && lplan[0].before == 58 &&
+               lplan[0].after == 90 && lplan[0].track == "melbourne",
+           "the box's laps go into the race's entries of the list once per address (a shared record is written once); "
+           "an entry with another race's laps stays");
+    expect(trk::plan_box_laps(base, le, {&sprint}, "", rp, ri).empty(), "a sprint set's list is left alone");
+    expect(trk::plan_box_laps(base, le, {&dset}, "monaco", rp, ri).empty(), "only the session's track when it is known");
+    ints[0x7000] = ints[0x7004] = 90;
+    expect(trk::plan_box_laps(base, le, {&dset}, "", rp, ri).empty(), "a list already at the box's laps is not written");
+    ints[0x7000] = 0;
+    expect(trk::plan_box_laps(base, le, {&dset}, "", rp, ri).empty(), "a list that does not hold a lap count is left alone");
+    ints[0x7000] = 58;
+    ptrs[0x6000 + trk::kListEnd] = 0x7000 + 4 * 9;
+    expect(trk::plan_box_laps(base, le, {&dset}, "", rp, ri).empty(), "a list longer than 8 entries is not a lap list");
+    ptrs.erase(0x1000 + trk::kLapsSlot);
+    expect(trk::plan_box_laps(base, le, {&dset}, "", rp, ri).empty(), "an unreadable slot writes nothing");
+    expect(trk::kLapsSlot == 0xe0 && trk::kListBegin == 0x10 && trk::kListEnd == 0x18,
+           "number_of_laps slot at TrackDataTrack +0xe0 (0x142e46e8c), int list begin/end at record +0x10/+0x18 (0x1445a4c80)");
+
     std::vector<trk::fuel::Set> stock(5);
     auto masks = [](trk::fuel::Set &x, uint32_t modes, uint32_t seasons, uint32_t formats) {
         x.modes = modes, x.seasons = seasons, x.formats = formats;

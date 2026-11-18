@@ -1,4 +1,6 @@
 #include "runtime.hpp"
+#include "hooks/hooks.hpp"
+#include "lang_scope.hpp"
 #include "registry/older.hpp"
 
 #include <safetyhook.hpp>
@@ -22,6 +24,8 @@
 // g_Loc_LanguageInfo +0x60). Each distinct text is copied once into storage that is never freed,
 // because the game may keep a returned pointer after the override is cleared. refresh() sends the current language
 // to the module's listeners (+0x170), the notification the game sends after it loads a language.
+// A key keeps one text variant per lang.string record in load order; a record's within is checked
+// against the core's current facts at lookup, so a season's strings show only in that season.
 
 namespace {
 
@@ -49,9 +53,19 @@ struct Eq {
     bool operator()(std::string_view a, std::string_view b) const noexcept { return a == b; }
 };
 
+namespace lang_scope = swofty_core::lang_scope;
+
 struct Entry {
-    const char *all = nullptr;
-    std::vector<std::pair<std::string, const char *>> per;
+    std::vector<lang_scope::Variant> variants;
+    bool scoped = false;
+    bool seen = false;
+    const char *last = nullptr;
+};
+
+struct Raw {
+    std::string key;
+    std::vector<std::pair<std::string, std::string>> texts;
+    std::shared_ptr<const swofty_core::hooks::Selectors> within;
 };
 
 bool g_on;
@@ -65,6 +79,7 @@ std::atomic<size_t> g_count{0};
 std::unordered_map<std::string, Entry, Hash, Eq> g_map;
 std::unordered_set<std::string, Hash, Eq> g_texts;
 std::atomic<uint8_t *> g_module{nullptr};
+std::mutex g_seen;
 uint8_t *g_info;
 
 std::string lower(std::string_view s)
@@ -98,14 +113,24 @@ const char *lookup(const char *key)
     AcquireSRWLockShared(&g_lock);
     auto it = g_map.find(std::string_view(key));
     if (it != g_map.end()) {
-        out = it->second.all;
-        if (!it->second.per.empty())
-            if (const char *code = current_code())
-                for (auto &[c, text] : it->second.per)
-                    if (!_stricmp(c.c_str(), code)) {
-                        out = text;
-                        break;
-                    }
+        Entry &e = it->second;
+        if (!e.scoped)
+            out = lang_scope::choose(e.variants, nullptr, current_code());
+        else {
+            auto facts = swofty_core::hooks::core().current();
+            out = lang_scope::choose(e.variants, facts.get(), current_code());
+            std::lock_guard<std::mutex> g(g_seen);
+            if (!e.seen || e.last != out) {
+                e.seen = true;
+                e.last = out;
+                std::string where = facts ? swofty_core::hooks::summary(*facts) : std::string("no facts yet");
+                if (out)
+                    swofty::log("[lang] override: %s shows \"%s\" (%s)", key, out, where.c_str());
+                else
+                    swofty::log("[lang] override: %s shows the game's own text: no record for it applies here (%s)", key,
+                                where.c_str());
+            }
+        }
     }
     ReleaseSRWLockShared(&g_lock);
     return out;
@@ -116,44 +141,74 @@ namespace older = swofty_core::registry::older;
 std::mutex g_shim;
 std::map<std::string, std::map<std::string, swofty::json::Value>> g_layers;
 
-void fill(const std::string &key, const swofty::json::Value &rec)
+bool raw_of(const std::string &id, const swofty::json::Value &rec, Raw &out)
 {
-    auto texts = older::string_texts(rec);
+    out.key = older::key_of(id);
+    out.texts = older::string_texts(rec);
+    if (out.texts.empty())
+        return false;
+    std::string why;
+    if (!lang_scope::compile_within(rec["within"], out.within, &why)) {
+        swofty::log("[lang] override: %s is not used: its within does not compile (%s)", id.c_str(), why.c_str());
+        return false;
+    }
+    return true;
+}
+
+std::vector<Raw> gather(const std::string *only)
+{
+    auto &st = runtime::older_store();
+    std::vector<Raw> out;
+    for (auto &id : older::string_ids(st)) {
+        if (only && older::key_of(id) != *only)
+            continue;
+        Raw r;
+        if (raw_of(id, older::effective(st, older::STRING, id), r))
+            out.push_back(std::move(r));
+    }
+    return out;
+}
+
+size_t install(std::vector<Raw> raws, const std::string *only)
+{
+    size_t scoped = 0;
     AcquireSRWLockExclusive(&g_lock);
-    if (texts.empty())
-        g_map.erase(key);
-    else {
-        Entry e;
-        for (auto &[language, text] : texts) {
+    if (only)
+        g_map.erase(*only);
+    else
+        g_map.clear();
+    for (auto &r : raws) {
+        lang_scope::Variant v;
+        v.within = std::move(r.within);
+        for (auto &[language, text] : r.texts) {
             const char *copy = g_texts.emplace(text).first->c_str();
             if (all_languages(language.c_str()))
-                e.all = copy;
+                v.all = copy;
             else
-                e.per.emplace_back(lower(language), copy);
+                v.per.emplace_back(lower(language), copy);
         }
-        g_map[key] = std::move(e);
+        Entry &e = g_map[r.key];
+        e.scoped = e.scoped || v.within;
+        e.variants.push_back(std::move(v));
     }
+    for (auto &[k, e] : g_map)
+        scoped += e.scoped;
     g_count.store(g_map.size(), std::memory_order_release);
     ReleaseSRWLockExclusive(&g_lock);
+    return scoped;
 }
 
 void refresh_key(const std::string &key)
 {
-    fill(key, older::effective(runtime::older_store(), older::STRING, "game/" + key));
+    install(gather(&key), &key);
 }
 
-size_t refresh_all()
+size_t refresh_all(size_t *scoped = nullptr)
 {
-    auto &st = runtime::older_store();
-    size_t n = 0;
-    for (auto &id : older::string_ids(st)) {
-        swofty::json::Value rec = older::effective(st, older::STRING, id);
-        if (older::addon_of(id) != "game" && older::string_texts(rec).empty())
-            continue;
-        fill(older::key_of(id), rec);
-        n++;
-    }
-    return n;
+    size_t s = install(gather(nullptr), nullptr);
+    if (scoped)
+        *scoped = s;
+    return g_count.load(std::memory_order_acquire);
 }
 
 void put_layer(const std::string &addon, const std::string &key)
@@ -333,8 +388,10 @@ void setup()
     if (!g_find_at)
         return;
     std::lock_guard<std::mutex> g(g_shim);
-    if (size_t n = refresh_all()) {
-        swofty::log("[lang] override: %zu string(s) from lang.string records", n);
+    size_t scoped = 0;
+    if (size_t n = refresh_all(&scoped)) {
+        swofty::log("[lang] override: %zu string(s) from lang.string records, %zu of them only within their scope", n,
+                    scoped);
         ensure_find_hook();
     }
 }

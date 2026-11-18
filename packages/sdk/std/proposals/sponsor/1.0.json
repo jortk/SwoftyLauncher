@@ -1,0 +1,437 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "sponsor 1.0",
+  "x-registry": "sponsor",
+  "x-version": "1.0",
+  "x-applies": "boot",
+  "x-snapshot": false,
+  "description": "sponsors::Sponsor (proposal): a sponsor brand with its decal designs, its My Team secondary sponsor rows in every career data group, its discovery and, optionally, a team badge emblem. Stock sponsors are game/<code> (128 in F1 25), so layers can change their names, logos and tiles. The core writes the sponsors.sponsor, DecalGroup, DecalSet, unlock, reward and secondary_sponsor rows, the menu and car textures with their texture registry entries, and allocates every id. Fields marked (native) need the runtime part described in docs/design/sponsor-registry.md.",
+  "type": "object",
+  "properties": {
+    "template": {
+      "description": "The stock sponsor whose rows a new sponsor copies (values, loyalty track, discovery event). null: game/avolo.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "x-ref": "sponsor"
+    },
+    "code": {
+      "description": "The database label (_metadata_) and texture prefix. Absent: the record key. Unique in the game.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,39}$"
+    },
+    "name": {
+      "$ref": "#/$defs/text"
+    },
+    "logo": {
+      "$ref": "#/$defs/path"
+    },
+    "list_tile": {
+      "$ref": "#/$defs/path"
+    },
+    "designs": {
+      "description": "The decal designs. Each is a DecalSet row, a menu texture (340 x 244) and a car texture (1024 x 1024, full mip chain) in both customisation_decals shader archives.",
+      "type": "array",
+      "x-key": [
+        "key"
+      ],
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/design"
+      }
+    },
+    "career": {
+      "$ref": "#/$defs/career"
+    },
+    "emblem": {
+      "description": "A team badge emblem of the brand (BadgeEmblem row, 512 x 512 texture, unlock rows). Its designs are then free stickers: available from the start, never paid, listed while the team badge uses the emblem (native).",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/emblem"
+        }
+      ]
+    },
+    "my_team": {
+      "$ref": "#/$defs/my_team"
+    },
+    "stat_id": {
+      "$ref": "#/$defs/stat_id"
+    },
+    "extends": {
+      "description": "Data files only: this record is a variant of that record, and its value is a merge patch on the base.",
+      "type": "string",
+      "x-ref": "sponsor",
+      "x-missing": {
+        "default": "required",
+        "allow": [
+          "required"
+        ]
+      }
+    }
+  },
+  "required": [
+    "name",
+    "logo",
+    "designs"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "path": {
+      "description": "A Path: a file or folder in the addon's folder, the game's original file (stock), or resources in an archive. null: empty.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[^/\\\\][^\\\\]*$"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stock": {
+              "type": "string",
+              "pattern": "^[^/\\\\][^\\\\]*$"
+            }
+          },
+          "required": [
+            "stock"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "erp": {
+              "type": "string",
+              "pattern": "^[^/\\\\][^\\\\]*$"
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "kinds": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "textures",
+                  "materials",
+                  "idf",
+                  "wep"
+                ]
+              }
+            }
+          },
+          "required": [
+            "erp",
+            "prefix",
+            "kinds"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "erp": {
+              "type": "string",
+              "pattern": "^[^/\\\\][^\\\\]*$"
+            },
+            "resources": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^eaid://"
+              }
+            }
+          },
+          "required": [
+            "erp",
+            "resources"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "text": {
+      "description": "A Text: a lang key as a string, or a literal.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "literal": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "literal"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "stat_id": {
+      "description": "A StatId: an explicit id, or \"auto\" (absent: \"auto\") for the core to allocate one.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "const": "auto"
+        }
+      ]
+    },
+    "key": {
+      "type": "string",
+      "pattern": "^(p|n|d([3-9]|1[0-2])|s[1-9])$",
+      "description": "A design key: p (primary), n (alternate), d3..d12 (more start designs), s1..s9 (loyalty designs). Its DecalSet row is <code>_<key>."
+    },
+    "design": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "image": {
+          "$ref": "#/$defs/path"
+        },
+        "name": {
+          "$ref": "#/$defs/text"
+        },
+        "id": {
+          "$ref": "#/$defs/stat_id"
+        }
+      },
+      "description": "One decal design. image null: the brand logo. name absent: the brand name (lng_sponsor_<code>_<key>). id: the DecalSet id; saved liveries store it, so once used it never changes.",
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "level": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9
+        },
+        "required_xp": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Levels with the same required_xp unlock together."
+        },
+        "design": {
+          "description": "The design this level unlocks. null: none; its row's decal is written empty, never a missing name.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/key"
+            }
+          ]
+        },
+        "livery": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "A livery reward label, or null."
+        },
+        "rewards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Reward labels."
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "career": {
+      "type": "object",
+      "description": "The My Team secondary sponsor, written to every MyTeamSponsorsDataGroup (both car years).",
+      "properties": {
+        "secondary": {
+          "type": "boolean",
+          "default": true,
+          "description": "false: no career rows (decals only)."
+        },
+        "available_from_start": {
+          "type": "boolean",
+          "default": false,
+          "description": "Appended to initial_secondary_sponsors (list-append, never set). The game applies that list only when a career is created; the core also discovers the sponsor in existing My Team careers at load (native)."
+        },
+        "discovery": {
+          "description": "Its own discovery department event, cloned from the template's. null: none (only with available_from_start or an emblem).",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "$ref": "#/$defs/text"
+                },
+                "description": {
+                  "$ref": "#/$defs/text"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "default_designs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/key"
+          },
+          "uniqueItems": true,
+          "description": "default_decals: owned once discovered. Absent: every start design (p, n, d3..)."
+        },
+        "loyalty": {
+          "type": "array",
+          "x-key": [
+            "level"
+          ],
+          "items": {
+            "$ref": "#/$defs/level"
+          },
+          "description": "Loyalty levels over the template's track. Absent: level n unlocks design s<n>, or none."
+        },
+        "sponsor_id": {
+          "$ref": "#/$defs/stat_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "emblem": {
+      "type": "object",
+      "description": "image null: the brand logo. id: the BadgeEmblem id, which the team badge stores (not a statId).",
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/path"
+        },
+        "name": {
+          "$ref": "#/$defs/text"
+        },
+        "id": {
+          "$ref": "#/$defs/stat_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "placement": {
+      "type": "object",
+      "description": "Where the decal sits on one car year's model, in the decal editor's own values.",
+      "properties": {
+        "t": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "translation"
+        },
+        "rot": {
+          "type": "number",
+          "description": "rotation angle"
+        },
+        "s": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "scale"
+        }
+      },
+      "required": [
+        "t",
+        "rot",
+        "s"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "type": "object",
+      "description": "A sponsor the My Team livery always carries in one projection area (native). locked true: kept like the title sponsor's decal (no swap, delete, duplicate or mirror; not paid per decal). locked false: placed once; the player may remove it.",
+      "properties": {
+        "area": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "The ProjectionArea label without fom_car_<year>_ (left_nose, top_nose, rear_wing_top...)."
+        },
+        "design": {
+          "$ref": "#/$defs/key"
+        },
+        "locked": {
+          "type": "boolean",
+          "default": true
+        },
+        "placement": {
+          "type": "object",
+          "description": "Per car year; absent: the area's default origin and size.",
+          "properties": {
+            "2025": {
+              "$ref": "#/$defs/placement"
+            },
+            "2026": {
+              "$ref": "#/$defs/placement"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "area"
+      ],
+      "additionalProperties": false
+    },
+    "my_team": {
+      "type": "object",
+      "description": "My Team behaviour beyond the stock data (native).",
+      "properties": {
+        "engines": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]+$"
+          },
+          "uniqueItems": true,
+          "description": "entrants.engines labels: an engine supplier's sponsor, listed only while the team's engine is one of these, taken off the livery when the supplier changes, never paid per decal."
+        },
+        "paid": {
+          "type": "boolean",
+          "default": true,
+          "description": "false: its decals earn no weekly per-decal income."
+        },
+        "fixed": {
+          "type": "array",
+          "x-key": [
+            "area"
+          ],
+          "items": {
+            "$ref": "#/$defs/fixed"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

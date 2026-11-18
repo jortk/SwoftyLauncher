@@ -21,11 +21,13 @@ static void expect(bool ok, const char *what)
 struct Memory {
     std::map<uint64_t, uint64_t> words;
     std::map<uint64_t, uint32_t> dwords;
+    int reads = 0;
 };
 
 static bool read(uint64_t address, void *out, size_t n, void *user)
 {
     Memory *m = static_cast<Memory *>(user);
+    m->reads++;
     if (n == 8) {
         auto it = m->words.find(address);
         if (it == m->words.end())
@@ -53,6 +55,15 @@ int main()
     expect(!gs::entry_usable(0, read, &m), "a null entry is skipped");
     expect(!gs::entry_usable(0xffffffffffffffffull, read, &m), "an all-ones entry is skipped");
     expect(!gs::entry_usable(0x9d9ec88, read, &m), "a canonical entry that does not read is skipped");
+
+    Memory counted = m;
+    counted.reads = 0;
+    gs::entry_usable(entry, read, &counted);
+    expect(counted.reads == 3, "a usable entry costs exactly three reads, one per link");
+    Memory refused = m;
+    refused.reads = 0;
+    gs::entry_usable(0x2a00002f33000020ull, read, &refused);
+    expect(refused.reads == 0, "a non-canonical entry is refused without reading");
 
     Memory badnode = m;
     badnode.words[entry + gs::NODE_AT] = 0x2a00002f33000020ull;

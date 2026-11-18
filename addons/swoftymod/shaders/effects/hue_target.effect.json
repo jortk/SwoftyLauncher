@@ -1,0 +1,193 @@
+{
+  "id": "hue_target",
+  "name": "Hue Target",
+  "description": "Pulls two bands of colour towards targets: each band picks colours by hue, saturation, brightness and height in the picture, then moves their hue and saturation towards a target while keeping their luminance. Band A is aimed at a sky blue in the upper picture, band B at grass green anywhere.",
+  "params": [
+    {
+      "id": "a_enabled",
+      "type": "bool",
+      "default": true,
+      "label": "Band A enabled",
+      "doc": "Turns band A on or off."
+    },
+    {
+      "id": "a_hue",
+      "type": "float",
+      "default": 210,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "label": "Band A hue",
+      "doc": "The centre hue of the colours band A picks up, in degrees round the colour wheel."
+    },
+    {
+      "id": "a_width",
+      "type": "float",
+      "default": 70,
+      "min": 5,
+      "max": 180,
+      "step": 1,
+      "label": "Band A width",
+      "doc": "How wide a slice of the colour wheel band A picks up, in degrees; the edges fade out."
+    },
+    {
+      "id": "a_min_saturation",
+      "type": "float",
+      "default": 0.1,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band A minimum saturation",
+      "doc": "How colourful a pixel has to be to count; greys and washed-out colours below it are left alone."
+    },
+    {
+      "id": "a_min_brightness",
+      "type": "float",
+      "default": 0.4,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band A minimum brightness",
+      "doc": "How bright a pixel has to be to count; dark areas such as asphalt below it are left alone."
+    },
+    {
+      "id": "a_vertical",
+      "type": "enum",
+      "values": [
+        "top",
+        "bottom",
+        "none"
+      ],
+      "default": "top",
+      "label": "Band A position",
+      "doc": "Where in the picture the band counts: top fades out towards the bottom (sky), bottom fades out towards the top, none counts the whole picture."
+    },
+    {
+      "id": "a_target_hue",
+      "type": "float",
+      "default": 210,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "label": "Band A target hue",
+      "doc": "The hue the picked-up colours are pulled towards, in degrees, along the shortest way round the wheel."
+    },
+    {
+      "id": "a_target_saturation",
+      "type": "float",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band A target saturation",
+      "doc": "The saturation the picked-up colours are pulled towards."
+    },
+    {
+      "id": "a_pull",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band A pull",
+      "doc": "How far the picked-up colours move to the target: 0 leaves them untouched, 1 puts them exactly on the target; brightness is kept."
+    },
+    {
+      "id": "b_enabled",
+      "type": "bool",
+      "default": true,
+      "label": "Band B enabled",
+      "doc": "Turns band B on or off."
+    },
+    {
+      "id": "b_hue",
+      "type": "float",
+      "default": 95,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "label": "Band B hue",
+      "doc": "The centre hue of the colours band B picks up, in degrees round the colour wheel."
+    },
+    {
+      "id": "b_width",
+      "type": "float",
+      "default": 90,
+      "min": 5,
+      "max": 180,
+      "step": 1,
+      "label": "Band B width",
+      "doc": "How wide a slice of the colour wheel band B picks up, in degrees; the edges fade out."
+    },
+    {
+      "id": "b_min_saturation",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band B minimum saturation",
+      "doc": "How colourful a pixel has to be to count; greys and washed-out colours below it are left alone."
+    },
+    {
+      "id": "b_min_brightness",
+      "type": "float",
+      "default": 0.15,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band B minimum brightness",
+      "doc": "How bright a pixel has to be to count; dark areas such as asphalt below it are left alone."
+    },
+    {
+      "id": "b_vertical",
+      "type": "enum",
+      "values": [
+        "top",
+        "bottom",
+        "none"
+      ],
+      "default": "none",
+      "label": "Band B position",
+      "doc": "Where in the picture the band counts: top fades out towards the bottom (sky), bottom fades out towards the top, none counts the whole picture."
+    },
+    {
+      "id": "b_target_hue",
+      "type": "float",
+      "default": 100,
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "label": "Band B target hue",
+      "doc": "The hue the picked-up colours are pulled towards, in degrees, along the shortest way round the wheel."
+    },
+    {
+      "id": "b_target_saturation",
+      "type": "float",
+      "default": 0.55,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band B target saturation",
+      "doc": "The saturation the picked-up colours are pulled towards."
+    },
+    {
+      "id": "b_pull",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Band B pull",
+      "doc": "How far the picked-up colours move to the target: 0 leaves them untouched, 1 puts them exactly on the target; brightness is kept."
+    }
+  ],
+  "passes": [
+    {
+      "name": "hue-target",
+      "shader": "hue_target.hlsl",
+      "entry": "effect",
+      "budget_ms": 0.15
+    }
+  ]
+}

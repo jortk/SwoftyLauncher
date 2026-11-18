@@ -1,0 +1,14 @@
+{
+  "content.package": {
+    "f1_1990": {
+      "$comment": "best_lap, best_of or aggregate",
+      "entrant_list": "f1_1990",
+      "season": 1990,
+      "rules": {
+        "grid": {
+          "qualifying": "best_of_two"
+        }
+      }
+    }
+  }
+}

@@ -13,11 +13,18 @@ use crate::{Error, Result, io_err};
 pub const LATEST_URL: &str =
     "https://api.github.com/repos/Swofty-Developments/SwoftyLauncher/releases/latest";
 pub const RELEASES_URL: &str = "https://github.com/Swofty-Developments/SwoftyLauncher/releases";
+pub const CDN_HOST: &str = "https://cdn.swofty.net";
+pub const MANIFEST_URL: &str = "https://cdn.swofty.net/launcher/latest.json";
+pub const MANIFEST_SCHEMA: u32 = 1;
 pub const SUMS_FILE: &str = "SHA256SUMS";
 pub const PRETEND_ENV: &str = "SWOFTY_UPDATE_PRETEND_VERSION";
 pub const FIXTURE_ENV: &str = "SWOFTY_TEST_GITHUB";
 pub const CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 pub const STAGING_DIR: &str = ".update";
+/// Beside the staging folder rather than in it, so cleaning that folder never deletes a lock in use.
+const LOCK_FILE: &str = ".update.lock";
+pub const INSTALL_MANIFEST: &str = ".install-manifest";
+const SWEPT_DIRS: [&str; 3] = ["loader", "addons", crate::postfx::DXC_DIR];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UpdateConfig {
@@ -90,6 +97,75 @@ pub struct Asset {
     pub browser_download_url: String,
     #[serde(default)]
     pub digest: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Manifest {
+    #[serde(default)]
+    pub schema: u32,
+    pub version: String,
+    pub tag: String,
+    #[serde(default)]
+    pub published_at: String,
+    #[serde(default)]
+    pub notes_url: String,
+    #[serde(default)]
+    pub assets: Vec<ManifestAsset>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ManifestAsset {
+    pub name: String,
+    pub url: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
+impl Manifest {
+    pub fn release(self) -> std::result::Result<Release, String> {
+        if self.schema != MANIFEST_SCHEMA {
+            return Err(format!(
+                "manifest schema {} is not {MANIFEST_SCHEMA}",
+                self.schema
+            ));
+        }
+        let tag = parse_version(&self.tag).ok_or_else(|| format!("{} is not a version", self.tag))?;
+        if parse_version(&self.version) != Some(tag) {
+            return Err(format!(
+                "version {} does not match tag {}",
+                self.version, self.tag
+            ));
+        }
+        let mut assets = Vec::new();
+        for a in self.assets.into_iter().filter(|a| a.name != SUMS_FILE) {
+            let sha = a.sha256.trim().to_ascii_lowercase();
+            if a.name.is_empty() || a.name.contains(['/', '\\']) {
+                return Err(format!("{:?} is not an asset name", a.name));
+            }
+            if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err(format!("{}: {:?} is not a SHA-256", a.name, a.sha256));
+            }
+            if a.size == 0 || a.url.is_empty() {
+                return Err(format!("{}: no size or no download address", a.name));
+            }
+            assets.push(Asset {
+                name: a.name,
+                size: a.size,
+                browser_download_url: a.url,
+                digest: Some(format!("sha256:{sha}")),
+            });
+        }
+        if assets.is_empty() {
+            return Err("manifest lists no downloads".into());
+        }
+        Ok(Release {
+            tag_name: self.tag,
+            html_url: self.notes_url,
+            assets,
+            draft: false,
+            prerelease: false,
+        })
+    }
 }
 
 impl Release {
@@ -184,6 +260,9 @@ pub fn endpoint(url: &str) -> String {
             if let Some(rest) = url.strip_prefix(host) {
                 return format!("{base}{rest}");
             }
+        }
+        if let Some(rest) = url.strip_prefix(CDN_HOST) {
+            return format!("{base}/cdn{rest}");
         }
     }
     url.to_owned()
@@ -292,10 +371,13 @@ pub fn request(
     head: bool,
     timeout: Option<Duration>,
 ) -> std::result::Result<ureq::http::Response<ureq::Body>, Failure> {
-    let response = builder(url, head, timeout)
-        .call()
-        .map_err(|e| Failure::Failed(format!("{url}: {e}")))?;
-    answered(url, response)
+    let (result, attempts) = transfer::send(|| builder(url, head, timeout).call());
+    let note = transfer::attempts_note(attempts);
+    let response = result.map_err(|e| Failure::Failed(format!("{url}: {e}{note}")))?;
+    answered(url, response).map_err(|f| match f {
+        Failure::Failed(text) => Failure::Failed(format!("{text}{note}")),
+        wait => wait,
+    })
 }
 
 pub fn get(url: &str, timeout: Option<Duration>) -> Result<ureq::Body> {
@@ -323,8 +405,64 @@ pub fn fetch_release(url: &str, timeout: Duration) -> std::result::Result<Releas
     fetch_json(url, timeout)
 }
 
+pub fn fetch_manifest(url: &str, timeout: Duration) -> std::result::Result<Release, Failure> {
+    fetch_json::<Manifest>(url, timeout)?
+        .release()
+        .map_err(|why| Failure::Failed(format!("{url}: {why}")))
+}
+
+pub fn fetch_latest_from(
+    manifest_url: &str,
+    github_url: &str,
+    timeout: Duration,
+) -> std::result::Result<Release, Failure> {
+    let cdn = match fetch_manifest(manifest_url, timeout) {
+        Ok(release) => return Ok(release),
+        Err(cdn) => cdn,
+    };
+    fetch_release(github_url, timeout).map_err(|github| match github {
+        Failure::Failed(text) => Failure::Failed(format!("{text} ({cdn})")),
+        wait => wait,
+    })
+}
+
 pub fn fetch_latest(timeout: Duration) -> Result<Release> {
-    Ok(fetch_release(LATEST_URL, timeout)?)
+    Ok(fetch_latest_from(MANIFEST_URL, LATEST_URL, timeout)?)
+}
+
+pub fn mirror_url(release: &Release, asset: &Asset) -> Option<String> {
+    asset
+        .browser_download_url
+        .starts_with(CDN_HOST)
+        .then(|| format!("{RELEASES_URL}/download/{}/{}", release.tag_name, asset.name))
+}
+
+pub fn download_release(
+    release: &Release,
+    asset: &Asset,
+    to: &Path,
+    progress: &dyn Fn(u64),
+) -> Result<(u64, String)> {
+    download_or(asset, mirror_url(release, asset).as_deref(), to, progress)
+}
+
+pub fn download_or(
+    asset: &Asset,
+    mirror: Option<&str>,
+    to: &Path,
+    progress: &dyn Fn(u64),
+) -> Result<(u64, String)> {
+    let first = download(asset, to, progress);
+    match (first, mirror) {
+        (Err(first), Some(url)) => {
+            let other = Asset {
+                browser_download_url: url.to_owned(),
+                ..asset.clone()
+            };
+            download(&other, to, progress).map_err(|e| Error::Other(format!("{e} ({first})")))
+        }
+        (first, _) => first,
+    }
 }
 
 pub fn verifiable(release: &Release, asset: &Asset) -> bool {
@@ -348,13 +486,28 @@ pub fn download(asset: &Asset, to: &Path, progress: &dyn Fn(u64)) -> Result<(u64
         too_long: &too_long,
     };
     let mut open = |from: u64| {
-        let mut request =
-            builder(url, false, Some(Duration::from_secs(30 * 60))).header("Accept-Encoding", "identity");
-        if from > 0 {
-            request = request.header("Range", format!("bytes={from}-"));
-        }
-        let response = request.call().map_err(transfer::Opening::Call)?;
-        answered(url, response).map_err(|f| transfer::Opening::Refused(f.into()))
+        let left = asset.size.saturating_sub(from);
+        let body_timeout = crate::catalog::body_timeout(left);
+        let request = || {
+            let mut request = builder(url, false, None)
+                .config()
+                .timeout_recv_body(Some(body_timeout))
+                .build()
+                .header("Accept-Encoding", "identity");
+            if from > 0 {
+                request = request.header("Range", format!("bytes={from}-"));
+            }
+            request.call()
+        };
+        let (result, attempts) = transfer::send(request);
+        let note = transfer::attempts_note(attempts);
+        let response = result.map_err(transfer::Opening::Call)?;
+        answered(url, response).map_err(|f| {
+            transfer::Opening::Refused(match f {
+                Failure::Failed(text) => Error::Other(format!("{text}{note}")),
+                wait => wait.into(),
+            })
+        })
     };
     transfer::fetch(&fetch, to, &mut open, progress)
 }
@@ -476,7 +629,14 @@ pub struct Install {
 impl Install {
     pub fn current() -> std::result::Result<Self, String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        Self::locate(&exe)
+        Self::locate(&exe)?.apart_from(&crate::paths::data_dir())
+    }
+
+    pub fn apart_from(self, data: &Path) -> std::result::Result<Self, String> {
+        if holds_data(&self.root, data) {
+            return Err(DATA_IN_INSTALL.into());
+        }
+        Ok(self)
     }
 
     pub fn locate(exe: &Path) -> std::result::Result<Self, String> {
@@ -511,7 +671,16 @@ impl Install {
         self.root.join(STAGING_DIR)
     }
 
+    /// Recover and remove what an update that died left in the staging folder. Leaves it alone and
+    /// returns false while another process's update holds it; true once the folder is gone.
     pub fn cleanup(&self) -> bool {
+        let Some(_lock) = UpdateLock::try_acquire(&self.root) else {
+            return false;
+        };
+        self.clean_staging()
+    }
+
+    fn clean_staging(&self) -> bool {
         let dir = self.staging();
         if let Ok(entries) = std::fs::read_dir(&dir) {
             for work in entries.flatten().map(|e| e.path()) {
@@ -531,14 +700,21 @@ impl Install {
         if crate::process::game_running() {
             return Err(Error::Other("close F1 25 before updating".into()));
         }
+        refuse_data_root(&self.root, &crate::paths::data_dir())?;
         let asset = release.platform_asset()?;
-        self.cleanup();
+        let Some(_lock) = UpdateLock::try_acquire(&self.root) else {
+            return Err(Error::Other(
+                "another launcher or swofty update is updating this copy right now; wait for it to finish"
+                    .into(),
+            ));
+        };
+        self.clean_staging();
         let work = self
             .staging()
             .join(format!("{}-{}", std::process::id(), now_secs()));
         std::fs::create_dir_all(&work).map_err(io_err(&work))?;
         let result = self.stage_and_apply(release, asset, &work, progress);
-        self.cleanup();
+        self.clean_staging();
         result.map(|_| version)
     }
 
@@ -559,7 +735,7 @@ impl Install {
         let archive = staging.join(&asset.name);
         let total = asset.size.max(1) as f32;
         let text = format!("Downloading {}", release.tag_name);
-        let (len, sha256) = download(asset, &archive, &|n| {
+        let (len, sha256) = download_release(release, asset, &archive, &|n| {
             progress.report(0.9 * n as f32 / total, &text);
         })?;
         check_download(asset, len, &sha256, sums.as_ref())?;
@@ -570,8 +746,35 @@ impl Install {
         if crate::process::game_running() {
             return Err(Error::Other("close F1 25 before updating".into()));
         }
+        refuse_data_root(&self.root, &crate::paths::data_dir())?;
         progress.report(0.95, "Replacing files");
         apply(&new, &self.root, &staging.join("old"))
+    }
+}
+
+/// Held for the whole of an update, so another launcher's start-up cleanup or a `swofty update`
+/// leaves its download and its half-applied swap alone. The operating system drops it when the
+/// process ends, which is how a later cleanup tells a dead update's leftovers from a live one.
+/// Where the file system cannot lock, updates go unguarded.
+struct UpdateLock {
+    _file: Option<std::fs::File>,
+}
+
+impl UpdateLock {
+    /// Take the lock, or `None` while another update holds it.
+    fn try_acquire(root: &Path) -> Option<Self> {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(root.join(LOCK_FILE));
+        let Ok(file) = file else {
+            return Some(Self { _file: None });
+        };
+        match file.try_lock() {
+            Err(std::fs::TryLockError::WouldBlock) => None,
+            Ok(()) | Err(std::fs::TryLockError::Error(_)) => Some(Self { _file: Some(file) }),
+        }
     }
 }
 
@@ -651,18 +854,113 @@ fn roll_back(done: &[Swap]) {
     }
 }
 
+pub const DATA_IN_INSTALL: &str = "your addons and saves are in the same folder as the launcher, so updates cannot install. Move them out in Settings, under Your addons and saves, or run the installer again";
+
+fn holds_data(root: &Path, data: &Path) -> bool {
+    resolved(data).starts_with(resolved(root))
+}
+
+fn resolved(path: &Path) -> PathBuf {
+    let mut rest = Vec::new();
+    let mut at = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(at) {
+            return rest.iter().rev().fold(real, |p, part| p.join(part));
+        }
+        match (at.parent(), at.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_owned());
+                at = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+pub fn refuse_data_root(root: &Path, data: &Path) -> Result<()> {
+    let why = if holds_data(root, data) {
+        Some(format!(
+            "the install folder {} is or contains the data folder {}",
+            root.display(),
+            data.display()
+        ))
+    } else {
+        ["config.json", "profiles", "saves"]
+            .iter()
+            .find(|m| root.join(m).symlink_metadata().is_ok())
+            .map(|m| {
+                format!(
+                    "the install folder {} holds {m}, so it looks like a data folder the launcher could not resolve (data folder resolved to {})",
+                    root.display(),
+                    data.display()
+                )
+            })
+    };
+    match why {
+        Some(why) => {
+            let why = format!("refusing to update: {why}");
+            eprintln!("swofty: {why}");
+            Err(Error::Other(why))
+        }
+        None => Ok(()),
+    }
+}
+
+fn read_install_manifest(root: &Path) -> Option<Vec<String>> {
+    let text = std::fs::read_to_string(root.join(INSTALL_MANIFEST)).ok()?;
+    Some(
+        text.lines()
+            .filter(|l| !l.is_empty())
+            .filter(|l| {
+                !l.split('/').any(|c| c == ".." || c.is_empty())
+                    && !l.starts_with('/')
+                    && SWEPT_DIRS.iter().any(|d| l.starts_with(&format!("{d}/")))
+            })
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
 pub fn apply(new: &Path, root: &Path, backup: &Path) -> Result<()> {
     let files = crate::builtin::loader_files(new)?;
+    let previous = read_install_manifest(root);
     let mut stale: Vec<String> = Vec::new();
-    for sub in ["loader", "addons", crate::postfx::DXC_DIR] {
-        let dir = root.join(sub);
-        if dir.is_dir() {
-            stale.extend(
-                crate::builtin::loader_files(&dir)?
-                    .into_keys()
-                    .map(|rel| format!("{sub}/{rel}"))
-                    .filter(|rel| !files.contains_key(rel)),
+    match &previous {
+        Some(prev) => stale.extend(
+            prev.iter()
+                .filter(|rel| !files.contains_key(*rel) && root.join(rel).symlink_metadata().is_ok())
+                .cloned(),
+        ),
+        None => {
+            eprintln!(
+                "swofty: no {INSTALL_MANIFEST} from the previous install; sweeping only loader/, dxc/ and the bundled addons the new package holds"
             );
+            let bundled: std::collections::BTreeSet<&str> = files
+                .keys()
+                .filter_map(|rel| rel.strip_prefix("addons/")?.split_once('/').map(|(id, _)| id))
+                .collect();
+            for id in bundled {
+                let dir = root.join("addons").join(id);
+                if dir.is_dir() {
+                    stale.extend(
+                        crate::builtin::loader_files(&dir)?
+                            .into_keys()
+                            .map(|rel| format!("addons/{id}/{rel}"))
+                            .filter(|rel| !files.contains_key(rel)),
+                    );
+                }
+            }
+            for sub in ["loader", crate::postfx::DXC_DIR] {
+                let dir = root.join(sub);
+                if dir.is_dir() {
+                    stale.extend(
+                        crate::builtin::loader_files(&dir)?
+                            .into_keys()
+                            .map(|rel| format!("{sub}/{rel}"))
+                            .filter(|rel| !files.contains_key(rel)),
+                    );
+                }
+            }
         }
     }
     let steps = files
@@ -695,6 +993,14 @@ pub fn apply(new: &Path, root: &Path, backup: &Path) -> Result<()> {
         }
     }
     std::fs::remove_file(&journal).map_err(io_err(&journal))?;
+    let recorded: String = files
+        .keys()
+        .filter(|rel| SWEPT_DIRS.iter().any(|d| rel.starts_with(&format!("{d}/"))))
+        .map(|rel| format!("{rel}\n"))
+        .collect();
+    if let Err(e) = std::fs::write(root.join(INSTALL_MANIFEST), recorded) {
+        eprintln!("swofty: couldn't record {INSTALL_MANIFEST}: {e}");
+    }
     Ok(())
 }
 
@@ -874,6 +1180,229 @@ mod tests {
         );
     }
 
+    fn manifest_json(tag: &str, asset_sha: &str) -> String {
+        let linux = format!("swofty-launcher-{tag}-linux-x86_64.tar.gz");
+        let windows = format!("swofty-launcher-{tag}-windows-x86_64.zip");
+        format!(
+            r#"{{"schema":1,"version":"{v}","tag":"{tag}","published_at":"2026-11-08T09:16:53Z","notes_url":"https://example.test/notes","assets":[
+{{"name":"{linux}","url":"https://cdn.swofty.net/launcher/{tag}/{linux}","size":10,"sha256":"{asset_sha}"}},
+{{"name":"{windows}","url":"https://cdn.swofty.net/launcher/{tag}/{windows}","size":20,"sha256":"{asset_sha}"}},
+{{"name":"SHA256SUMS","url":"https://cdn.swofty.net/launcher/{tag}/SHA256SUMS","size":3,"sha256":"{asset_sha}"}}]}}"#,
+            v = tag.trim_start_matches('v')
+        )
+    }
+
+    fn serve(routes: Vec<(&'static str, u16, Vec<u8>)>) -> String {
+        use std::io::Write;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut request = [0u8; 4096];
+                let n = stream.read(&mut request).unwrap_or(0);
+                let head = String::from_utf8_lossy(&request[..n]).into_owned();
+                let path = head.split_whitespace().nth(1).unwrap_or("").to_owned();
+                let (status, body) = routes
+                    .iter()
+                    .find(|(p, _, _)| *p == path)
+                    .map_or((404, Vec::new()), |(_, s, b)| (*s, b.clone()));
+                let reply = format!(
+                    "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(reply.as_bytes());
+                let _ = stream.write_all(&body);
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    fn github_json(tag: &str) -> Vec<u8> {
+        format!(r#"{{"tag_name":"{tag}","html_url":"https://github.test/{tag}","assets":[]}}"#).into_bytes()
+    }
+
+    #[test]
+    fn reads_the_cdn_manifest_into_a_release() {
+        let sha = "A".repeat(64);
+        let manifest: Manifest = serde_json::from_str(&manifest_json("v1.8.29", &sha)).unwrap();
+        let release = manifest.release().unwrap();
+        assert_eq!(release.tag_name, "v1.8.29");
+        assert_eq!(release.notes_url(), "https://example.test/notes");
+        assert!(release.sums().is_none());
+        assert_eq!(release.assets.len(), 2);
+        let linux = release.asset("linux", "x86_64").unwrap();
+        assert_eq!(linux.size, 10);
+        assert_eq!(
+            linux.browser_download_url,
+            "https://cdn.swofty.net/launcher/v1.8.29/swofty-launcher-v1.8.29-linux-x86_64.tar.gz"
+        );
+        assert_eq!(
+            linux.digest.as_deref(),
+            Some(format!("sha256:{}", "a".repeat(64)).as_str())
+        );
+        assert_eq!(release.asset("windows", "x86_64").unwrap().size, 20);
+        assert!(release.asset("macos", "aarch64").is_none());
+        assert!(verifiable(&release, linux));
+    }
+
+    #[test]
+    fn rejects_an_invalid_manifest() {
+        let sha = "a".repeat(64);
+        let good = manifest_json("v1.8.29", &sha);
+        let parse = |text: &str| serde_json::from_str::<Manifest>(text).unwrap().release();
+        assert!(parse(&good).is_ok());
+        assert!(parse(&good.replace(r#""schema":1"#, r#""schema":2"#)).is_err());
+        assert!(parse(&good.replace(r#""version":"1.8.29""#, r#""version":"1.8.28""#)).is_err());
+        assert!(parse(&good.replace(r#""tag":"v1.8.29""#, r#""tag":"nightly""#)).is_err());
+        assert!(parse(&good.replace(&sha, "abc")).is_err());
+        assert!(parse(&good.replace("swofty-launcher-v1.8.29-linux", "../x-linux")).is_err());
+        assert!(parse(&good.replace(r#""size":10"#, r#""size":0"#)).is_err());
+        let sums_only = r#"{"schema":1,"version":"1.0.0","tag":"v1.0.0","assets":[{"name":"SHA256SUMS","url":"u","size":1,"sha256":""}]}"#;
+        assert!(parse(sums_only).is_err());
+        assert!(serde_json::from_str::<Manifest>("<html>").is_err());
+    }
+
+    #[test]
+    fn rejects_a_download_that_does_not_match_the_manifest() {
+        let sha = "a".repeat(64);
+        let release = serde_json::from_str::<Manifest>(&manifest_json("v1.8.29", &sha))
+            .unwrap()
+            .release()
+            .unwrap();
+        let asset = release.asset("linux", "x86_64").unwrap();
+        assert!(check_download(asset, 10, &sha, None).is_ok());
+        let err = check_download(asset, 10, &"b".repeat(64), None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("SHA-256") && err.contains(&sha), "{err}");
+        assert!(check_download(asset, 9, &sha, None).is_err());
+    }
+
+    #[test]
+    fn takes_the_release_from_the_cdn_when_its_manifest_is_good() {
+        let sha = "c".repeat(64);
+        let cdn = serve(vec![(
+            "/launcher/latest.json",
+            200,
+            manifest_json("v2.0.0", &sha).into_bytes(),
+        )]);
+        let github = serve(vec![("/latest", 200, github_json("v1.0.0"))]);
+        let release = fetch_latest_from(
+            &format!("{cdn}/launcher/latest.json"),
+            &format!("{github}/latest"),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        assert_eq!(release.tag_name, "v2.0.0");
+    }
+
+    #[test]
+    fn falls_back_to_github_when_the_cdn_has_no_usable_manifest() {
+        let github = serve(vec![("/latest", 200, github_json("v1.0.0"))]);
+        let sha = "c".repeat(64);
+        let broken = [
+            ("missing", 404, Vec::new()),
+            ("html", 200, b"<html>oops</html>".to_vec()),
+            (
+                "wrong-schema",
+                200,
+                manifest_json("v2.0.0", &sha)
+                    .replace(r#""schema":1"#, r#""schema":9"#)
+                    .into_bytes(),
+            ),
+            (
+                "empty",
+                200,
+                br#"{"schema":1,"version":"2.0.0","tag":"v2.0.0","assets":[]}"#.to_vec(),
+            ),
+        ];
+        for (name, status, body) in broken {
+            let cdn = serve(vec![("/latest.json", status, body)]);
+            let release = fetch_latest_from(
+                &format!("{cdn}/latest.json"),
+                &format!("{github}/latest"),
+                Duration::from_secs(5),
+            )
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(release.tag_name, "v1.0.0", "{name}");
+        }
+    }
+
+    #[test]
+    fn reports_both_failures_when_the_cdn_and_github_fail() {
+        let cdn = serve(vec![]);
+        let github = serve(vec![]);
+        let err = fetch_latest_from(
+            &format!("{cdn}/latest.json"),
+            &format!("{github}/latest"),
+            Duration::from_secs(5),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("/latest: HTTP 404") && err.contains("latest.json: HTTP 404"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn downloads_from_github_when_the_cdn_copy_is_missing() {
+        use sha2::{Digest, Sha256};
+        let body = b"0123456789".to_vec();
+        let sha: String = Sha256::digest(&body).iter().map(|b| format!("{b:02x}")).collect();
+        let github = serve(vec![("/asset", 200, body.clone())]);
+        let cdn = serve(vec![]);
+        let asset = Asset {
+            name: "a.tar.gz".into(),
+            size: 10,
+            browser_download_url: format!("{cdn}/asset"),
+            digest: Some(format!("sha256:{sha}")),
+        };
+        let to = temp("mirror").join("a.tar.gz");
+        let (len, got) = download_or(&asset, Some(&format!("{github}/asset")), &to, &|_| {}).unwrap();
+        assert_eq!((len, got.as_str()), (10, sha.as_str()));
+        assert!(check_download(&asset, len, &got, None).is_ok());
+        assert!(download_or(&asset, None, &to, &|_| {}).is_err());
+    }
+
+    #[test]
+    fn only_cdn_downloads_have_a_github_mirror() {
+        let release = Release {
+            tag_name: "v1.8.29".into(),
+            ..Default::default()
+        };
+        let on = |url: &str| Asset {
+            name: "x.zip".into(),
+            size: 1,
+            browser_download_url: url.into(),
+            digest: None,
+        };
+        assert_eq!(
+            mirror_url(&release, &on("https://cdn.swofty.net/launcher/v1.8.29/x.zip")).as_deref(),
+            Some("https://github.com/Swofty-Developments/SwoftyLauncher/releases/download/v1.8.29/x.zip")
+        );
+        assert!(
+            mirror_url(
+                &release,
+                &on("https://github.com/o/r/releases/download/v1.8.29/x.zip")
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    #[ignore = "reads the live https://cdn.swofty.net/launcher/latest.json and downloads one asset"]
+    fn live_cdn_serves_a_verifiable_release() {
+        let release = fetch_manifest(MANIFEST_URL, Duration::from_secs(30)).unwrap();
+        let asset = release.platform_asset().unwrap();
+        assert!(asset.browser_download_url.starts_with(CDN_HOST));
+        let to = temp("live").join(&asset.name);
+        let (len, sha) = download(asset, &to, &|_| {}).unwrap();
+        check_download(asset, len, &sha, None).unwrap();
+        println!("{} {} bytes sha256 {sha}", asset.name, len);
+    }
+
     #[test]
     fn a_release_offers_only_what_it_can_verify() {
         let name = "swofty-launcher-v0.2.1-linux-x86_64.tar.gz";
@@ -954,6 +1483,23 @@ mod tests {
     }
 
     #[test]
+    fn an_install_that_holds_the_data_folder_cannot_update() {
+        let dir = temp("apart");
+        release_tree(&dir, "v1");
+        let launcher = dir.join("bin").join(exe("swofty-launcher"));
+        let install = || Install::locate(&launcher).unwrap();
+        assert_eq!(
+            install().apart_from(&dir.join("Swofty")).unwrap_err(),
+            DATA_IN_INSTALL
+        );
+        assert!(install().apart_from(&dir).is_err());
+        let outside = temp("apart-data");
+        assert!(install().apart_from(&outside).is_ok());
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_dir_all(&outside).ok();
+    }
+
+    #[test]
     fn extracts_both_archive_kinds() {
         let dir = temp("extract");
         let tree = dir.join("swofty-launcher-v2-x");
@@ -1015,12 +1561,98 @@ mod tests {
     }
 
     #[test]
+    fn an_install_root_that_is_or_holds_the_data_folder_is_refused() {
+        let dir = temp("refuse");
+        let data = dir.join("Swofty");
+        std::fs::create_dir_all(data.join("addons")).unwrap();
+        assert!(refuse_data_root(&data, &data).is_err());
+        assert!(refuse_data_root(&dir, &data).is_err());
+        assert!(refuse_data_root(&dir.join("elsewhere"), &data).is_ok());
+        assert!(refuse_data_root(&data.join("app"), &data).is_ok());
+        let moved = dir.join("D");
+        write(&moved.join("saves").join("p").join("career.sav"), "career");
+        let stale_config = dir.join("C-old");
+        assert!(refuse_data_root(&moved, &stale_config).is_err());
+        let custom = dir.join("install").join("mydata");
+        std::fs::create_dir_all(&custom).unwrap();
+        assert!(refuse_data_root(&dir.join("install"), &custom).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn user_addons_survive_when_the_install_root_is_the_data_folder() {
+        let dir = temp("data-root");
+        let (root, new) = (dir.join("Swofty"), dir.join("new"));
+        release_tree(&root, "v1");
+        write(&root.join("addons").join("mine").join("addon.json"), "{}");
+        write(&root.join("addons").join("other.swoftyaddon"), "user");
+        write(&root.join("loader").join("stale.dll"), "stale");
+        write(&root.join("saves").join("p").join("career.sav"), "career");
+        release_tree(&new, "v2");
+        apply(&new, &root, &dir.join("old")).unwrap();
+        assert_eq!(read(&root.join("addons").join("mine").join("addon.json")), "{}");
+        assert_eq!(read(&root.join("addons").join("other.swoftyaddon")), "user");
+        assert!(!root.join("loader").join("stale.dll").exists());
+        assert_eq!(read(&root.join("saves").join("p").join("career.sav")), "career");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn without_a_manifest_only_bundled_addon_folders_are_swept() {
+        let dir = temp("no-manifest");
+        let (root, new) = (dir.join("install"), dir.join("new"));
+        release_tree(&root, "v1");
+        write(&root.join("addons").join("core").join("addon.json"), "v1");
+        write(&root.join("addons").join("core").join("removed.txt"), "stale");
+        write(&root.join("addons").join("mine").join("addon.json"), "user");
+        write(&root.join("addons").join("mine").join("extra.txt"), "user");
+        write(&root.join("saves").join("p").join("career.sav"), "career");
+        release_tree(&new, "v2");
+        write(&new.join("addons").join("core").join("addon.json"), "v2");
+        apply(&new, &root, &dir.join("old")).unwrap();
+        assert_eq!(read(&root.join("addons").join("core").join("addon.json")), "v2");
+        assert!(!root.join("addons").join("core").join("removed.txt").exists());
+        assert_eq!(read(&root.join("addons").join("mine").join("addon.json")), "user");
+        assert_eq!(read(&root.join("addons").join("mine").join("extra.txt")), "user");
+        assert_eq!(read(&root.join("saves").join("p").join("career.sav")), "career");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn only_files_in_the_previous_manifest_are_swept() {
+        let dir = temp("manifest-sweep");
+        let (root, new) = (dir.join("install"), dir.join("new"));
+        release_tree(&root, "v1");
+        write(&root.join("addons").join("bundled.swoftyaddon"), "old");
+        write(&root.join("addons").join("user.swoftyaddon"), "user");
+        write(&root.join("loader").join("old.dll"), "old");
+        write(&root.join("loader").join("user-added.dll"), "user");
+        write(
+            &root.join(INSTALL_MANIFEST),
+            "addons/bundled.swoftyaddon\nloader/old.dll\n../escape\naddons/../bin/x\n",
+        );
+        release_tree(&new, "v2");
+        apply(&new, &root, &dir.join("old")).unwrap();
+        assert!(!root.join("addons").join("bundled.swoftyaddon").exists());
+        assert!(!root.join("loader").join("old.dll").exists());
+        assert_eq!(read(&root.join("addons").join("user.swoftyaddon")), "user");
+        assert_eq!(read(&root.join("loader").join("user-added.dll")), "user");
+        let recorded = read(&root.join(INSTALL_MANIFEST));
+        assert!(recorded.contains(&format!("loader/{}", crate::builtin::CORE_DLL)));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn replaces_the_install_and_mirrors_the_loader() {
         let dir = temp("apply");
         let (root, new) = (dir.join("install"), dir.join("new"));
         release_tree(&root, "v1");
         write(&root.join("loader/stale.dll"), "stale");
         write(&root.join("addons/gone.swoftyaddon"), "gone");
+        write(
+            &root.join(INSTALL_MANIFEST),
+            "loader/stale.dll\naddons/gone.swoftyaddon\naddons/kept.swoftyaddon\ndxc/lib/libold.so\n",
+        );
         write(&root.join("addons/kept.swoftyaddon"), "kept v1");
         write(&root.join("dxc/lib/libold.so"), "old dxc");
         write(&root.join("bin/user-note.txt"), "mine");
@@ -1073,6 +1705,36 @@ mod tests {
             "core v1"
         );
         assert!(!root.join("bin/added").exists());
+        assert!(!root.join(STAGING_DIR).exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn cleanup_leaves_a_live_update_alone_and_recovers_a_dead_one() {
+        let dir = temp("live");
+        let (root, new) = (dir.join("install"), dir.join("new"));
+        release_tree(&root, "v1");
+        release_tree(&new, "v2");
+        let work = root.join(STAGING_DIR).join("w1");
+        apply(&new, &root, &work.join("old")).unwrap();
+        write(&work.join(APPLYING), "");
+        write(&work.join("swofty.zip"), "half a download");
+        let install = Install { root: root.clone() };
+
+        let live = UpdateLock::try_acquire(&root).expect("no update holds the lock yet");
+        assert!(UpdateLock::try_acquire(&root).is_none());
+        assert!(!install.cleanup());
+        assert_eq!(read(&root.join("bin").join(exe("swofty"))), "cli v2");
+        assert!(work.join(APPLYING).is_file());
+        assert_eq!(read(&work.join("swofty.zip")), "half a download");
+
+        drop(live);
+        assert!(install.cleanup());
+        assert_eq!(read(&root.join("bin").join(exe("swofty"))), "cli v1");
+        assert_eq!(
+            read(&root.join("loader").join(crate::builtin::CORE_DLL)),
+            "core v1"
+        );
         assert!(!root.join(STAGING_DIR).exists());
         std::fs::remove_dir_all(&dir).ok();
     }

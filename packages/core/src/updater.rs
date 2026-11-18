@@ -156,6 +156,17 @@ impl Track {
         }
     }
 
+    pub fn on_manifest(&mut self, part: Part, release: Release, now: u64) {
+        self.probe_at = now + CHECK_INTERVAL.as_secs();
+        self.error = None;
+        if part.ready(&release) {
+            self.tag = Some(release.tag_name.clone());
+            self.release = Some(release);
+        } else {
+            self.error = Some(format!("release {} is not complete yet", release.tag_name));
+        }
+    }
+
     pub fn fetch_due(&self, installed: Option<&Version>, now: u64) -> bool {
         self.newer_than(installed)
             && self.release.as_ref().map(|r| &r.tag_name) != self.tag.as_ref()
@@ -187,6 +198,12 @@ impl Track {
 }
 
 pub fn check(part: Part, track: &mut Track, installed: Option<&Version>, fetch: bool, now: u64) {
+    if part == Part::Launcher
+        && let Ok(release) = update::fetch_manifest(update::MANIFEST_URL, update::CHECK_TIMEOUT)
+    {
+        track.on_manifest(part, release, now);
+        return;
+    }
     track.on_probe(probe(part, update::CHECK_TIMEOUT), now);
     if fetch && track.fetch_due(installed, now) {
         track.on_fetch(
@@ -654,6 +671,28 @@ mod tests {
         fn report(&self, done: f32, text: &str) {
             self.0.lock().unwrap().push((done, text.to_owned()));
         }
+    }
+
+    #[test]
+    fn a_cdn_manifest_sets_the_offer_without_a_probe() {
+        let mut t = Track::default();
+        let mut bare = launcher_release("v1.0.9");
+        bare.assets.retain(|a| a.name != SUMS_FILE);
+        t.on_manifest(Part::Launcher, bare, 100);
+        assert_eq!(t.probe_at, 100 + CHECK_INTERVAL.as_secs());
+        assert!(t.tag.is_none() && t.error.is_some());
+        let mut ok = launcher_release("v1.0.9");
+        ok.assets.retain(|a| a.name != SUMS_FILE);
+        for a in &mut ok.assets {
+            a.digest = Some(format!("sha256:{}", "a".repeat(64)));
+        }
+        t.on_manifest(Part::Launcher, ok, 200);
+        assert!(t.error.is_none());
+        assert_eq!(
+            t.offer(Some(&v("1.0.8"))).map(|r| r.tag_name.as_str()),
+            Some("v1.0.9")
+        );
+        assert!(t.offer(Some(&v("1.0.9"))).is_none());
     }
 
     #[test]

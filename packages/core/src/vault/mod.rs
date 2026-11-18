@@ -12,6 +12,7 @@
 pub mod career_names;
 pub mod careers;
 pub mod cloud;
+pub mod guard;
 pub mod locate;
 pub mod migrate;
 pub mod restore;
@@ -411,6 +412,49 @@ pub fn now() -> i64 {
 }
 
 /// `YYYY-MM-DD HH:MM UTC`.
+/// The files in a save folder, one line: name, size and modified time to the second, so a change
+/// made during or after a session shows up between two listings.
+pub fn folder_listing(dir: &Path) -> String {
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return format!("{} could not be read", dir.display());
+    };
+    let mut files: Vec<(String, u64, i64)> = read
+        .filter_map(|e| {
+            let e = e.ok()?;
+            let meta = e.metadata().ok()?;
+            if !meta.is_file() {
+                return None;
+            }
+            let secs = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0));
+            Some((e.file_name().to_string_lossy().into_owned(), meta.len(), secs))
+        })
+        .collect();
+    files.sort();
+    if files.is_empty() {
+        return format!("{} is empty", dir.display());
+    }
+    let list: Vec<String> = files
+        .iter()
+        .map(|(name, len, secs)| {
+            let s = crate::save_backup::stamp(*secs);
+            format!(
+                "{name} {len} bytes {}-{}-{} {}:{}:{} UTC",
+                &s[0..4],
+                &s[4..6],
+                &s[6..8],
+                &s[9..11],
+                &s[11..13],
+                &s[13..15]
+            )
+        })
+        .collect();
+    format!("{}: {}", dir.display(), list.join("; "))
+}
+
 pub fn human(secs: i64) -> String {
     let s = crate::save_backup::stamp(secs);
     format!(
@@ -637,6 +681,7 @@ impl Vault {
             {
                 Some(mut s) => {
                     s.id = id;
+                    s.source.clone_from(&self.source);
                     out.push(s);
                 }
                 None => unreadable.push(name),
@@ -723,8 +768,15 @@ impl Vault {
             std::fs::remove_file(&tmp).ok();
             return Err(changed_during(src));
         }
+        if let Err(e) = crate::sync_file(&tmp) {
+            std::fs::remove_file(&tmp).ok();
+            return Err(e);
+        }
         match std::fs::rename(&tmp, &blob) {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                crate::sync_dir(Some(&dir));
+                Ok(())
+            }
             Err(_) if blob.is_file() => {
                 std::fs::remove_file(&tmp).ok();
                 Ok(())

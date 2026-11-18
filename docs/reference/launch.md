@@ -53,6 +53,17 @@ From 1.3.1, **Play** on an [EA app copy](/using/game-copies) runs in this order:
 
 When F1 25 hasn't started 5 minutes after the link, the launcher opens the EA app and the status line reads **Press Play on F1 25 in the EA app**. Pressing **Play** there starts the modded session. After 10 more minutes without the game, the launch stops and the game folder rolls back. The `[ea app]` line after the link says whether offline play's file is still in place. When the EA app took it out to repair F1 25, the status line reads **The EA app is repairing F1 25** instead, and F1 25 starts without mods after the repair.
 
+### Programs set to run as administrator
+
+The EA app runs without administrator rights, and Windows won't start a program set to **Run this program as an administrator** for it (error 740). Before the launcher starts the EA app or changes the game folder, it reads that setting for you and for all users, under `HKEY_CURRENT_USER` and `HKEY_LOCAL_MACHINE` in `Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`. The launch stops there with **A program is set to run as administrator** when one of these is set:
+
+- the program that hands the EA app the launch link, usually `EALauncher.exe`, while the launcher runs without administrator rights. The message also names `EADesktop.exe` and `EALauncher.exe` wherever they are set.
+- `F1_25.exe` or offline play's `EAAntiCheat.GameServiceLauncher.exe` in the game folder, for a modded session, while the EA app runs without administrator rights. Running the launcher as administrator doesn't change that, and the message says so.
+
+The message names each file, with what to untick: right-click the file, open **Properties > Compatibility**, untick **Run this program as an administrator**, and untick it under **Change settings for all users** too. Then select **Play** again.
+
+When Windows refuses a start the check didn't see, the launch stops at once with the same message: when the launch link's hand-off or the EA app itself fails with error 740, or when offline play's session launcher logs `CreateProcessW failed, error 740` after the link. The launcher doesn't wait the 5 and 10 minutes for F1 25 then. The game folder rolls back and the session's lock is freed before the message shows, so the next **Play** starts straight away.
+
 When the EA app repairs F1 25 before it starts the game, the repair puts EA's `EAAntiCheat.GameServiceLauncher.exe` over offline play's file, and F1 25 starts without mods. Once F1 25 has started, the launcher puts offline play's file back, keeps EA's file as the backup the roll-back restores, and opens **The EA app repaired F1 25**. Close F1 25 and select **Play** in the launcher again. An EA app that asks to repair F1 25 on every **Play** checks that file on that PC, and modded play doesn't start through it; the vanilla profile still plays.
 
 | | Running | Launch link handed to |
@@ -62,12 +73,14 @@ When the EA app repairs F1 25 before it starts the game, the repair puts EA's `E
 
 On Windows, `ea_launch_command` replaces the handler when it's set. The EA app registers the handler with an unquoted path, and the launcher runs everything up to `.exe` as the program.
 
-When the EA app doesn't come up, the launch stops with one of these messages:
+When the EA app doesn't come up or the launch link doesn't reach it, the launch stops with one of these messages:
 
 | Message | What to do |
 |---|---|
 | `the EA app didn't start within 90 s; open the EA app and press Play again` | Open the EA app yourself, then select **Play** again |
 | `could not start the EA app (...); open the EA app and press Play again` | Open the EA app yourself, then select **Play** again |
+| `could not run <program> to hand the launch link to the EA app (...); open the EA app and press Play again` | Open the EA app yourself, then select **Play** again |
+| `EALauncher.exe is set to run as administrator, so Windows won't start it for an EA app session (error 740). ...` | Untick **Run this program as an administrator** on each file the message names; see [Programs set to run as administrator](#programs-set-to-run-as-administrator) |
 | `the EA app is closed and starting it is turned off ...` | Open the EA app, or turn **Start the EA app automatically** back on |
 | `the EA app was not found on this computer ...` | Install or repair the EA app |
 | `... Swofty starts it through the EA app with the launch.ea_launch_command setting ...` | Set `ea_launch_command` on Linux |
@@ -81,11 +94,26 @@ When the EA app doesn't come up, the launch stops with one of these messages:
 [ea app] F1 25 started (pid 5120)
 ```
 
-`swofty doctor` shows whether the EA app runs and how the link reaches it, in its `ea app` and `ea app hand-off` rows. `swofty run --direct` starts an EA app copy through Proton instead, without the EA app. `swofty game launch` hands the EA app the launch link for the copy as it's installed, without your profile or offline play.
+`swofty doctor` shows whether the EA app runs and how the link reaches it, in its `ea app` and `ea app hand-off` rows. An EA app copy always starts through the EA app; `swofty run --direct` is for Steam copies. `swofty game launch` hands the EA app the launch link for the copy as it's installed, without your profile or offline play.
+
+## Copies Swofty plays
+
+Modded sessions run only on a copy Steam or the EA app installed. Before a session or `swofty apply` changes anything, the launcher checks that:
+
+- The copy is a Steam copy or an EA app copy. A copy in any other folder is refused.
+- The game folder has none of the files Steam emulators and cracks leave: `steam_settings`, `steam_emu.ini`, `steam_api64_o.dll`, `steam_interfaces.txt`, `ColdClientLoader.ini`, `steamclient_loader_x64.exe`, `steamclient64.dll`, `OnlineFix64.dll`, `OnlineFix.ini`, `cream_api.ini`, `CODEX64.dll` and `SmartSteamEmu.ini`. A file in Steam's list for the install is never one of them.
+- `F1_25.exe` and `steam_api64.dll` match the size and SHA-1 in Steam's list, on a Steam copy whose list the launcher reads. A changed one opens **Your game files have been edited**; see [Game files changed outside Swofty](#game-files-changed-outside-swofty).
+- An EA app copy starts through the EA app.
+
+`swofty run` and `swofty apply` stop with the reason:
+
+```text
+swofty: this copy of F1 25 wasn't installed by Steam or the EA app, so it can't be played modded; Swofty runs only on a copy you own on Steam or the EA app
+```
 
 ## Game files changed outside Swofty
 
-Before a modded session builds anything, the launcher checks the Steam copy against Steam's list of the files it installed. When files were changed outside Swofty, usually by a mod copied into the game folder by hand, F1 25 is not started and nothing in the game folder is changed. [Checking against Steam](/reference/restore#checking-against-steam) lists what the check compares.
+Before a modded session builds anything, the launcher checks the Steam copy against Steam's list of the files it installed. When files were changed outside Swofty, usually by a mod copied into the game folder by hand, F1 25 is not started and nothing in the game folder is changed. A DLL other than `steam_api64.dll` that differs from Steam's copy is logged and doesn't stop the launch; a missing one does. [Checking against Steam](/reference/restore#checking-against-steam) lists what the check compares.
 
 The launcher opens **Your game files have been edited**. It says how many files changed, names the first six, and shows the fix:
 
@@ -106,8 +134,8 @@ A game file the profile replaces that is missing from the game folder is put bac
 
 | `F1_25.exe` version | Fix |
 | --- | --- |
-| Older than 1.0.141.7865 | Update F1 25 in Steam or the EA app |
-| 1.0.141.7865 or newer | Verify the game files in Steam, or repair them in the EA app |
+| Older than 1.0.145.2472 | Update F1 25 in Steam or the EA app |
+| 1.0.145.2472 or newer | Verify the game files in Steam, or repair them in the EA app |
 | Unknown | Update F1 25, then verify the game files |
 
 `swofty run` and `swofty apply` stop with the same fix:
@@ -128,7 +156,7 @@ A game file that is shorter than it should be is named with the fix to verify th
 
 ## An older F1 25
 
-Before a modded session, `swofty run` and the launcher's **Play** compare `F1_25.exe`'s version with 1.0.141.7865, the latest update. On an older copy the launcher shows **F1 25 needs the latest update** and the session goes on; `swofty run` prints the same on a `[warning]` line. Mods may not load on an older copy.
+Before a modded session, `swofty run` and the launcher's **Play** compare `F1_25.exe`'s version with 1.0.145.2472, the latest update. On an older copy the launcher shows **F1 25 needs the latest update** and the session goes on; `swofty run` prints the same on a `[warning]` line. Mods may not load on an older copy.
 
 ## Linux: the Steam wrapper
 
@@ -136,13 +164,13 @@ Set Steam's launch option to `swofty run -- %command%` so its Play button starts
 
 To go back to Steam's normal launch, clear the option.
 
-Without the wrapper in the launch option, the launcher's **Play** and `swofty run --direct` start Proton themselves. Proton reads wheels and controllers through SDL2. When the system has no 64-bit SDL2, as under NixOS `steam-run`, the launcher links the copy from Steam's runtime into `$DATA/state/runtime-libs` and adds it to the game's library path. `swofty run` then prints `controllers: this system has no SDL2`.
+Without the wrapper in the launch option, the launcher's **Play** and `swofty run --direct` start Proton themselves. Proton reads wheels and controllers through SDL2. When the system has no 64-bit SDL2, as under NixOS `steam-run`, the launcher links Steam's own copy into `$DATA/state/runtime-libs` and adds it to the game's library path: the 64-bit client's SDL3 (`steamrt64/libSDL3.so.0`) with the SDL2 layer from its runtime, or the old `ubuntu12_32/steam-runtime` SDL2 on clients that still have it. `swofty run` then prints `controllers: this system has no SDL2`.
 
 ## Windows
 
 Select **Play** in the launcher or run `swofty run`. If Steam is closed, it [starts first](#steam). To follow the logs in the launcher, select the arrow next to **Play** and choose **Play with console**.
 
-Modded sessions don't start while `F1_25.exe` is set to **Run this program as an administrator** and the launcher runs normally: Windows won't start the game unelevated (error 740), and the launch stops with a message naming the setting. To fix it, right-click `F1_25.exe` in the game folder, open **Properties > Compatibility** and untick the box, or untick it under **Change settings for all users** when it's set for all users. You can also run the launcher as administrator. `swofty doctor` shows the setting in its `run as admin` row.
+On a Steam copy, modded sessions don't start while `F1_25.exe` is set to **Run this program as an administrator** and the launcher runs normally: Windows won't start the game unelevated (error 740), and the launch stops with a message naming the setting. To fix it, right-click `F1_25.exe` in the game folder, open **Properties > Compatibility** and untick the box, or untick it under **Change settings for all users** when it's set for all users. You can also run the launcher as administrator. On an EA app copy, the EA app starts F1 25, and running the launcher as administrator doesn't help: untick the setting. See [Programs set to run as administrator](#programs-set-to-run-as-administrator). `swofty doctor` shows the setting in its `run as admin` row.
 
 The launcher doesn't pass its `__COMPAT_LAYER`, the variable Windows uses to hand compatibility settings on to the programs a program starts, to F1 25, to the offline play session launcher, or to the EA app when it starts the EA app. The launch log says `environment: not passing the Windows compatibility layer __COMPAT_LAYER=<layers> to the game` when it drops one. A `__COMPAT_LAYER` under `"env"` in `"launch"` in `$DATA/config.json` is still passed. Each session's `env.txt` lists the environment the launcher starts the game with.
 

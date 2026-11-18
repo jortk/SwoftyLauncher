@@ -47,12 +47,18 @@ pub fn sha256_opt(path: &Path) -> Result<Option<String>> {
 
 pub const HASHES_FILE: &str = "state/hashes.json";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 struct Stamp {
     len: u64,
     modified: u128,
     changed: i128,
     ino: u64,
+    #[serde(default = "one")]
+    links: u64,
+}
+
+fn one() -> u64 {
+    1
 }
 
 impl Stamp {
@@ -65,27 +71,40 @@ impl Stamp {
             .ok()?
             .as_nanos();
         #[cfg(unix)]
-        let (changed, ino) = {
+        let (changed, ino, links) = {
             use std::os::unix::fs::MetadataExt;
             (
                 i128::from(meta.ctime()) * 1_000_000_000 + i128::from(meta.ctime_nsec()),
                 meta.ino(),
+                meta.nlink(),
             )
         };
         #[cfg(not(unix))]
-        let (changed, ino) = (
+        let (changed, ino, links) = (
             meta.created()
                 .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map_or(0, |d| d.as_nanos() as i128),
             0,
+            1,
         );
         Some(Self {
             len: meta.len(),
             modified,
             changed,
             ino,
+            links,
         })
+    }
+
+    /// Adding or removing a hard link changes the inode's change time without
+    /// touching its bytes, so for a linked file only size, mtime and inode
+    /// are compared.
+    fn same(&self, other: &Self) -> bool {
+        self.len == other.len
+            && self.modified == other.modified
+            && self.ino == other.ino
+            && (self.changed == other.changed || self.links > 1 || other.links > 1)
     }
 }
 
@@ -118,12 +137,12 @@ impl Hashes {
     pub fn sha256(&mut self, path: &Path) -> Result<String> {
         let before = Stamp::of(path);
         if let (Some(now), Some((was, sha))) = (before, self.files.get(path))
-            && now == *was
+            && now.same(was)
         {
             return Ok(sha.clone());
         }
         let sha = sha256_file(path)?;
-        if let Some(stamp) = before.filter(|b| Stamp::of(path) == Some(*b)) {
+        if let Some(stamp) = before.filter(|b| Stamp::of(path).is_some_and(|n| n.same(b))) {
             self.files.insert(path.to_path_buf(), (stamp, sha.clone()));
             self.dirty = true;
         }
@@ -151,7 +170,8 @@ impl Hashes {
         if !self.dirty {
             return;
         }
-        self.files.retain(|p, (stamp, _)| Stamp::of(p) == Some(*stamp));
+        self.files
+            .retain(|p, (stamp, _)| Stamp::of(p).is_some_and(|n| n.same(stamp)));
         if crate::write_json(&self.path, &self.files).is_ok() {
             self.dirty = false;
         }

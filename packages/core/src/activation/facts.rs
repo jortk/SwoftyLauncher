@@ -584,6 +584,8 @@ pub fn facts(scan: &Scan, previous: Option<&Facts>, cache: &mut WorldsCache) -> 
         stamp(&mut hasher, &a.shipped);
         stamp(&mut hasher, &a.placed);
         hasher.update(format!("{} ui {:?};", a.code, a.ui_lists));
+        let placed_ai = ai_placed(&a.code, &scan.placed);
+        hasher.update(format!("{} ai {placed_ai:?};", a.code));
         let row = codes
             .iter()
             .find(|(_, c)| *c == a.code)
@@ -594,10 +596,9 @@ pub fn facts(scan: &Scan, previous: Option<&Facts>, cache: &mut WorldsCache) -> 
         let Ok(placed) = ErpFile::open(&a.placed) else {
             continue;
         };
-        ai.insert(
-            a.code.clone(),
-            ai_of_names(&a.code, placed.erp.resources.iter().map(|r| r.name.as_str())),
-        );
+        let mut found = ai_of_names(&a.code, placed.erp.resources.iter().map(|r| r.name.as_str()));
+        found.extend(placed_ai);
+        ai.insert(a.code.clone(), found);
         rows.insert(a.code.clone(), *row);
         let files = vec![a.placed.clone(), a.shipped.clone()];
         jobs.push(Job {
@@ -855,9 +856,10 @@ mod tests {
             db: db_path.clone(),
             game: &game,
             file: &file,
-            placed: vec![format!(
-                "{TRACKS_DIR}/melbourne/ai/f1_1990_vehicle_package/f1_1990_car/line.aispline"
-            )],
+            placed: vec![
+                format!("{TRACKS_DIR}/melbourne/ai/f1_1990_vehicle_package/f1_1990_car/line.aispline"),
+                format!("{TRACKS_DIR}/added/ai/f1_1990_vehicle_package/ferrari/ferrari.erp"),
+            ],
             added: vec![
                 Added {
                     code: "added".into(),
@@ -951,7 +953,14 @@ mod tests {
         let a = &f.tracks["added"];
         assert_eq!(a.worlds["f1_26"], room(22, 11, 11, Some("f1")));
         assert_eq!(a.worlds["f1_26_myteam"], room(24, 12, 12, Some("f1")));
-        assert_eq!(a.ai, ["f1_2025_vehicle_package/ferrari"]);
+        assert_eq!(
+            a.ai,
+            [
+                "f1_1990_vehicle_package/ferrari",
+                "f1_2025_vehicle_package/ferrari"
+            ],
+            "an added track lists the ai of its archive and the ai addons place for it"
+        );
         assert_eq!(a.ai_difficulties, ["f1_1990_vehicle_package"]);
         let text = serde_json::to_value(&f).unwrap();
         assert!(

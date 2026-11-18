@@ -1,0 +1,12 @@
+{
+  "content.package": {
+    "f1_1959": {
+      "$comment": "off, reduced, standard, increased or null",
+      "entrant_list": "f1_1959",
+      "season": 1959,
+      "rules": {
+        "safety_car": "none"
+      }
+    }
+  }
+}

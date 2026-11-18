@@ -48,7 +48,7 @@ A mod that adds a driver head the game doesn't have, such as a face mod with a `
 
 ## Tracks
 
-Drop a track zip on the launcher without unpacking it. It becomes a track addon in the **Tracks** category; turn it on to add the track to Grand Prix track selection. You can turn on any number of tracks in one profile.
+Drop a track zip on the launcher without unpacking it. It becomes a track addon in the **Tracks** category; turn it on to add the track to Grand Prix track selection. One profile can add up to 29 tracks to the game's track lists; the build leaves out the ones past that, in load order, and names them in the Play log.
 
 A track whose package doesn't say which track it replaces or copies can't be used. The launcher warns when you import it, marks its addon **Track left out** on the Addons page, and leaves it out when you play; the rest of the profile still loads. Import a fixed version, or ask the track's author for one.
 

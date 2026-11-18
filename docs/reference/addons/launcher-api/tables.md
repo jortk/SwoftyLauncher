@@ -156,6 +156,23 @@ An older launcher ignores `row_height`, `image`, `spans` and `detail`, and draws
 
 A launcher older than 1.5.25 fails a view with a colour cell, and ignores a cell picture's `fit` and `transparent`. Set `"compat": { "launcher": ">=1.5.25" }`, or check `launcher` in `hello` and fall back ([Versions](../launcher-api#versions)).
 
+### Pictures supplied in memory
+
+When `hello.params.capabilities` contains `"view.cell.image_data"`, a helper can send a small PNG directly in a cell. The launcher decodes and renders it in memory without creating image files:
+
+```json
+{ "text": "Ferrari", "image_data": { "png": "<base64-encoded PNG bytes>", "width": 28, "height": 28, "fit": "contain", "transparent": true } }
+```
+
+- `png` is standard base64 of a static PNG, with no data-URI prefix. The encoded string must be at most 65,536 bytes; the decoded picture must be at most 256 by 256 pixels. Animated PNGs are unsupported.
+- `width`, `height`, `fit` and `transparent` behave like the file-backed cell image settings. Alpha is preserved; `transparent` removes the background behind the picture.
+- Set the table's `row_height` to leave room for taller pictures; for example, `row_height: 64` accommodates a 48 px image. Cell text is displayed beside a valid picture too: use empty `text` for an image-only cell.
+- A valid `image_data` takes precedence over `image`. Invalid or oversized data falls back to `image`, if provided, and then to the cell's text. Existing image path restrictions still apply.
+- Decoded images and failed inputs share a bounded in-memory cache of 64 entries, reused across view refreshes. Supply the same bytes for an unchanged picture.
+- Check the capability before sending this field and keep `text` as a fallback, including for search and sorting. An absent capability list is empty.
+
+This field accepts pixels supplied by the helper. It does not resolve game texture names or Live API `team_badge_texture` references. Those references identify a resource; they do not contain PNG bytes.
+
 ## Editing cells
 
 - Click an editable cell to edit it. Enter or leaving the cell commits it, and Escape cancels.

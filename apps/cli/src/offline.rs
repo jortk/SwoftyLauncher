@@ -178,17 +178,25 @@ pub fn ensure_extension(store: &Store) -> Result<Artifacts> {
     match offline::artifacts(&store.root) {
         Ok(a) => Ok(a),
         Err(e) => {
-            let dir = offline::extension_dir(&store.root);
-            if dir.exists() {
-                // A copy that fails its pins is stale or tampered. The pins
-                // are the trust decision, so the pinned release replaces it.
-                println!("offline play extension does not match the pins ({e}); fetching the pinned release");
-            } else {
-                println!("offline play extension is not installed yet: {e}");
-            }
+            println!("{}", why_fetch(store, &e));
             fetch(store)
         }
     }
+}
+
+fn why_fetch(store: &Store, e: &swofty_core::Error) -> String {
+    if let Some(stub) = offline::stub_removed_from_extension(&store.root) {
+        return format!(
+            "offline play: {}; fetching the pinned release",
+            offline::stub_removed_text(&store.root, &stub)
+        );
+    }
+    if offline::extension_dir(&store.root).exists() {
+        // A copy that fails its pins is stale or tampered. The pins
+        // are the trust decision, so the pinned release replaces it.
+        return format!("offline play extension does not match the pins ({e}); fetching the pinned release");
+    }
+    format!("offline play extension is not installed yet: {e}")
 }
 
 #[cfg(test)]
@@ -219,6 +227,40 @@ mod tests {
         assert!(
             !err.contains("yourself") && !err.contains("offline install"),
             "{err}"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_stub_gone_beside_its_hook_is_put_down_to_an_antivirus() {
+        let root = std::env::temp_dir().join(format!("swofty-cli-offline-av-{}", std::process::id()));
+        std::fs::remove_dir_all(&root).ok();
+        let store = Store::new(&root);
+        let dir = offline::extension_dir(&root);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in offline::REQUIRED {
+            std::fs::write(dir.join(name), "x").unwrap();
+        }
+        std::fs::remove_file(dir.join("f1op_stub.exe")).unwrap();
+        let e = offline::artifacts(&root).unwrap_err();
+        let line = why_fetch(&store, &e);
+        assert!(
+            line.starts_with("offline play: f1op_stub.exe is missing from ")
+                && line.contains("an antivirus most likely removed it")
+                && line.contains("quarantine")
+                && line.contains(&format!(
+                    "exclusion for the Swofty data folder ({})",
+                    root.display()
+                ))
+                && line.ends_with("; fetching the pinned release"),
+            "{line}"
+        );
+        std::fs::remove_file(dir.join("f1op_hook.dll")).unwrap();
+        let e = offline::artifacts(&root).unwrap_err();
+        assert!(
+            why_fetch(&store, &e).starts_with("offline play extension does not match the pins"),
+            "{}",
+            why_fetch(&store, &e)
         );
         std::fs::remove_dir_all(&root).ok();
     }

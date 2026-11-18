@@ -83,7 +83,7 @@ When naming yours, leave these alone:
 
 Each time you build the profile, the launcher generates ADDON SETTINGS from the game's own screens:
 
-- `swofty_settings`: one tile per enabled addon and track, with its name, author, version and description.
+- `swofty_settings`: one tile per enabled addon and track, in a row per launcher folder, with its name, icon, author, version and description.
 - `swofty_addon_<n>`: the page for `addons[n]` of `swofty/settings.json`, with one row per option.
 - `swofty_map_<n>`: a track's code, author and version.
 

@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <mutex>
 #include <string>
 
 #include "apply/tracks/box.hpp"
@@ -42,6 +43,8 @@ std::atomic<uintptr_t> last_record{0};
 std::atomic<uint64_t> counter{0}, record_seq{0}, select_seq{0};
 std::atomic<bool> offered, wanted, settled, live;
 std::atomic<uint32_t> logged{0};
+std::mutex confirmed_lock;
+std::string confirmed_time_trial;
 
 void site_matched(SwoftyContext *c)
 {
@@ -68,6 +71,10 @@ bool refused(bool time_trial)
     uintptr_t at = 0;
     if (!mem::read(rec + RECORD_NAME, at) || !mem::c_string(at, name, 64))
         name.clear();
+    if (time_trial) {
+        std::lock_guard<std::mutex> lk(confirmed_lock);
+        confirmed_time_trial = name;
+    }
     trk::Active a = trk::active();
     if (!a.set) {
         note("[tracks] guard: " + name + " confirmed with no box picked; allowed");
@@ -148,6 +155,12 @@ void track_select_commit()
                 live ? "armed: a Grand Prix or Time Trial confirm of a track the box can't run shows why and stays on the "
                        "screen"
                      : "did not install (see the [core] lines)");
+}
+
+std::string track_select_time_trial()
+{
+    std::lock_guard<std::mutex> lk(confirmed_lock);
+    return confirmed_time_trial;
 }
 
 }

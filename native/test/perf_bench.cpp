@@ -31,6 +31,14 @@ const std::wstring &swofty_root()
     static const std::wstring root = L".\\";
     return root;
 }
+std::wstring hardware_settings_file()
+{
+    return L"";
+}
+std::string read_file(const std::wstring &, size_t)
+{
+    return "";
+}
 }
 
 namespace {

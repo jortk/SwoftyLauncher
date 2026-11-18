@@ -22,10 +22,11 @@
 // (entity +0x2b0 setup mode stat id byte +0x80, entity +0xe18 the selected entrant list's u16 season at +0xb0;
 // Trk_ChampionshipEntity_TrackDataQuery_Body, V1631) and writes the session's track again in those sets and the
 // ones the query picks; at the session's end it logs when the query changed during the session. Without a box
-// entry, a track.data record <track>/<data set> whose fuel differs from the set's is written into that named set.
+// entry, a track.data record <track>/<data set> whose fuel an addon set and that differs from the set's is written into that named set.
 // Box writes are put back on the next box press, on leaving the box and on career unload; track.data writes when
 // the session ends. Each write keeps the bytes it found and puts back only what still holds the bytes the core
-// wrote. Only fuel is written: the other track.data fields take effect at the next start (D4).
+// wrote. Only fuel is written: the other track.data fields take effect at the next start (D4). The box's pit speed
+// limit and race laps (track.per_package pit.speed_limit, laps; fuel_plan.hpp) are written and put back the same way.
 
 namespace swofty_core::apply::tracks {
 
@@ -84,6 +85,128 @@ bool write_fuel(uintptr_t obj, const pf::Fuel &f)
 
 std::mutex mu;
 std::vector<FuelWrite> box_writes, session_writes;
+std::vector<PitWrite> pit_writes;   // the box's pit speed limits (put back with the box's fuel)
+std::vector<LapsWrite> laps_writes; // the box's race laps (put back with the box's fuel)
+
+bool read_float(uintptr_t at, float &v)
+{
+    if (!swofty::mem::readable(at, sizeof v))
+        return false;
+    std::memcpy(&v, reinterpret_cast<const void *>(at), sizeof v);
+    return true;
+}
+
+int apply_pit(std::vector<PitWrite> &plan)
+{
+    int n = 0;
+    for (auto &w : plan) {
+        bool held = false;
+        for (auto &k : pit_writes)
+            held = held || k.object == w.object;
+        if (held || !put(w.object + kPitSpeed, &w.after, sizeof w.after))
+            continue;
+        pit_writes.push_back(w);
+        n++;
+    }
+    return n;
+}
+
+int put_back_pit(int *changed)
+{
+    int n = 0;
+    for (auto it = pit_writes.rbegin(); it != pit_writes.rend(); ++it) {
+        float now = 0;
+        if (read_float(it->object + kPitSpeed, now) && now == it->after)
+            n += put(it->object + kPitSpeed, &it->before, sizeof it->before);
+        else if (changed)
+            ++*changed;
+    }
+    pit_writes.clear();
+    return n;
+}
+
+// The box's pit speed limits into these sets (only the session's track when code is given). Caller holds mu.
+int write_pit(const Active &a, const std::vector<const pf::Set *> &into, const std::string &code)
+{
+    std::vector<PitWrite> plan = plan_box_pit(base(), a.entries, into, code, read_float);
+    int n = apply_pit(plan);
+    if (n)
+        swofty::log("[tracks] box %s: pit speed limit written: %d write(s) in %zu set(s)%s%s; put back when the box is left",
+                    a.package.c_str(), n, into.size(), code.empty() ? "" : " for ", code.c_str());
+    return n;
+}
+bool read_ptr(uintptr_t at, uintptr_t &v)
+{
+    if (!swofty::mem::readable(at, sizeof v))
+        return false;
+    std::memcpy(&v, reinterpret_cast<const void *>(at), sizeof v);
+    return true;
+}
+
+bool read_i32(uintptr_t at, int32_t &v)
+{
+    if (!swofty::mem::readable(at, sizeof v))
+        return false;
+    std::memcpy(&v, reinterpret_cast<const void *>(at), sizeof v);
+    return true;
+}
+
+int apply_laps(std::vector<LapsWrite> &plan)
+{
+    int n = 0;
+    for (auto &w : plan) {
+        bool held = false;
+        for (auto &k : laps_writes)
+            held = held || k.at == w.at;
+        if (held || !put(w.at, &w.after, sizeof w.after))
+            continue;
+        laps_writes.push_back(w);
+        n++;
+    }
+    return n;
+}
+
+int put_back_laps(int *changed)
+{
+    int n = 0;
+    for (auto it = laps_writes.rbegin(); it != laps_writes.rend(); ++it) {
+        int32_t now = 0;
+        if (read_i32(it->at, now) && now == it->after)
+            n += put(it->at, &it->before, sizeof it->before);
+        else if (changed)
+            ++*changed;
+    }
+    laps_writes.clear();
+    return n;
+}
+
+// The box's race laps into these sets (only the session's track when code is given). Caller holds mu.
+int write_laps(const Active &a, const std::vector<const pf::Set *> &into, const std::string &code)
+{
+    std::vector<LapsWrite> plan = plan_box_laps(base(), a.entries, into, code, read_ptr, read_i32);
+    int n = apply_laps(plan);
+    if (n) {
+        std::string what;
+        for (auto &w : plan) {
+            std::string one = w.track + " " + std::to_string(w.before) + " -> " + std::to_string(w.after);
+            if (what.find(one) == std::string::npos)
+                what += (what.empty() ? "" : ", ") + one;
+        }
+        swofty::log("[tracks] box %s: race laps written (full race length; the race length option scales them): %d "
+                    "write(s) in %zu set(s)%s%s (%s); put back when the box is left",
+                    a.package.c_str(), n, into.size(), code.empty() ? "" : " for ", code.c_str(), what.c_str());
+    }
+    return n;
+}
+
+bool any_laps(const Active &a, const std::string &code)
+{
+    for (auto &[id, en] : a.entries.by_track)
+        if (en.laps && base().by_id(id) && (code.empty() || base().by_id(id)->code == code))
+            return true;
+    return false;
+}
+
 std::string waiting_logged;
 bool session_query_read = false;
 Query session_query;
@@ -197,6 +320,30 @@ public:
                     return true;
             return false;
         }();
+        bool box_pit = a.set && a.mode == Mode::grand_prix && [&] {
+            for (auto &[id, en] : a.entries.by_track)
+                if (en.pit_speed && base().by_id(id) && base().by_id(id)->code == code)
+                    return true;
+            return false;
+        }();
+        bool box_laps = a.set && a.mode == Mode::grand_prix && any_laps(a, code);
+        if (box_pit || box_laps) {
+            Query q;
+            std::string pwhy;
+            std::vector<pf::Set> psets;
+            if (read_sets(e, psets, pwhy) && read_query(e, q, pwhy)) {
+                std::lock_guard g(mu);
+                std::vector<const pf::Set *> into = box_sets(psets, q.mode, &q);
+                if (box_pit)
+                    report.applied += write_pit(a, into, code);
+                if (box_laps)
+                    report.applied += write_laps(a, into, code);
+            } else {
+                swofty::log("[tracks] box %s: %s for %s not written: %s", a.package.c_str(),
+                            box_pit && box_laps ? "pit speed limit and race laps" : box_pit ? "pit speed limit" : "race laps",
+                            code.c_str(), pwhy.c_str());
+            }
+        }
         std::vector<std::pair<std::string, float>> data = data_fuel(store, ctx.track);
         if (!box_fuel && data.empty())
             return;
@@ -274,7 +421,7 @@ private:
         std::vector<std::pair<std::string, float>> out;
         for (auto &n : pf::kSets) {
             registry::Record r = store.get("track.data", track + "/" + n.name);
-            if (r.status != registry::Status::ok)
+            if (r.status != registry::Status::ok || !burn_from_addon(r.origins, r.owner))
                 continue;
             const swofty::json::Value &f = r.value["fuel"];
             if (f.is_object() && f["burn_per_lap"].is_number() && f["burn_per_lap"].as_double() > 0)
@@ -290,9 +437,26 @@ int write_box_fuel_now(const Active &a, int mode_stat)
 {
     if (!a.set || a.mode != Mode::grand_prix)
         return 0;
-    bool any = false;
-    for (auto &[id, en] : a.entries.by_track)
+    bool any = false, pit = false, laps = any_laps(a, "");
+    for (auto &[id, en] : a.entries.by_track) {
         any = any || (en.burn && base().by_id(id));
+        pit = pit || (en.pit_speed && base().by_id(id));
+    }
+    if ((pit || laps) && mode_stat >= 0 && mode_stat < 32) {
+        std::vector<pf::Set> psets;
+        std::string pwhy;
+        if (read_sets(entity(), psets, pwhy)) {
+            std::lock_guard g(mu);
+            std::vector<const pf::Set *> into = box_sets(psets, uint32_t(mode_stat), nullptr);
+            if (pit)
+                write_pit(a, into, "");
+            if (laps)
+                write_laps(a, into, "");
+        } else {
+            swofty::log("[tracks] box %s: %s waits for the session load: %s", a.package.c_str(),
+                        pit && laps ? "pit speed limit and race laps" : pit ? "pit speed limit" : "race laps", pwhy.c_str());
+        }
+    }
     if (!any)
         return 0;
     if (mode_stat < 0 || mode_stat >= 32) {
@@ -319,6 +483,20 @@ int write_box_fuel_now(const Active &a, int mode_stat)
 int put_back_box_fuel(const char *why)
 {
     std::lock_guard g(mu);
+    if (!pit_writes.empty()) {
+        int pchanged = 0;
+        size_t had = pit_writes.size();
+        int pn = put_back_pit(&pchanged);
+        swofty::log("[tracks] box pit speed limit: %d of %zu write(s) put back (%s)%s", pn, had, why ? why : "",
+                    pchanged ? (", " + std::to_string(pchanged) + " changed since and left").c_str() : "");
+    }
+    if (!laps_writes.empty()) {
+        int lchanged = 0;
+        size_t had = laps_writes.size();
+        int ln = put_back_laps(&lchanged);
+        swofty::log("[tracks] box race laps: %d of %zu write(s) put back (%s)%s", ln, had, why ? why : "",
+                    lchanged ? (", " + std::to_string(lchanged) + " changed since and left").c_str() : "");
+    }
     if (box_writes.empty())
         return 0;
     int changed = 0;

@@ -33,9 +33,9 @@ static int set_look(const char *driver, const char *look)
 }
 
 static const SwoftyCareerOps kOps5 = {5,       available, nullptr, nullptr, nullptr, nullptr, nullptr,
-                                      nullptr, nullptr,   nullptr, nullptr, nullptr, nullptr, set_look};
+                                      nullptr, nullptr,   nullptr, nullptr, nullptr, nullptr, set_look, nullptr, nullptr, nullptr};
 static const SwoftyCareerOps kOps6 = {6,       available, nullptr, nullptr, nullptr, nullptr, nullptr,
-                                      nullptr, nullptr,   nullptr, nullptr, nullptr, nullptr, set_look};
+                                      nullptr, nullptr,   nullptr, nullptr, nullptr, nullptr, set_look, nullptr, nullptr, nullptr};
 
 int main()
 {

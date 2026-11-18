@@ -1,0 +1,13 @@
+{
+  "content.package": {
+    "f1_2008": {
+      "$comment": "a fuel load is 0 or more kg",
+      "entrant_list": "f1_2008",
+      "season": 2008,
+      "rules": {
+        "refuelling": true,
+        "refuel_stint_kg": -5
+      }
+    }
+  }
+}

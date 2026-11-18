@@ -1,0 +1,9 @@
+{
+  "session.points": {
+    "f1_1950": {
+      "$comment": "1950: 8-6-4-3-2 for the top five, one point for the fastest lap; a box names it as rules.points",
+      "points": [8, 6, 4, 3, 2],
+      "fastest_lap": 1
+    }
+  }
+}

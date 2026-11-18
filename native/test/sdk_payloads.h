@@ -123,6 +123,23 @@ typedef struct SwoftyEvHudVisible {
     bool visible;
 } SwoftyEvHudVisible;
 
+typedef struct SwoftyEvLapsRecorded {
+    uint32_t size, payload_version;
+    const char *path_str;
+    int32_t time_ms;
+    int32_t valid;
+} SwoftyEvLapsRecorded;
+
+typedef struct SwoftyEvLapsSealing {
+    uint32_t size, payload_version;
+    const char *path_str;
+    int32_t time_ms;
+    const uint8_t *body;
+    uint32_t body_len;
+    int32_t (*add_section_fn)(void *user, const char *tag, const void *bytes, uint32_t len);
+    void *user;
+} SwoftyEvLapsSealing;
+
 typedef struct SwoftyEvPartsRegister {
     uint32_t size, payload_version;
     int32_t car;
@@ -211,6 +228,8 @@ typedef struct SwoftyEvCatalogueBuild {
     X(SwoftyEvLap, sessions, Lap, 24)                                                                          \
     X(SwoftyEvControllersRebuilt, cars, ControllersRebuilt, 32)                                                \
     X(SwoftyEvHudVisible, spectator, HudVisible, 32)                                                           \
+    X(SwoftyEvLapsRecorded, laps, Recorded, 24)                                                                \
+    X(SwoftyEvLapsSealing, laps, Sealing, 56)                                                                  \
     X(SwoftyEvPartsRegister, cars, PartsRegister, 48)                                                          \
     X(SwoftyEvBundleResolve, sounds, BundleResolve, 56)                                                        \
     X(SwoftyEvLogoResolve, teams, LogoResolve, 56)                                                             \
@@ -274,6 +293,15 @@ typedef struct SwoftyEvCatalogueBuild {
     X(SwoftyEvControllersRebuilt, cars, ControllersRebuilt, reason, 24)                                        \
     X(SwoftyEvHudVisible, spectator, HudVisible, following, 8)                                                 \
     X(SwoftyEvHudVisible, spectator, HudVisible, visible, 24)                                                  \
+    X(SwoftyEvLapsRecorded, laps, Recorded, path_str, 8)                                                       \
+    X(SwoftyEvLapsRecorded, laps, Recorded, time_ms, 16)                                                       \
+    X(SwoftyEvLapsRecorded, laps, Recorded, valid, 20)                                                         \
+    X(SwoftyEvLapsSealing, laps, Sealing, path_str, 8)                                                         \
+    X(SwoftyEvLapsSealing, laps, Sealing, time_ms, 16)                                                         \
+    X(SwoftyEvLapsSealing, laps, Sealing, body, 24)                                                            \
+    X(SwoftyEvLapsSealing, laps, Sealing, body_len, 32)                                                        \
+    X(SwoftyEvLapsSealing, laps, Sealing, add_section_fn, 40)                                                  \
+    X(SwoftyEvLapsSealing, laps, Sealing, user, 48)                                                            \
     X(SwoftyEvPartsRegister, cars, PartsRegister, car, 8)                                                      \
     X(SwoftyEvPartsRegister, cars, PartsRegister, vehicle_id, 16)                                              \
     X(SwoftyEvPartsRegister, cars, PartsRegister, front_wing, 24)                                              \

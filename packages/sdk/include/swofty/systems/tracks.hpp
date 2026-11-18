@@ -64,7 +64,7 @@ struct Date {
 SWOFTY_RECORD(Date, day, month)
 
 struct Track {
-    static constexpr Version version{1, 0};
+    static constexpr Version version{1, 1};
     std::string code;
     std::string name;
     Ref<Track> base;

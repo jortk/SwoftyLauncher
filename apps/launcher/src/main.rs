@@ -2,40 +2,71 @@
 
 mod addons;
 mod admin_needed;
+mod ads;
 mod app_log;
+mod avatar;
+mod ban;
 mod blocks;
 mod browser;
 mod career_saves;
+mod chart_demo;
 mod colour;
 mod console;
 mod crash_modal;
+mod data_move;
 mod db;
 mod developer;
+mod dialog_keys;
 mod discord;
+mod download_dock;
+mod download_queue;
 mod ea_app;
+mod fallback_fonts;
+mod format;
+mod found_data;
 mod game;
 mod game_edited;
 mod importer;
 mod library;
 mod multiplayer;
 mod news;
+mod notices;
+mod onboarding;
+mod online;
 mod pages;
 mod play_bar;
+mod play_checks;
+mod profile_panel;
+mod profiles;
 mod reveal;
+mod save_area;
+mod scale;
 mod scroll;
 mod sections;
 mod send_logs;
+mod settings;
 mod setup;
+mod shaders;
 mod shell;
+mod support;
 mod tasks;
 mod theme;
+mod time_trial;
 mod tools;
+mod ui;
+mod ui_mode;
+mod unsupported_build;
 mod update;
 
 use gpui_kit::component::{TitleBar, v_flex};
 use gpui_kit::*;
 
 fn main() {
+    if std::env::args().any(|a| a == "--chart-demo") {
+        chart_demo::run();
+        return;
+    }
+    swofty_core::data_move::recover_at_start();
     app_log::start();
     app_log::step("starting the app runtime");
     let app = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
@@ -43,9 +74,11 @@ fn main() {
     app_log::step("app runtime ready, entering the event loop");
     app.run(move |cx| {
         app_log::step("event loop running");
+        fallback_fonts::install(cx);
         gpui_kit::init(cx);
         app_log::step("ui kit ready");
         theme::init(cx);
+        dialog_keys::init(cx);
         app_log::step("theme ready, opening the window");
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
@@ -90,6 +123,9 @@ impl Launcher {
                 shell.update(cx, |s, cx| {
                     s.restore_console(cx);
                     s.run_startup(window, cx);
+                    s.show_data_move_result(window, cx);
+                    s.scan_for_lost_data(window, cx);
+                    s.start_ui_mode(window, cx);
                 });
                 this.shell = Some(shell);
                 app_log::step("launcher shell built");
@@ -121,7 +157,7 @@ impl Render for Launcher {
                     .justify_center()
                     .gap(px(20.))
                     .child(pages::wordmark(220.))
-                    .child("Loading your launcher…"),
+                    .child(swofty_i18n::tr("Loading your launcher…")),
             )
             .into_any_element()
     }

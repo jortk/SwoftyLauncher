@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+mod chart;
+pub use chart::*;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SectionSpec {
     pub id: String,
@@ -76,6 +79,7 @@ pub enum Block {
     Form(Form),
     Tabs(Tabs),
     Image(Image),
+    Chart(Chart),
     DropZone(DropZone),
 }
 
@@ -539,10 +543,40 @@ pub struct CellSpec {
     /// A picture before the text, such as a portrait or a flag.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<CellImage>,
+    /// Small helper-supplied PNG, kept only in memory. Requires `view.cell.image_data`.
+    /// A valid image_data takes precedence over the optional file-backed image.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_data: Option<CellImageData>,
     /// The text in pieces with their own weight and colour, drawn instead of `text`;
     /// `text` still searches, sorts and shows on launchers without spans.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spans: Vec<Span>,
+}
+
+/// An in-memory cell picture: base64 PNG, at most 64 KiB encoded and 256 x 256 pixels.
+/// Invalid images leave the cell's text and optional file-backed fallback available.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CellImageData {
+    pub png: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<f32>,
+    #[serde(default)]
+    pub fit: Fit,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub transparent: bool,
+}
+
+impl CellImageData {
+    pub fn size(&self, side: f32) -> (f32, f32) {
+        match (self.width, self.height) {
+            (Some(w), Some(h)) => (w, h),
+            (Some(w), None) => (w, w),
+            (None, Some(h)) => (h, h),
+            _ => (side, side),
+        }
+    }
 }
 
 /// A cell's picture: the absolute path of a PNG or JPEG under the addon's cache or data
@@ -1772,6 +1806,27 @@ mod tests {
         assert!(matches!(&block, Block::Image(i) if i.transparent));
         let again: TableRow = serde_json::from_value(serde_json::to_value(&row).unwrap()).unwrap();
         assert_eq!(again, row);
+    }
+
+    #[test]
+    fn memory_cell_pictures_round_trip_beside_the_text_fallback() {
+        let value = serde_json::json!({
+            "text": "Ferrari", "image_data": {
+                "png": "aW1hZ2U=", "width": 28.0, "height": 20.0,
+                "fit": "contain", "transparent": true
+            }
+        });
+        let cell: Cell = serde_json::from_value(value.clone()).unwrap();
+        let spec = cell.spec();
+        assert_eq!(spec.text, "Ferrari");
+        let data = spec.image_data.unwrap();
+        assert_eq!(data.size(32.), (28., 20.));
+        assert_eq!(data.fit, Fit::Contain);
+        assert!(data.transparent);
+        assert_eq!(serde_json::to_value(cell).unwrap(), value);
+        let plain: Cell = serde_json::from_value(serde_json::json!({"text":"Ferrari"})).unwrap();
+        assert!(plain.spec().image_data.is_none());
+        assert!(serde_json::to_value(plain).unwrap().get("image_data").is_none());
     }
 
     #[test]

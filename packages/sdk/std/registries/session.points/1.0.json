@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "session.points 1.0",
+  "x-registry": "session.points",
+  "x-version": "1.0",
+  "x-applies": "boot",
+  "x-snapshot": false,
+  "description": "sessions::Points: a points system, one game_setup.session_standings row added at boot (a copy of the stock standard_race preset); a box names it in content.package rules.points.",
+  "$defs": {
+    "places": {
+      "description": "Points per finishing position, from P1; the core pads them with 0 to 26 places.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 26,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9999
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "points": {
+      "$ref": "#/$defs/places"
+    },
+    "fastest_lap": {
+      "description": "The fastest lap bonus, given to a driver in the top 10 (the game's BestOfTop10 rule). null: none.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 99
+    },
+    "reduced": {
+      "description": "The points of a race stopped at 75, 50 and 25 % distance, in that order; a missing entry gives the full points.",
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/places"
+      }
+    },
+    "extends": {
+      "description": "Data files only: this record is a variant of that record, and its value is a merge patch on the base.",
+      "type": "string",
+      "x-ref": "session.points",
+      "x-missing": {
+        "default": "required",
+        "allow": [
+          "required"
+        ]
+      }
+    }
+  },
+  "required": [
+    "points"
+  ],
+  "additionalProperties": true
+}

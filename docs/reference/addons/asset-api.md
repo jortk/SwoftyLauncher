@@ -214,8 +214,9 @@ a game path                  file.put, erp.add-mipmaps (its target)
 ```
 
 - A `file.put` of a whole archive writes every resource that ERP ops write in that archive. Ops from the addon that puts it, or from addons after it in load order, apply to the archive it puts. A put after them in load order replaces their changes.
-- Replacing a target another origin already wrote is a conflict for `erp.put-resource`, `erp.replace-resource`, `erp.remove-resource`, `erp.overlay`, `erp.add-mipmaps`, `db.set`, `db.put-record`, `db.remove-record`, `lang.set` and `file.put`.
-- `erp.add-resource`, `erp.copy-resource`, `erp.patch-pkg`, `erp.set-material`, `group.register` and added rows compose.
+- Replacing a target another origin already wrote is a conflict for `erp.put-resource`, `erp.replace-resource`, `erp.remove-resource`, `erp.add-resource`, `erp.overlay`, `erp.add-mipmaps`, `db.set`, `db.put-record`, `db.remove-record`, `lang.set` and `file.put`.
+- An `erp.add-resource` of a name that an earlier addon's `erp.put-resource` or `erp.add-resource` wrote replaces that resource, and the build log names both addons. An `erp.add-resource` of a name the game's archive has still fails the build.
+- `erp.copy-resource`, `erp.patch-pkg`, `erp.set-material`, `group.register` and added rows compose.
 
 After its stages, the build prints a line per addon with what it writes, then a warning per pair of addons in conflict, the winner first:
 
@@ -250,7 +251,8 @@ The build's `swofty/assets.json` and its files are in the loader folder `swofty/
       "deps": [], "template": "", "origin": "example.livery" }
   ],
   "resource_erps": [                // erp: one overlay archive per origin, from the last origin in load order to the first,
-                                    // since a group reads them in that order and the first that holds a resource wins
+                                    // since a group reads them in that order and the first that holds a resource wins;
+                                    // an origin whose copies of a resource differ between archives has one for each
     { "file": "assets/resources/0.erp", "erps": ["2025_asset_groups/ui_package/flow_boot.erp"], "origin": "example.livery" }
                                     // assets/resources/p<n>.erp for erp.overlay archives
   ],
@@ -292,7 +294,7 @@ The game builds its database before the window opens. To get swofty_core in befo
   registry: the core loads at the early stage for the registry records of 2012 Season, Classic Seasons 2016-2024
   ```
 - `"early": true` on an `operations.native` entry loads that plugin with swofty_core at the early stage. The build lists these plugins in `early_plugins` in `swofty/settings.json`; a nonempty list turns the early stage on.
-- Every other plugin loads at the window trigger, with a second mixin commit. A window-stage mixin that overlaps one installed at the early stage drops its addon.
+- Every other plugin loads at the window trigger, with a second mixin commit. A window-stage wrap or site on the very address of one installed earlier chains onto it (the log line says `chained onto the one installed earlier`). A window-stage mixin whose patched bytes only partly overlap one installed at the early stage drops its addon.
 - Without the early stage, addons load after the database is built. Then only in-place int, float and bool overwrites of existing keys apply. New keys, strings and type changes are skipped and logged.
 
 ### Experimental features

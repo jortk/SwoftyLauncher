@@ -33,7 +33,7 @@ Once the launcher has found F1 25, you do everything from one window. This secti
 | [News](/using/news) | The Discord invite, news posts, changelogs, and where the feed comes from |
 | [Addons](/using/addons) | Installing, turning on, checking and removing addons; the built-in addons |
 | [Addon Browser](/using/addon-browser) | Finding, installing, starring and updating community addons; creators |
-| [Swofty's addons](/using/swofty-addons) | F1 25 RE-Optimization, the Career Mode Editor, the Driver Manager and R&D Tyres |
+| [Swofty's addons](/using/swofty-addons) | The Career Mode Editor, the Driver Manager and R&D Tyres, plus xanpavle's F1 25 RE-Optimization |
 | [Mods and tracks](/using/mods) | Importing mods and tracks, load order, conflicts and `swofty mods` |
 | [Tools](/using/tools) | The tools that make or edit Swofty addons |
 | [Profiles](/using/profiles) | Creating, switching, renaming, duplicating and deleting profiles |

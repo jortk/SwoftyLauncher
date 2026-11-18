@@ -140,7 +140,13 @@ fn collects_the_logs_the_developers_need() {
             want.insert(format!("sessions/{s}/{f}"));
         }
     }
-    assert_eq!(names(&zip), want);
+    let mut got = names(&zip);
+    if cfg!(windows) {
+        got.remove("windows/application-events.txt");
+        // EA App diagnostics come from the host account, not the fake data root.
+        got.retain(|path| !path.starts_with("ea-app/"));
+    }
+    assert_eq!(got, want);
     let addons: Value = serde_json::from_str(&entry(&zip, "addons.json")).unwrap();
     let helper = addons["installed"]
         .as_array()
@@ -756,7 +762,119 @@ fn splits_a_perf_report_into_sections() {
 }
 
 #[test]
-fn excerpts_the_summary_and_addons_sections_in_sixty_lines() {
+fn excerpts_the_pacing_section_between_the_summary_and_addons() {
+    let text = "== Summary\nuptime: 60 s\n\n== Pacing (last 2 minute(s), one row a minute, local time at its end)\ntime fps\n\
+                14:02:00 117\n\n== Addons\nowner calls\n\n== Hooks\nx\n";
+    let lines = perf::excerpt(text, PERF_LINES);
+    assert_eq!(
+        lines,
+        [
+            "== Summary",
+            "uptime: 60 s",
+            "",
+            "== Pacing (last 2 minute(s), one row a minute, local time at its end)",
+            "time fps",
+            "14:02:00 117",
+            "",
+            "== Addons",
+            "owner calls"
+        ]
+    );
+}
+
+const LOADER_MINUTES: &str = "\
+2026-11-14 10:00:01.000 [  812] [perf] gpu engine use: sampled from the GPU Engine counters every 5 s (first read 31 ms)
+2026-11-14 10:00:02.000 [  812] [perf] gpu 0: the driver gives no engine performance data (0xc00000bb); no core clock
+2026-11-14 10:01:00.000 [  812] [perf] last 60 s: pacing: 7000 frame(s) 117 fps; frame times p50 8.38 ms, p99 10.12, p99.9 \
+14.88, max 21.4 ms; 0.8% uneven (over 20% and 1 ms off the previous one), change p99 1.88 ms; 3 over 2x the median, 0 over 50 \
+ms, 0 over 250 ms; 2 spike(s) over 2x the running average
+2026-11-14 10:01:00.000 [  812] [perf] last 60 s: verdict: smooth in frame times; GPU bound (3D engine 98% busy)
+2026-11-14 10:01:00.500 [  812] [perf] display: the game's window is on \\\\.\\DISPLAY1 (2560x1440 at 144 Hz)
+2026-11-14 10:02:00.000 [  812] [perf] last 60 s: pacing: 6900 frame(s) 115 fps; frame times p50 8.62 ms, p99 30.12, p99.9 \
+70.88, max 80.0 ms; 12.0% uneven (over 20% and 1 ms off the previous one), change p99 9.88 ms; 30 over 2x the median, 2 over 50 \
+ms, 0 over 250 ms; 25 spike(s) over 2x the running average
+2026-11-14 10:02:00.000 [  812] [perf] last 60 s: verdict: stutter (2 frame(s) over 50 ms, 25 spike(s) over 2x the running \
+average); judder (12% of frames over 20% off the previous one); display mismatch (VSync off at 115 presents/s on a 144 Hz \
+display: tearing and uneven motion unless FreeSync or G-Sync is on)
+2026-11-14 10:02:30.000 [  812] [perf] overlay module in the game: RTSSHooks64.dll
+2026-11-14 10:02:31.000 [  812] [perf] gpu engine use: sampled from the GPU Engine counters every 5 s (first read 31 ms)
+2026-11-14 10:03:00.000 [  812] [perf] last 60 s: pacing: 7100 frame(s) 118 fps; frame times p50 8.38 ms, p99 9.88, p99.9 \
+10.12, max 12.0 ms; 0.5% uneven (over 20% and 1 ms off the previous one), change p99 1.12 ms; 0 over 2x the median, 0 over 50 \
+ms, 0 over 250 ms; 0 spike(s) over 2x the running average
+2026-11-14 10:03:00.000 [  812] [perf] last 60 s: presents: 7100 (118.3/s, 1.00 per game frame); intervals p50 8.38 ms
+2026-11-14 10:03:00.000 [  812] [perf] last 60 s: gpu 0: clocks and sensors unavailable; 3D engine busy 97%
+2026-11-14 10:03:00.000 [  812] [perf] last 60 s: cpu: system load 31-44% (average 38%)
+2026-11-14 10:03:00.000 [  812] [perf] last 60 s: other processes: 0.40 cores in total
+2026-11-14 10:03:00.000 [  812] [perf] last 60 s: verdict: smooth in frame times; GPU bound (3D engine 97% busy)
+2026-11-14 10:04:00.000 [  812] [perf] last 60 s: verdict: too few frames to judge (3)
+";
+
+#[test]
+fn smoothness_counts_verdicts_and_keeps_the_newest_and_roughest_minutes() {
+    let out = perf::smoothness(LOADER_MINUTES);
+    assert_eq!(
+        out[0],
+        "  verdicts: 3 minute(s) judged: 2 smooth in frame times, 1 stutter, 1 judder; 2 GPU bound, 0 CPU bound; 1 display \
+         mismatch; 0 background load (1 with too few frames)"
+    );
+    assert!(
+        out[1].starts_with("  newest display: 2026-11-14 10:01:00.500"),
+        "{out:?}"
+    );
+    assert_eq!(out[2], "  newest minute:");
+    assert!(
+        out[3].ends_with("[perf] last 60 s: verdict: too few frames to judge (3)"),
+        "{out:?}"
+    );
+    assert!(out[4].contains("pacing: 7100 frame(s)"), "{out:?}");
+    assert!(out[5].contains("presents: 7100"), "{out:?}");
+    assert!(out[6].contains("gpu 0: clocks"), "{out:?}");
+    assert!(out[7].contains("cpu: system load"), "{out:?}");
+    assert!(out[8].contains("other processes: 0.40"), "{out:?}");
+    assert!(
+        out[9].starts_with("  roughest minute: 2026-11-14 10:02:00.000") && out[9].contains("25 spike(s)"),
+        "{out:?}"
+    );
+    assert_eq!(out.len(), 13, "{out:?}");
+    assert!(out[10].contains("gpu engine use: sampled"));
+    assert!(out[11].contains("the driver gives no engine performance data"));
+    assert!(out[12].contains("overlay module in the game: RTSSHooks64.dll"));
+    assert_eq!(
+        perf::smoothness("[perf] last 60 s: 10 frame(s) (60 fps, p99 1.0 ms, 0 over 50 ms)\n"),
+        ["  no [perf] verdict lines (a core older than this launcher, or the game ran for under a minute)"]
+    );
+}
+
+#[test]
+fn verdicts_count_each_part_once() {
+    let mut v = perf::Verdicts::default();
+    v.add("smooth in frame times; CPU bound (busiest game thread 0.95 cores); background load (1.20 cores in other processes)");
+    v.add("judder (11% of frames over 20% off the previous one)");
+    assert_eq!(
+        (v.judged, v.smooth, v.judder, v.cpu, v.background, v.gpu),
+        (2, 1, 1, 1, 1, 0)
+    );
+    assert!(!v.text().contains("too few frames"));
+}
+
+#[test]
+fn summary_has_a_smoothness_section_from_the_loader_log() {
+    let root = tmp("smooth");
+    let (store, game) = fake_data(&root);
+    put(&game.join("swofty/loader.log"), LOADER_MINUTES);
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "20261021-130000");
+    let summary = summary_of(&bundle);
+    assert!(
+        summary.contains("\nSmoothness\ngame/loader.log\n  verdicts: 3 minute(s) judged"),
+        "{summary}"
+    );
+    assert!(summary.find("\nGraphics and memory\n") < summary.find("\nSmoothness\n"));
+    assert!(summary.find("\nSmoothness\n") < summary.find("\nCrash\n"));
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn excerpts_the_summary_and_addons_sections_in_the_line_cap() {
     let lines = perf::excerpt(PERF, PERF_LINES);
     assert_eq!(lines.first().map(String::as_str), Some("== Summary"));
     assert_eq!(lines[1], "uptime: 00:12:41");
@@ -999,8 +1117,8 @@ fn includes_the_newest_crash_report_and_minidump() {
         "{names:?}"
     );
     assert!(
-        !names.iter().any(|n| n.contains("crash-20261021-090000")),
-        "only the newest report: {names:?}"
+        names.contains(&"crash/earlier/crash-20261021-090000.txt".to_string()),
+        "the earlier report is kept apart: {names:?}"
     );
     let zip = bundle.zip().unwrap();
     assert_eq!(entry(&zip, "crash/crash-20261021-122616.txt"), CRASH);
@@ -1025,6 +1143,50 @@ fn includes_the_newest_crash_report_and_minidump() {
     assert!(summary.contains("Ne_Heap_DeallocateNonSmall"), "{summary}");
     assert!(summary.contains("last flow      race load"), "{summary}");
     assert!(summary.find("\nCrash\n") < summary.find("\nPerformance\n"));
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn keeps_the_last_five_crash_reports_and_lists_the_dumps() {
+    let root = tmp("crashmany");
+    let (store, game) = fake_data(&root);
+    let loader = game.join("swofty");
+    for d in 1..=7 {
+        put(
+            &loader.join(format!("crash-2026102{d}-090000.txt")),
+            format!("Swofty crash report\n\nreason number {d}\n"),
+        );
+        put(
+            &loader.join(format!("crash-2026102{d}-090000.dmp")),
+            noise(1000, d),
+        );
+    }
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "20261021-130000");
+    let names: Vec<_> = bundle.entries.iter().map(|e| e.path.clone()).collect();
+    assert!(
+        names.contains(&"crash/crash-20261027-090000.txt".to_string()),
+        "{names:?}"
+    );
+    assert!(
+        names.contains(&"crash/crash-20261027-090000.dmp".to_string()),
+        "{names:?}"
+    );
+    for d in 3..=6 {
+        let n = format!("crash/earlier/crash-2026102{d}-090000.txt");
+        assert!(names.contains(&n), "{n} missing: {names:?}");
+    }
+    assert!(!names.iter().any(|n| n.contains("crash-20261022")), "{names:?}");
+    assert!(!names.iter().any(|n| n.contains("crash-20261021")), "{names:?}");
+    assert!(
+        !names.contains(&"crash/earlier/crash-20261026-090000.dmp".to_string()),
+        "older dumps are listed, not sent"
+    );
+    let zip = bundle.zip().unwrap();
+    let listing = entry(&zip, "crash/dumps.txt");
+    assert!(listing.contains("crash-20261026-090000.dmp"), "{listing}");
+    assert!(listing.contains("report in crash/earlier/"), "{listing}");
+    assert!(listing.contains("report and minidump in crash/"), "{listing}");
+    assert_eq!(listing.lines().count(), 6, "{listing}");
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -1091,6 +1253,37 @@ fn finds_a_crash_report_kept_in_a_session_folder() {
             .iter()
             .any(|n| n.starts_with("sessions/") && n.contains("crash-")),
         "the crash files are not also added as redacted session text: {names:?}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn sends_load_stall_reports_from_the_game_folder_and_sessions_but_not_as_a_crash() {
+    let root = tmp("stall");
+    let (store, game) = fake_data(&root);
+    put(
+        &game.join("swofty/stall-20261112-123300.txt"),
+        "== Load stall report 1 of at most 2\n",
+    );
+    put(&game.join("swofty/stall-20261112-123130.txt"), "older\n");
+    put(&game.join("swofty/stall-20261112-123000.txt"), "oldest\n");
+    let newest = store.sessions_dir().join("20261020-090000");
+    put(&newest.join("game-logs/stall-20261020-093000.txt"), "kept\n");
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    let names: Vec<_> = bundle.entries.iter().map(|e| e.path.clone()).collect();
+    let live: Vec<_> = names.iter().filter(|n| n.starts_with("game/stall-")).collect();
+    assert_eq!(live.len(), 2, "{names:?}");
+    assert!(
+        names.contains(&"game/stall-20261112-123300.txt".to_string()),
+        "{names:?}"
+    );
+    assert!(
+        names.contains(&"sessions/20261020-090000/game-logs/stall-20261020-093000.txt".to_string()),
+        "{names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n.starts_with("crash/")),
+        "a stall is not a crash: {names:?}"
     );
     std::fs::remove_dir_all(&root).ok();
 }
@@ -1269,6 +1462,31 @@ fn names_a_program_windows_blocked() {
         summary.contains(
             "\nMod loader\n  last launch: Windows blocked a Swofty program (Smart App Control or an app \
              control policy blocked swofty.exe)\n  blocked: C:\\Swofty\\bin\\swofty.exe (os error 4551)\n"
+        ),
+        "{summary}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn names_the_programs_set_to_run_as_administrator() {
+    let root = tmp("run-as-admin");
+    let (store, game) = fake_data(&root);
+    let r = crate::compat::RunAsAdmin::new([std::path::PathBuf::from(r"D:\Games\F1 25\F1_25.exe")], true);
+    crate::launch::Failure::new(crate::launch::Cause::RunAsAdmin(r))
+        .write(&store.root)
+        .unwrap();
+    let summary = summary_of(&Bundle::collect_with(
+        &store,
+        &report(&game),
+        Limits::default(),
+        "x",
+    ));
+    assert!(
+        summary.contains(
+            "\n  last launch: A program is set to run as administrator (Windows won't start F1_25.exe: it is \
+             set to run as administrator)\n  set to run as administrator (os error 740): D:\\Games\\F1 \
+             25\\F1_25.exe\n"
         ),
         "{summary}"
     );
@@ -1559,38 +1777,48 @@ fn names_the_overlay_addons_and_whether_the_overlay_drew() {
 
 #[test]
 fn sends_the_room_logs_trace_and_state_without_secrets() {
+    // No session module is loaded in this process: the files an earlier run wrote are redacted by the
+    // launcher alone.
+    const CREDENTIAL: &str = "dGVzdC1jcmVkZW50aWFsLTEyMzQ1Njc4OQ==";
+    const ACCOUNT: &str = "lowercase-account-token-0001";
     let root = tmp("room");
     let (store, game) = fake_data(&root);
-    crate::multiplayer::diag::secret("bundle-test", &["turn-credential-9f8e7d"]);
+    assert!(!crate::multiplayer::client::is_loaded());
+    crate::multiplayer::client::know_secret(ACCOUNT);
     put(
-        &store.root.join(crate::multiplayer::diag::FILE),
-        "20261026-101010.000Z room ABCD opened: 1 member(s)\n20261026-101011.000Z leaked turn-credential-9f8e7d\n",
+        &store.root.join(crate::multiplayer::client::LOG_FILE),
+        format!(
+            "20261026-101010.000Z room ABCD opened: 1 member(s)\n20261026-101011.000Z leaked {CREDENTIAL} and \
+             {ACCOUNT}\n20261026-101012.000Z fingerprint {}\n",
+            "a1".repeat(32)
+        ),
     );
     put(
-        &store.root.join(crate::multiplayer::diag::PREVIOUS),
-        "20261026-090000.000Z phase: in the lobby\n",
+        &store.root.join(crate::multiplayer::client::LOG_PREVIOUS),
+        format!("20261026-090000.000Z phase: in the lobby, key={CREDENTIAL}\n"),
     );
     put(
-        &game.join(crate::multiplayer::bridge::STATUS_FILE),
+        &game.join(crate::multiplayer::client::GAME_STATUS_FILE),
         r#"{"pid":42,"self":2,"base":41000,"game_port":21414}"#,
     );
     put(&game.join(NET_TRACE), "# swofty net trace\nbind s=1 port=21414\n");
     put(
         &store
             .root
-            .join(crate::multiplayer::diag::PRINTS_DIR)
+            .join(crate::multiplayer::client::PRINTS_DIR)
             .join("ABCD-20261026-101010.json"),
-        r#"{"room":"ABCD","host":{"note":"turn-credential-9f8e7d"}}"#,
+        format!(
+            r#"{{"room":"ABCD","host":{{"note":"{CREDENTIAL}","credential":"short-one","who":"{ACCOUNT}"}}}}"#
+        ),
     );
     let mut r = report(&game);
     r.room = Some(serde_json::json!({
         "phase": {"phase": "in_lobby"},
         "room": {"code": "ABCD"},
         "session_token": "tok-should-go",
-        "last_error": "relay said turn-credential-9f8e7d",
+        "last_error": format!("relay said {CREDENTIAL}"),
     }));
     let bundle = Bundle::collect_with(&store, &r, Limits::default(), "20261026-101010");
-    crate::multiplayer::diag::secret("bundle-test", &[]);
     let zip = bundle.zip().unwrap();
     let got = names(&zip);
     for want in [
@@ -1603,15 +1831,18 @@ fn sends_the_room_logs_trace_and_state_without_secrets() {
     ] {
         assert!(got.contains(want), "no {want} in {got:?}");
     }
-    assert!(entry(&zip, "state/multiplayer.log").contains("room ABCD opened"));
+    let log = entry(&zip, "state/multiplayer.log");
+    assert!(log.contains("room ABCD opened"), "{log}");
+    assert!(log.contains(&"a1".repeat(32)), "a digest stays readable: {log}");
     assert!(entry(&zip, "game/netplay.json").contains("\"game_port\":21414"));
     assert!(entry(&zip, "game/net-trace.log").contains("bind s=1 port=21414"));
     let room = entry(&zip, "multiplayer/session.json");
     assert!(room.contains("\"code\": \"ABCD\""), "{room}");
     for name in &got {
         let text = entry(&zip, name);
-        assert!(!text.contains("turn-credential-9f8e7d"), "{name}: {text}");
-        assert!(!text.contains("tok-should-go"), "{name}: {text}");
+        for secret in [CREDENTIAL, ACCOUNT, "tok-should-go", "short-one"] {
+            assert!(!text.contains(secret), "{name} carries {secret}: {text}");
+        }
     }
 }
 
@@ -1702,11 +1933,319 @@ fn the_cores_reports_in_the_data_folder_win_over_the_game_folders() {
 
 #[test]
 fn carries_the_blocked_record_when_there_is_one() {
-    let root = tmp("blocked");
+    let root = tmp("blocked-record");
     let (store, game) = fake_data(&root);
     let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "20261020-101010");
     assert!(!bundle.entries.iter().any(|e| e.path == "state/blocked.json"));
     put(&store.root.join("state/blocked.json"), "{\"files\":[]}");
     let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "20261020-101010");
     assert!(bundle.entries.iter().any(|e| e.path == "state/blocked.json"));
+}
+
+#[test]
+fn finds_a_crash_report_left_in_the_data_folder() {
+    let root = tmp("crashfallback");
+    let (store, game) = fake_data(&root);
+    put(&store.root.join("state/crash-20261101-125350.txt"), CRASH);
+    put(
+        &store.root.join("state/crash-20261101-125350.dmp"),
+        noise(50_000, 3),
+    );
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    let names: Vec<_> = bundle.entries.iter().map(|e| e.path.clone()).collect();
+    assert!(
+        names.contains(&"crash/crash-20261101-125350.txt".to_string()),
+        "{names:?}"
+    );
+    assert!(
+        names.contains(&"crash/crash-20261101-125350.dmp".to_string()),
+        "{names:?}"
+    );
+    assert!(!summary_of(&bundle).contains("No crash report was found"));
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn a_logged_crash_report_that_is_missing_is_not_reported_as_never_written() {
+    let root = tmp("crashunsaved");
+    let (store, game) = fake_data(&root);
+    let path = "C:\\Users\\id\\AppData\\Local\\Swofty\\state\\crash-20261101-125350.txt";
+    put(
+        &store.root.join("state/loader-fallback.log"),
+        format!(
+            "2026-11-01 12:53:50.100 [5] [crash] crash report {path}: boom; minidump failed (error 5)\r\n"
+        ),
+    );
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    let summary = summary_of(&bundle);
+    assert!(!summary.contains("No crash report was found"), "{summary}");
+    assert!(
+        summary.contains(&format!(
+            "A crash report was started ({path}) but could not be saved"
+        )),
+        "{summary}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn no_crash_line_and_no_file_still_says_none_was_written() {
+    let root = tmp("crashnone");
+    let (store, game) = fake_data(&root);
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    assert!(summary_of(&bundle).contains("No crash report was found"));
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn a_fast_fail_exit_without_a_crash_report_is_named_with_the_loader_log_tail() {
+    let root = tmp("fastfail");
+    let (store, game) = fake_data(&root);
+    let session = store.root.join("sessions").join("20261020-090000");
+    put(&session.join("exit_code"), "-1073740791\n");
+    put(
+        &session.join("loader.log"),
+        "[core] up\n[crash] crash log armed\n[loader] last line before the end\n",
+    );
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    let summary = summary_of(&bundle);
+    assert!(
+        summary.contains(
+            "F1 25 stopped itself after detecting a corrupted stack or an invalid call (0xc0000409).\n\
+             Last loader.log lines:\n  [core] up\n  [crash] crash log armed\n  [loader] last line before the end\n"
+        ),
+        "{summary}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn a_clean_exit_adds_no_fast_fail_sentence() {
+    let root = tmp("fastfailclean");
+    let (store, game) = fake_data(&root);
+    let session = store.root.join("sessions").join("20261020-090000");
+    put(&session.join("exit_code"), "0\n");
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    assert!(!summary_of(&bundle).contains("stopped itself"));
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn saves_excerpt_keeps_the_save_source_and_slot_lines() {
+    let text = "1 [core] up\n\
+        2 [saves] launcher saves are off for profile main: the game reads Steam's saves natively\n\
+        3 [saves] sandbox: FileRead profile (call 1)\n\
+        4 [saves] profile load 1: manager 0 slot 0: gm_driver_career id=3 key=0000000000abcdef career=dc-000b0000\n";
+    let lines = super::saves_excerpt(text, 10);
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].contains("reads Steam's saves natively"));
+    assert!(lines[1].contains("career=dc-000b0000"));
+    assert_eq!(super::saves_excerpt(text, 1).len(), 1);
+}
+
+#[test]
+fn summary_names_the_stub_an_antivirus_blocked() {
+    let root = tmp("stub-av");
+    let (store, game) = fake_data(&root);
+    let mut bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    assert_eq!(bundle.stub_blocked_line(Some(&game)), None);
+
+    bundle.entries.push(Entry {
+        path: "ea-app/EAEgsProxy.log".into(),
+        data: b"20\t[2026-11-01T01:57:04.895Z]\tERROR   \t(eax::services::process::ProcessWin::createProcess)\t[PROCESS] \
+          Create Process: Operation did not complete successfully because the file contains a virus or \
+          potentially unwanted software. | exe=[C:\\F1 25\\F1 25\\EAAntiCheat.GameServiceLauncher.exe] | OS \
+          ErrorCode:  0xe1\n"
+            .to_vec(),
+        note: None,
+    });
+    let line = bundle.stub_blocked_line(Some(&game)).unwrap();
+    assert!(
+        line.starts_with("offline: EAAntiCheat.GameServiceLauncher.exe was blocked by antivirus (error 225)"),
+        "{line}"
+    );
+
+    put(&game.join("EAAntiCheat.GameServiceLauncher.exe.bak"), "real");
+    let plain = Bundle::collect_with(&store, &report(&game), Limits::default(), "x");
+    assert_eq!(plain.stub_blocked_line(Some(&game)), None);
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn a_cut_loader_log_keeps_its_start_and_its_end() {
+    let dir = tmp("loader-cut");
+    let path = dir.join("loader.log");
+    let lines: Vec<String> = (0..400)
+        .map(|i| format!("line {i:04} of the loader log\n"))
+        .collect();
+    let log = lines.concat();
+    put(&path, &log);
+    let len = log.len() as u64;
+
+    assert_eq!(kept_head(&path, 5 << 20), LOADER_KEEP);
+    assert_eq!(kept_head(&path, 1024), 512);
+    assert_eq!(kept_head(&path, 256), 0);
+    assert_eq!(kept_head(&dir.join("loader.prev.log"), 1024), 512);
+    assert_eq!(kept_head(&dir.join("launcher-app.log"), 1024), 0);
+
+    for cap in [len, len + 1, 5 << 20] {
+        let (data, cut) = read_cut(&path, cap, kept_head(&path, cap)).unwrap();
+        assert_eq!(cut, Cut::None);
+        assert_eq!(data, log.as_bytes());
+    }
+
+    for cap in [1024, 2000, len - 1] {
+        let (data, cut) = read_cut(&path, cap, kept_head(&path, cap)).unwrap();
+        assert!(data.len() as u64 <= cap, "{} over {cap}", data.len());
+        let text = String::from_utf8(data).unwrap();
+        let got: Vec<&str> = text.split_inclusive('\n').collect();
+        let gap = got
+            .iter()
+            .position(|l| l.starts_with("[swofty: left out "))
+            .unwrap();
+        let (head, tail) = (&got[..gap], &got[gap + 1..]);
+        assert!(!head.is_empty() && !tail.is_empty());
+        assert_eq!(head, &lines[..head.len()]);
+        assert_eq!(tail, &lines[lines.len() - tail.len()..]);
+        let left: usize = lines[head.len()..lines.len() - tail.len()]
+            .iter()
+            .map(String::len)
+            .sum();
+        assert!(
+            got[gap].starts_with(&format!("[swofty: left out {left} bytes (")),
+            "{}",
+            got[gap]
+        );
+        assert!(got[gap].ends_with(&format!(" of {} here]\n", size(len))));
+        let (head_len, tail_len) = (head.concat().len() as u64, tail.concat().len() as u64);
+        assert_eq!(
+            cut,
+            Cut::Middle {
+                head: head_len,
+                tail: tail_len
+            }
+        );
+        assert!(head_len <= cap / 2 && head_len + 64 > cap / 2);
+    }
+
+    let (data, cut) = read_cut(&path, 1024, 0).unwrap();
+    assert_eq!(cut, Cut::Tail);
+    assert!(data.ends_with(b"line 0399 of the loader log\n") && data.len() <= 1024);
+}
+
+#[test]
+fn a_cut_loader_log_that_is_not_text_is_still_cut_to_its_cap() {
+    let dir = tmp("loader-cut-bytes");
+    let path = dir.join("loader.log");
+    let mut log = vec![0xff_u8; 3000];
+    log.extend_from_slice(b"\xfe\xfd tail \xc3\n");
+    put(&path, &log);
+    let (data, cut) = read_cut(&path, 1024, kept_head(&path, 1024)).unwrap();
+    assert!(matches!(cut, Cut::Middle { head: 513, .. }), "{cut:?}");
+    assert!(data.len() <= 1024);
+    assert!(data.starts_with(&[0xff; 512]) && data.ends_with(b" tail \xc3\n"));
+    assert!(String::from_utf8_lossy(&data).contains("\n[swofty: left out "));
+
+    put(&path, noise(4000, 7));
+    let (data, _) = read_cut(&path, 1024, kept_head(&path, 1024)).unwrap();
+    assert!(data.len() <= 1024);
+}
+
+#[test]
+fn bundles_the_start_of_a_long_session_loader_log() {
+    let root = tmp("loader-head");
+    let (store, game) = fake_data(&root);
+    let mut log = String::from("boot: swofty loader attached\n");
+    log.push_str(&"filler line of the session\n".repeat(400));
+    log.push_str("the last line before the crash\n");
+    put(&store.root.join("sessions/20261020-090000/loader.log"), &log);
+    let limits = Limits {
+        file: 1024,
+        total: 1 << 20,
+    };
+    let bundle = Bundle::collect_with(&store, &report(&game), limits, "x");
+    let entry = bundle
+        .entries
+        .iter()
+        .find(|e| e.path == "sessions/20261020-090000/loader.log")
+        .unwrap();
+    let text = String::from_utf8(entry.data.clone()).unwrap();
+    assert!(text.starts_with("boot: swofty loader attached\n"), "{text}");
+    assert!(text.ends_with("the last line before the crash\n"));
+    assert_eq!(text.matches("\n[swofty: left out ").count(), 1);
+    assert!(entry.data.len() <= 1024);
+    let note = entry.note.as_deref().unwrap();
+    assert!(
+        note.starts_with("first ") && note.contains(" and last "),
+        "{note}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn reads_both_ends_of_a_log_bigger_than_the_cap() {
+    let dir = tmp("read-ends");
+    let path = dir.join("loader.log");
+    let mut log = String::from("1 [overlay] present hook armed: Present (vt+0x40)\n");
+    log.push_str(&"2 [game] filler line\n".repeat(500));
+    log.push_str("3 [overlay] first overlay frame submitted: 96 vertices\n");
+    put(&path, &log);
+    let head_only = read_head(&path, 1024).unwrap();
+    let missed = crate::overlay_guard::SessionOverlay::scan(&String::from_utf8_lossy(&head_only)).unwrap();
+    assert!(!missed.drew);
+    let ends = read_ends(&path, 1024, 1024).unwrap();
+    let seen = crate::overlay_guard::SessionOverlay::scan(&String::from_utf8_lossy(&ends)).unwrap();
+    assert!(seen.armed && seen.drew);
+    assert_eq!(read_ends(&path, 1 << 20, 1 << 20).unwrap(), log.as_bytes());
+}
+
+#[test]
+fn bundles_the_stat_id_files_and_summarises_the_package_ids() {
+    let root = tmp("registry-ids");
+    let (store, game) = fake_data(&root);
+    put(
+        &store.root.join("registry/ids.json"),
+        "{\"version\":1,\"ids\":{\"vehicle.package\":{\"gone.x/pkg_1\":1,\"gone.x/pkg_2\":2}}}\n",
+    );
+    put(
+        &store.root.join("registry/row-ids.json"),
+        "{\"version\":2,\"rows\":{\"b/entrants.vehicles.vehicle_packages.vehicle_package/p\":{\"id\":3,\"from\":\"new\"}}}\n",
+    );
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "20261028-120000");
+    let zip = bundle.zip().unwrap();
+    assert!(entry(&zip, "game/registry/ids.json").contains("gone.x/pkg_1"));
+    assert!(entry(&zip, "game/registry/row-ids.json").contains("\"id\":3"));
+    assert!(entry(&zip, "summary.txt").contains("3 of 254 used, highest 3, 3 held by addons not installed"));
+}
+
+#[test]
+fn system_excerpt_takes_the_boot_lines_and_the_newest_minute() {
+    let head =
+        "boot\n[system] gpu 0: Card A, driver 1.2, dedicated VRAM 8192 MiB\n[system] ram: 32768 MiB\nother\n";
+    let tail = "[perf] last 60 s: memory: old\nx\n[perf] last 60 s: memory: RAM 1/2 MiB; VRAM 3/4 MiB\nend\n";
+    let out = super::system_excerpt(head, tail, 12);
+    assert_eq!(out.len(), 3, "{out:?}");
+    assert!(out[0].contains("Card A") && out[1].contains("[system] ram"));
+    assert!(
+        out[2].starts_with("  newest minute: ") && out[2].contains("VRAM 3/4"),
+        "{out:?}"
+    );
+    assert!(super::system_excerpt("none\n", "none\n", 12).is_empty());
+    assert_eq!(super::system_excerpt(head, tail, 1).len(), 2);
+}
+
+#[test]
+fn summary_has_a_graphics_section_from_the_loader_log() {
+    let root = tmp("gfx");
+    let (store, game) = fake_data(&root);
+    put(
+        &game.join("swofty/loader.log"),
+        "[system] gpu 0: Card A, driver 1.2, dedicated VRAM 8192 MiB\n[perf] last 60 s: memory: RAM 1/2 MiB\n",
+    );
+    let bundle = Bundle::collect_with(&store, &report(&game), Limits::default(), "20261021-130000");
+    let summary = summary_of(&bundle);
+    assert!(summary.contains("\nGraphics and memory\n"), "{summary}");
+    assert!(summary.contains("Card A, driver 1.2"), "{summary}");
+    assert!(summary.find("\nGraphics and memory\n") < summary.find("\nCrash\n"));
+    std::fs::remove_dir_all(&root).ok();
 }

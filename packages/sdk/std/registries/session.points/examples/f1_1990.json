@@ -1,0 +1,10 @@
+{
+  "session.points": {
+    "f1_1990_race": {
+      "$comment": "1990: 9-6-4-3-2-1, half points for a race stopped early",
+      "points": [9, 6, 4, 3, 2, 1],
+      "fastest_lap": null,
+      "reduced": [[9, 6, 4, 3, 2, 1], [4, 3, 2, 1, 1], [4, 3, 2, 1, 1]]
+    }
+  }
+}

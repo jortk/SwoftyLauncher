@@ -31,7 +31,7 @@ fn swofty(root: &Path, running: &str, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_swofty"))
         .args(args)
         .env("SWOFTY_DATA_DIR", root.join("data"))
-        .env("SWOFTY_STEAM_ROOT", root.join("steam"))
+        .env("SWOFTY_STEAM_ROOT_ONLY", root.join("steam"))
         .env("SWOFTY_TEST_RUNNING", running)
         .env("HOME", root.join("home"))
         .env_remove("LOCALAPPDATA")

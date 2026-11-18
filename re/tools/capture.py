@@ -158,7 +158,7 @@ def parse_lines(lines, source):
             run = Run(source)
             runs.append(run)
             core_pass, ea_when = 'init', 'init'
-        if line.startswith('[swofty: kept the last'):
+        if line.startswith(('[swofty: kept the last', '[swofty: left out')):
             run.truncated = True
             continue
         run.lines += 1

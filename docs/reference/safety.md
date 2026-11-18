@@ -11,9 +11,9 @@ The loader and addons need the game to run without EA AntiCheat, so the launcher
 
 ## The one-time step
 
-The first time you press **Play**, you'll see the **Modded play runs offline** dialog. It explains what you're accepting: modded sessions run offline, without EA AntiCheat, and EA's terms of service do not cover playing without EA AntiCheat even offline.
+The first time you open the launcher, onboarding shows the **Swofty Launcher EULA**. It explains what you're accepting: modded sessions run offline, without EA AntiCheat, and EA's terms of service do not cover playing without EA AntiCheat even offline.
 
-Select **Accept and launch** to start the game. If you decline, nothing changes and the game won't launch. You only need to accept once; after that, **Play** launches directly.
+Select **Accept** to go on. **Skip** on the first steps of onboarding leads to the EULA, and onboarding doesn't finish until you accept it. You only need to accept once; after that, **Play** launches directly. If the terms change, the next **Play** shows them in the **Modded play runs offline** dialog, and **Accept and launch** starts the game.
 
 ## Return to vanilla
 

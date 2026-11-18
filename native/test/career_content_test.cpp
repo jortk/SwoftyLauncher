@@ -211,6 +211,43 @@ int main()
         expect(!content::data_group(nullptr, a).name, "walk: a null career has no data group");
     }
     {
+        Fake f;
+        std::vector<std::string> names(149, "f1_other");
+        names[138] = "f1_career_sw_progressive";
+        build(f, names, 0);
+        content::Access a{fake_setup, fake_index, fake_readable, &f};
+        content::Desc d = desc1990();
+        d.data_group = "f1_career_sw_progressive";
+        content::Loaded l = content::loaded_list(f.source.data(), 138, a);
+        expect(l.known && l.slots == 149 && l.list && content::loaded_why(d, 138, l).empty(),
+               "loaded: stat_id 138 of 149 slots passes, whatever the table's row count");
+        l = content::loaded_list(f.source.data(), 148, a);
+        expect(l.list && content::loaded_why(d, 148, l).empty(), "loaded: the last slot passes");
+        l = content::loaded_list(f.source.data(), 149, a);
+        expect(l.known && !l.list && content::loaded_why(d, 149, l).find("past the 149 entrant list slots") !=
+                                         std::string::npos,
+               "loaded: an id equal to the slot count is refused");
+        l = content::loaded_list(f.source.data(), -1, a);
+        expect(l.known && !l.list && !content::loaded_why(d, -1, l).empty(), "loaded: a negative id is refused");
+        put(f.groups, 50 * content::GROUP_STRIDE + content::GROUP_AT, (void *)nullptr);
+        l = content::loaded_list(f.source.data(), 50, a);
+        expect(l.known && !l.list &&
+                   content::loaded_why(d, 50, l).find("loaded no list at that id") != std::string::npos,
+               "loaded: an id whose slot holds no list is refused");
+        build(f, std::vector<std::string>(105, "f1_other"), 0);
+        d.data_group = "f1_career_porsche25";
+        l = content::loaded_list(f.source.data(), 240, a);
+        expect(l.known && l.slots == 105 && !l.list &&
+                   content::loaded_why(d, 240, l).find("stat_id 240, past the 105 entrant list slots") !=
+                       std::string::npos,
+               "loaded: stat_id 240 with 105 loaded slots is refused (the 1.9.15 tile press crash)");
+        put(f.source, content::GROUPS_END, f.groups.data());
+        l = content::loaded_list(f.source.data(), 3, a);
+        expect(!l.known && content::loaded_why(d, 3, l).empty(),
+               "loaded: lists that can't be read (the EA copy) don't refuse the content");
+        expect(!content::loaded_list(nullptr, 3, a).known, "loaded: no entrants system is not known");
+    }
+    {
         std::vector<uint8_t> e(3 * content::ENTRY_SIZE, 0);
         put<uint32_t>(e, 0 * content::ENTRY_SIZE + content::ENTRY_ID, 0x00000011);
         put<uint32_t>(e, 1 * content::ENTRY_SIZE + content::ENTRY_ID, 0x00010022);

@@ -108,6 +108,8 @@ What an addon's `Input` holds depends on the focus:
 
 `key_down(vk)`, `key_pressed(vk)`, `key_typed(vk)`, `clicked(button)`, `held(button)`, `pad_held(button)`, `pad_hit(button)` and `inside(x, y, w, h)` read an `Input`. Keys are Windows virtual-key codes; `keys_pressed` holds the keys that went down this frame and `keys_typed` also their auto-repeats.
 
+While the game has a text box open (naming a team, for example) an addon that does not hold focus gets no keys, so a hotkey does not fire from typed letters.
+
 The gamepad fields come from `xinput1_4.dll!XInputGetState`, read while an addon calls `input()`:
 
 | Field | Holds |
@@ -248,14 +250,17 @@ The launcher can turn the overlay off for one addon: an addon id in `"overlay_of
 
 ## When the overlay draws
 
-The core draws the overlay only where it knows the drawing is ordered with the game's own frame. Where it doesn't draw, paint callbacks don't run, and `swofty/loader.log` says why on an `[overlay]` line.
+Paint callbacks run once per frame at `Present`, or at `Present1` for a swapchain presented through it (XeSS frame generation presents that way). Where the swapchain is one the core can draw on, the overlay is drawn into its back buffer there. Where frame generation owns the swapchain, the overlay is drawn into the game's own back buffer in the command queue just after the game's list that moves it to `PRESENT`, so frame generation sees it and the generated frames carry it. That draw uses the callbacks' output from the previous `Present`, so the overlay is one frame late. The core decides at start: drawing before frame generation is on when the game's `hardware_settings_config.xml` has frame generation on. `SWOFTY_OVERLAY_FG=0` or `"overlay_fg": false` in `swofty/assets.json` turns it off, and `SWOFTY_OVERLAY_FG=1` or `"overlay_fg": true` turns it on whatever the game's setting. `swofty/loader.log` has an `[overlay]` line for each case, and one at start with the game's frame generation setting.
 
 | Case | Overlay |
 |---|---|
 | A swapchain the game created after the core loaded | Draws, on the command queue the swapchain was created with |
-| A swapchain created before the core hooked swapchain creation | Doesn't draw on it |
-| A swapchain that a frame generation module (DLSS Frame Generation, FSR or XeSS frame generation) created or presents | Doesn't draw on it |
-| A swapchain created through Streamline's frame generation hook (`sl.dlss_g.dll`, every NVIDIA Streamline build of F1 25) | Draws while the game's `hardware_settings_config.xml` has `frame_gen mode="0"`; stops for the session once it reads anything else |
+| A swapchain the core never saw created, whose queue it reads at its first `Present` | Draws, on that queue |
+| A swapchain the core never saw created that names no queue (DLSS Frame Generation and the NVIDIA app's present layer make these) | Draws, on the direct queue that last ran `ExecuteCommandLists` on the presenting thread, from the frame after its first `Present`. The core's device hooks arm at that first `Present` when an NVIDIA module (`NvPresent64.dll`, `nvngx_dlssg.dll`, `sl.dlss_g.dll` or `sl.interposer.dll`) is loaded. It doesn't draw on it when FSR or XeSS frame generation presents it, with no NVIDIA module loaded, or with `SWOFTY_OVERLAY_FG=0` / `"overlay_fg": false` |
+| A swapchain that a frame generation module (DLSS Frame Generation, FSR or XeSS frame generation) created or presents | Draws into the game's back buffer (a resource named `BackBuffer`) before `Present` when frame generation was on in the game's settings at start |
+| A swapchain created through Streamline's frame generation hook (`sl.dlss_g.dll`, every NVIDIA Streamline build of F1 25) | Draws at `Present` while the game's `hardware_settings_config.xml` has `frame_gen mode="0"`; draws into the game's back buffer before `Present` once it reads anything else, when frame generation was on at start (otherwise it stops for the session) |
+| Frame generation, and the back buffer is not a render target of the swapchain's size, or its queue is not a direct queue, or it is on another device than the overlay's | Doesn't draw; one `[overlay]` line says which |
+| RivaTuner Statistics Server (it comes with MSI Afterburner) is running when the game starts | Doesn't draw: the core leaves its `Present` hook off, `available()` returns `false` and `on_paint` returns `unavailable`. One `[overlay] off:` line names it. `SWOFTY_OVERLAY_RIVAL=1` / `"overlay_rival": true` arms the hook anyway |
 | The GPU still holds the previous frames' overlay work | Skips drawing that frame |
 | The GPU was removed | Stops for the rest of the session; an `[overlay]` line says how long after the overlay last drew |
 

@@ -1,0 +1,25 @@
+{
+  "sponsor": {
+    "crest": {
+      "name": {
+        "literal": "Crest"
+      },
+      "logo": "emblems/crest.png",
+      "designs": [
+        {
+          "key": "p"
+        },
+        {
+          "key": "n"
+        }
+      ],
+      "career": {
+        "available_from_start": true,
+        "discovery": null
+      },
+      "emblem": {
+        "image": "emblems/crest_badge.png"
+      }
+    }
+  }
+}

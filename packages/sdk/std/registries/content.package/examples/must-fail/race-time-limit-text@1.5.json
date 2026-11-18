@@ -1,0 +1,12 @@
+{
+  "content.package": {
+    "f1_1959": {
+      "$comment": "seconds as a whole number",
+      "entrant_list": "f1_1959",
+      "season": 1959,
+      "rules": {
+        "race_time_limit_s": "3h"
+      }
+    }
+  }
+}

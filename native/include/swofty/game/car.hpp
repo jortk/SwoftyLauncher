@@ -105,18 +105,184 @@ static_assert(offsetof(CarEngine, limiter_rotation_rate) == 0x2528);
 static_assert(offsetof(CarEngine, rotation_rate) == 0x2538);
 static_assert(offsetof(CarEngine, throttle) == 0x2574);
 
+struct CarErsMode {
+};
+
+struct CarSpline {
+};
+
+struct CarErs {
+    void *vtable; // L2 experimental
+    CarLive *car; // L2 experimental
+    void *allocator; // L2 experimental
+    void *data_vtable; // L2 experimental
+    uint8_t _pad_0x20[0x8];
+    float max_deploy_power; // L2 experimental
+    float max_derate_power; // L2 experimental
+    float boost_mode_power_add_limit; // L2 experimental
+    float min_initial_deploy_power; // L2 experimental
+    float power_reduction_rate_limit; // L2 experimental
+    float power_reduction_speed_min; // L2 experimental
+    float full_throttle_time; // L2 experimental
+    float off_throttle_time; // L2 experimental
+    float off_throttle_timer_torque; // L2 experimental
+    float harvest_torque_factor; // L2 experimental
+    float harvest_limit_mguk; // L2 experimental
+    float harvest_override_bonus_mguk; // L2 experimental
+    float harvest_limit_qualifying_mguk; // L2 experimental
+    float deploy_limit_mguk; // L2 experimental
+    float energy_store_capacity; // L2 experimental
+    float energy_deploy_efficiency_mguk; // L2 experimental
+    float energy_harvest_efficiency_mguk; // L2 experimental
+    float energy_harvest_efficiency_mguh; // L2 experimental
+    float max_brake_torque_mguk; // L2 experimental
+    float exhaust_power_coefficient; // L2 experimental
+    float turbo_power_coefficient; // L2 experimental
+    float overtake_power_efficiency; // L2 experimental
+    uint8_t use_derate_lights; // L2 experimental
+    uint8_t override_mode_available; // L2 experimental
+    uint8_t allow_full_throttle_power_increase; // L2 experimental
+    uint8_t _pad_0x83[0xaa5];
+    float base_wear_rate_es; // L2 experimental
+    uint8_t _pad_0xb2c[0x7fc];
+    float base_wear_rate_mguk; // L2 experimental
+    uint8_t _pad_0x132c[0x654];
+    float medium_deploy_factor; // L2 experimental
+    float hotlap_deploy_factor; // L2 experimental
+    float harvest_factor_mguh; // L2 experimental
+    float medium_derate_factor; // L2 experimental
+    float hotlap_derate_factor; // L2 experimental
+    float override_detection_lap_progress; // L2 experimental
+    float override_activation_lap_progress; // L2 experimental
+    uint8_t _pad_0x199c[0x4];
+    uint8_t track_settings_found; // L2 experimental
+    uint8_t _pad_0x19a1[0x27];
+    float harvest_lap_mguk; // L2 experimental
+    float harvest_lap_mguh; // L2 experimental
+    float deploy_lap; // L2 experimental
+    uint8_t _pad_0x19d4[0x1c];
+    float energy; // L3 experimental
+    float lap_harvest_limit; // L2 experimental
+    uint8_t _pad_0x19f8[0x8];
+    float harvest_power_mguk; // L2 experimental
+    float harvest_power_mguh; // L2 experimental
+    uint8_t _pad_0x1a08[0xc];
+    float deploy_power; // L2 experimental
+    uint8_t _pad_0x1a18[0x50];
+    int32_t ers_mode; // L3 experimental
+};
+static_assert(offsetof(CarErs, vtable) == 0x0);
+static_assert(offsetof(CarErs, car) == 0x8);
+static_assert(offsetof(CarErs, allocator) == 0x10);
+static_assert(offsetof(CarErs, data_vtable) == 0x18);
+static_assert(offsetof(CarErs, max_deploy_power) == 0x28);
+static_assert(offsetof(CarErs, max_derate_power) == 0x2c);
+static_assert(offsetof(CarErs, boost_mode_power_add_limit) == 0x30);
+static_assert(offsetof(CarErs, min_initial_deploy_power) == 0x34);
+static_assert(offsetof(CarErs, power_reduction_rate_limit) == 0x38);
+static_assert(offsetof(CarErs, power_reduction_speed_min) == 0x3c);
+static_assert(offsetof(CarErs, full_throttle_time) == 0x40);
+static_assert(offsetof(CarErs, off_throttle_time) == 0x44);
+static_assert(offsetof(CarErs, off_throttle_timer_torque) == 0x48);
+static_assert(offsetof(CarErs, harvest_torque_factor) == 0x4c);
+static_assert(offsetof(CarErs, harvest_limit_mguk) == 0x50);
+static_assert(offsetof(CarErs, harvest_override_bonus_mguk) == 0x54);
+static_assert(offsetof(CarErs, harvest_limit_qualifying_mguk) == 0x58);
+static_assert(offsetof(CarErs, deploy_limit_mguk) == 0x5c);
+static_assert(offsetof(CarErs, energy_store_capacity) == 0x60);
+static_assert(offsetof(CarErs, energy_deploy_efficiency_mguk) == 0x64);
+static_assert(offsetof(CarErs, energy_harvest_efficiency_mguk) == 0x68);
+static_assert(offsetof(CarErs, energy_harvest_efficiency_mguh) == 0x6c);
+static_assert(offsetof(CarErs, max_brake_torque_mguk) == 0x70);
+static_assert(offsetof(CarErs, exhaust_power_coefficient) == 0x74);
+static_assert(offsetof(CarErs, turbo_power_coefficient) == 0x78);
+static_assert(offsetof(CarErs, overtake_power_efficiency) == 0x7c);
+static_assert(offsetof(CarErs, use_derate_lights) == 0x80);
+static_assert(offsetof(CarErs, override_mode_available) == 0x81);
+static_assert(offsetof(CarErs, allow_full_throttle_power_increase) == 0x82);
+static_assert(offsetof(CarErs, base_wear_rate_es) == 0xb28);
+static_assert(offsetof(CarErs, base_wear_rate_mguk) == 0x1328);
+static_assert(offsetof(CarErs, medium_deploy_factor) == 0x1980);
+static_assert(offsetof(CarErs, hotlap_deploy_factor) == 0x1984);
+static_assert(offsetof(CarErs, harvest_factor_mguh) == 0x1988);
+static_assert(offsetof(CarErs, medium_derate_factor) == 0x198c);
+static_assert(offsetof(CarErs, hotlap_derate_factor) == 0x1990);
+static_assert(offsetof(CarErs, override_detection_lap_progress) == 0x1994);
+static_assert(offsetof(CarErs, override_activation_lap_progress) == 0x1998);
+static_assert(offsetof(CarErs, track_settings_found) == 0x19a0);
+static_assert(offsetof(CarErs, harvest_lap_mguk) == 0x19c8);
+static_assert(offsetof(CarErs, harvest_lap_mguh) == 0x19cc);
+static_assert(offsetof(CarErs, deploy_lap) == 0x19d0);
+static_assert(offsetof(CarErs, energy) == 0x19f0);
+static_assert(offsetof(CarErs, lap_harvest_limit) == 0x19f4);
+static_assert(offsetof(CarErs, harvest_power_mguk) == 0x1a00);
+static_assert(offsetof(CarErs, harvest_power_mguh) == 0x1a04);
+static_assert(offsetof(CarErs, deploy_power) == 0x1a14);
+static_assert(offsetof(CarErs, ers_mode) == 0x1a68);
+
 struct CarF1Aero {
-    uint8_t _pad_0x0[0x19a0];
+    uint8_t _pad_0x0[0x1988];
+    uint8_t drs_flags; // L2 experimental
+    uint8_t _pad_0x1989[0x17];
     float drag_scale; // L3 experimental
     float lift_scale; // L3 experimental
 };
+static_assert(offsetof(CarF1Aero, drs_flags) == 0x1988);
 static_assert(offsetof(CarF1Aero, drag_scale) == 0x19a0);
 static_assert(offsetof(CarF1Aero, lift_scale) == 0x19a4);
 
 struct CarFuelEcu {
-    uint8_t _pad_0x0[0x128];
+    uint8_t _pad_0x0[0x28];
+    CarObfFloat fuel_burn_scale_lean; // L2 experimental
+    uint8_t _pad_0x34[0x4];
+    CarObfFloat fuel_burn_scale_standard; // L2 experimental
+    uint8_t _pad_0x44[0x4];
+    CarObfFloat fuel_burn_scale_rich; // L2 experimental
+    uint8_t _pad_0x54[0x4];
+    CarObfFloat fuel_burn_scale_max; // L2 experimental
+    uint8_t _pad_0x64[0x4];
+    CarObfFloat fuel_power_scale_lean; // L2 experimental
+    uint8_t _pad_0x74[0x4];
+    CarObfFloat fuel_power_scale_standard; // L2 experimental
+    uint8_t _pad_0x84[0x4];
+    CarObfFloat fuel_power_scale_rich; // L2 experimental
+    uint8_t _pad_0x94[0x4];
+    CarObfFloat fuel_power_scale_max; // L2 experimental
+    uint8_t _pad_0xa4[0x4];
+    CarObfFloat fuel_revs_scale_lean; // L2 experimental
+    uint8_t _pad_0xb4[0x4];
+    CarObfFloat fuel_revs_scale_standard; // L2 experimental
+    uint8_t _pad_0xc4[0x4];
+    CarObfFloat fuel_revs_scale_rich; // L2 experimental
+    uint8_t _pad_0xd4[0x4];
+    CarObfFloat fuel_revs_scale_max; // L2 experimental
+    uint8_t _pad_0xe4[0x4];
+    CarObfFloat temperature_scale_lean; // L2 experimental
+    uint8_t _pad_0xf4[0x4];
+    CarObfFloat temperature_scale_standard; // L2 experimental
+    uint8_t _pad_0x104[0x4];
+    CarObfFloat temperature_scale_rich; // L2 experimental
+    uint8_t _pad_0x114[0x4];
+    CarObfFloat temperature_scale_max; // L2 experimental
+    uint8_t _pad_0x124[0x4];
     int32_t fuel_mode; // L3 stable
 };
+static_assert(offsetof(CarFuelEcu, fuel_burn_scale_lean) == 0x28);
+static_assert(offsetof(CarFuelEcu, fuel_burn_scale_standard) == 0x38);
+static_assert(offsetof(CarFuelEcu, fuel_burn_scale_rich) == 0x48);
+static_assert(offsetof(CarFuelEcu, fuel_burn_scale_max) == 0x58);
+static_assert(offsetof(CarFuelEcu, fuel_power_scale_lean) == 0x68);
+static_assert(offsetof(CarFuelEcu, fuel_power_scale_standard) == 0x78);
+static_assert(offsetof(CarFuelEcu, fuel_power_scale_rich) == 0x88);
+static_assert(offsetof(CarFuelEcu, fuel_power_scale_max) == 0x98);
+static_assert(offsetof(CarFuelEcu, fuel_revs_scale_lean) == 0xa8);
+static_assert(offsetof(CarFuelEcu, fuel_revs_scale_standard) == 0xb8);
+static_assert(offsetof(CarFuelEcu, fuel_revs_scale_rich) == 0xc8);
+static_assert(offsetof(CarFuelEcu, fuel_revs_scale_max) == 0xd8);
+static_assert(offsetof(CarFuelEcu, temperature_scale_lean) == 0xe8);
+static_assert(offsetof(CarFuelEcu, temperature_scale_standard) == 0xf8);
+static_assert(offsetof(CarFuelEcu, temperature_scale_rich) == 0x108);
+static_assert(offsetof(CarFuelEcu, temperature_scale_max) == 0x118);
 static_assert(offsetof(CarFuelEcu, fuel_mode) == 0x128);
 
 struct CarFuelTank {
@@ -307,6 +473,8 @@ inline constexpr address<"Car_FuelEcu_SetMode_Thunk"> Car_FuelEcu_SetMode_Thunk{
 inline constexpr address<"Car_Load_Vtf"> Car_Load_Vtf{}; // L2 experimental
 inline constexpr address<"Car_Model_BindCockpitNodes"> Car_Model_BindCockpitNodes{}; // L2 experimental
 inline constexpr address<"Car_Physics_PostVehicleUpdate"> Car_Physics_PostVehicleUpdate{}; // L2 experimental
+using Car_PitStop_ApplyTyreAndWingVisuals_t = void(void *car_visual, float a2, bool a3);
+inline constexpr fn<"Car_PitStop_ApplyTyreAndWingVisuals", Car_PitStop_ApplyTyreAndWingVisuals_t> Car_PitStop_ApplyTyreAndWingVisuals{}; // L2 experimental
 inline constexpr address<"Car_Powertrain_Step"> Car_Powertrain_Step{}; // L2 experimental
 inline constexpr address<"Car_Read_Engine"> Car_Read_Engine{}; // L2 experimental
 inline constexpr address<"Car_Read_F1Aero"> Car_Read_F1Aero{}; // L2 experimental
@@ -319,13 +487,19 @@ using Car_Reset_LastFittedUpgrade_t = void(void *inst);
 inline constexpr fn<"Car_Reset_LastFittedUpgrade", Car_Reset_LastFittedUpgrade_t> Car_Reset_LastFittedUpgrade{}; // L2 experimental
 inline constexpr address<"Car_Setup_ApplyTuning"> Car_Setup_ApplyTuning{}; // L3 stable
 inline constexpr address<"Car_SteeringWheelLeds_Update"> Car_SteeringWheelLeds_Update{}; // L2 experimental
+using Car_SuspensionDamage_OnCollision_t = void(void *susp_damage, void *contact);
+inline constexpr fn<"Car_SuspensionDamage_OnCollision", Car_SuspensionDamage_OnCollision_t> Car_SuspensionDamage_OnCollision{}; // L2 experimental
 inline constexpr address<"Car_Systems_FindOrCreate"> Car_Systems_FindOrCreate{}; // L2 experimental
 inline constexpr address<"Car_Systems_Reset_Thunk"> Car_Systems_Reset_Thunk{}; // L3 stable
 inline constexpr address<"Car_Tuning_SetChassisZCom"> Car_Tuning_SetChassisZCom{}; // L2 experimental
 inline constexpr address<"Car_Tuning_SetEngineBrakingAndRadiator"> Car_Tuning_SetEngineBrakingAndRadiator{}; // L2 experimental
 inline constexpr address<"Car_Tuning_SetFinalDrive"> Car_Tuning_SetFinalDrive{}; // L2 experimental
 inline constexpr address<"Car_TyreSystem_PitstopComplete"> Car_TyreSystem_PitstopComplete{}; // L2 experimental
+using Car_Tyre_CheckCompoundClassRule_t = bool(const void *set);
+inline constexpr fn<"Car_Tyre_CheckCompoundClassRule", Car_Tyre_CheckCompoundClassRule_t> Car_Tyre_CheckCompoundClassRule{}; // L2 experimental
 inline constexpr address<"Car_Tyre_GripScale"> Car_Tyre_GripScale{}; // L2 experimental
+using Car_Tyre_IsCompoundAllowed_t = bool(const void *set);
+inline constexpr fn<"Car_Tyre_IsCompoundAllowed", Car_Tyre_IsCompoundAllowed_t> Car_Tyre_IsCompoundAllowed{}; // L2 experimental
 inline constexpr address<"Car_Tyre_MagicFormula"> Car_Tyre_MagicFormula{}; // L2 experimental
 using Car_Tyre_SetWearFactor_t = void(void *tyre_component, bool apply_set, uint16_t force);
 inline constexpr fn<"Car_Tyre_SetWearFactor", Car_Tyre_SetWearFactor_t> Car_Tyre_SetWearFactor{}; // L2 experimental
@@ -355,6 +529,7 @@ inline constexpr site<"site_Car_RegisterVehicleId"> site_Car_RegisterVehicleId{}
 inline constexpr site<"site_Car_SetupTuningApplied"> site_Car_SetupTuningApplied{}; // L3 stable
 inline constexpr site<"site_Car_UpgradeSectionApplyCall"> site_Car_UpgradeSectionApplyCall{}; // L2 experimental
 inline constexpr site<"site_Car_VehicleTableRemove"> site_Car_VehicleTableRemove{}; // L3 stable
+inline constexpr vtable<"vt_Car_SystemsContainer", 1> vt_Car_SystemsContainer{}; // L2 experimental
 inline constexpr vtable<"vt_Car_VehicleEnvironment", 7> vt_Car_VehicleEnvironment{}; // L2 experimental
 
 }

@@ -1,13 +1,17 @@
 #include "moments.hpp"
 
 #include "../hooks/hooks.hpp"
+#include "../perf.hpp"
 #include "../registry/table.hpp"
 #include "../runtime.hpp"
 #include "content/appliers.hpp"
 #include "database.hpp"
 #include "facts.hpp"
 #include "files_api.hpp"
+#include "gp_track_logic.hpp"
 #include "scheduler.hpp"
+#include "tracks/base.hpp"
+#include "tracks/seed.hpp"
 
 #include <swofty/game.hpp>
 #include <swofty/mem.hpp>
@@ -20,9 +24,11 @@
 #include <cstdio>
 #include <ctime>
 #include <cstddef>
+#include <array>
 #include <map>
 #include <mutex>
 #include <set>
+#include <thread>
 
 namespace swofty_core::apply::moments {
 
@@ -34,6 +40,7 @@ using swofty::json::Value;
 std::once_flag attached;
 std::mutex status_mu;
 std::map<std::string, std::vector<std::string>> status_lines;
+std::map<std::string, std::array<int, 3>> left_outs;
 std::atomic<bool> loaded_from_flow{false};
 std::mutex ids_mu;
 
@@ -146,6 +153,8 @@ void facts(const reg::Context &c)
             f.session->setup_mode = c.setup_mode;
         } else {
             f.session.reset();
+            f.player.reset();
+            f.participants.clear();
         }
         f.vehicle_packages.clear();
         if (!c.vehicle_package.empty())
@@ -181,6 +190,12 @@ void extend(Value &, Value &conflicts)
                                       {"addon", Value(f.addon)},
                                       {"error", Value(f.what)}}));
     std::lock_guard g(status_mu);
+    if (!left_outs.empty()) {
+        Value out = Value::object();
+        for (auto &[addon, n] : left_outs)
+            out[addon] = Value::object({{"teams", Value(n[0])}, {"vehicles", Value(n[1])}, {"lists", Value(n[2])}});
+        conflicts["left_out"] = out;
+    }
     if (status_lines.empty())
         return;
     Value st = Value::object();
@@ -278,6 +293,7 @@ bool vtable_is(uintptr_t obj, const char *id)
 }
 
 struct Weekend {
+    uintptr_t at = 0;
     uint32_t session = 0;
     bool sprint = false;
     int track = -1;
@@ -308,6 +324,7 @@ bool weekend(uintptr_t holder, Weekend &out)
         !rd(season + offsetof(g::Season, current_weekend), wi) || we < wb || (we - wb) / 8 > MAX_ROUNDS ||
         wi >= (we - wb) / 8 || !rd(wb + wi * 8, wk) || !vtable_is(wk, "vt_Career_Weekend"))
         return false;
+    out.at = wk;
     uint8_t track = 0xff;
     if (rd(wk + offsetof(g::Weekend, track_stat_id), track) && track != 0xff)
         out.track = track;
@@ -329,27 +346,125 @@ bool weekend(uintptr_t holder, Weekend &out)
 std::mutex tracks_mu;
 std::map<int, std::string> track_labels;
 bool tracks_read = false;
+std::string tracks_read_at;
+
+// The tracks table is read once per game run, at the first of the window stage, a box press or a session load that
+// finds it readable; the rows do not change between those in one run, so later readers use the cached rows. The
+// read goes through the database reader only once an addon has initialised it: a run without one keeps the reader
+// (and its signature resolve) off, and the Grand Prix track repair decides from the track base and the shipping table.
+void read_track_rows(const char *when)
+{
+    if (tracks_read)
+        return;
+    if (!runtime::db_initialised()) {
+        once(std::string("the tracks table is not readable at ") + when +
+             " (no addon has opened the game database, so its reader is not initialised); the track is left empty");
+        return;
+    }
+    const SwoftyDb *db = runtime::db_table();
+    SwoftyDbCursor cur{};
+    int r = !db || !db->available || !db->available() ? SWOFTY_ASSET_UNAVAILABLE : db->open("tracks", &cur);
+    if (r != SWOFTY_ASSET_OK) {
+        once(std::string("the tracks table is not readable at ") + when + " (" +
+             (r == SWOFTY_ASSET_LATE ? "its row count is 0" : r == SWOFTY_ASSET_INVALID ? "its keys are invalid" : "the database is not loaded") +
+             "); the track is left empty");
+        return;
+    }
+    tracks_read = true;
+    tracks_read_at = when;
+    do {
+        SwoftyDbValue v{};
+        const char *label = db->row_name(&cur);
+        if (label && db->cell(&cur, "statId", &v) == SWOFTY_ASSET_OK)
+            track_labels[int(v.i)] = label;
+    } while (db->step(&cur) == SWOFTY_ASSET_OK);
+    swofty::log("[apply] tracks table: %zu row(s) with a statId read at %s", track_labels.size(), when);
+}
 
 std::string track_label(int stat_id)
 {
     std::lock_guard g(tracks_mu);
-    if (!tracks_read) {
-        const SwoftyDb *db = runtime::db_table();
-        SwoftyDbCursor cur{};
-        if (!db || !db->available || !db->available() || db->open("tracks", &cur) != SWOFTY_ASSET_OK) {
-            once("the tracks table is not readable yet; the track is left empty");
-            return {};
-        }
-        tracks_read = true;
-        do {
-            SwoftyDbValue v{};
-            const char *label = db->row_name(&cur);
-            if (label && db->cell(&cur, "statId", &v) == SWOFTY_ASSET_OK)
-                track_labels[int(v.i)] = label;
-        } while (db->step(&cur) == SWOFTY_ASSET_OK);
-    }
+    read_track_rows("the session load");
     auto it = track_labels.find(stat_id);
     return it == track_labels.end() ? std::string() : it->second;
+}
+
+std::string cached_track_label(int stat_id)
+{
+    std::lock_guard g(tracks_mu);
+    if (!tracks_read)
+        return {};
+    auto it = track_labels.find(stat_id);
+    return it == track_labels.end() ? std::string() : it->second;
+}
+
+std::vector<gp_track::Source> track_sources()
+{
+    std::vector<gp_track::Source> out;
+    const tracks::Base &b = tracks::base();
+    gp_track::Source table{"the tracks table", {}, {}}, base{"the track base", {}, {}};
+    {
+        std::lock_guard g(tracks_mu);
+        read_track_rows("the session load");
+        if (tracks_read) {
+            table.name += " (read at " + tracks_read_at + ")";
+            table.rows = track_labels;
+        }
+    }
+    // A dormant stock row that an older track or a track record fills is a live track: only stock rows count as dormant.
+    std::set<int> filled;
+    if (b.ready)
+        for (const tracks::BaseTrack &t : b.tracks)
+            if (t.stat_id >= 0 && t.stat_id < 0xff) {
+                base.rows[t.stat_id] = t.code;
+                if (t.kind != tracks::Kind::stock)
+                    filled.insert(t.stat_id);
+                else if (tracks::is_dormant(t.code)) {
+                    base.dormant.insert(t.stat_id);
+                    table.dormant.insert(t.stat_id);
+                }
+            }
+    for (const char *d : tracks::DORMANT)
+        for (auto &[id, label] : table.rows)
+            if (label == d && !filled.count(id))
+                table.dormant.insert(id);
+    if (b.ready)
+        for (const std::string &d : b.dormant)
+            if (const gp_track::StockRow *r = gp_track::stock_row_by_code(d.rfind("game/", 0) == 0 ? d.substr(5) : d))
+                if (!base.rows.count(r->stat_id)) {
+                    base.rows[r->stat_id] = r->code;
+                    base.dormant.insert(r->stat_id);
+                }
+    std::vector<std::pair<int, std::string>> records;
+    for (auto &id : reg::store().list("track", "")) {
+        reg::Record r = reg::store().get("track", id);
+        if (r.status == reg::Status::ok && r.value["stat_id"].is_int())
+            records.emplace_back(int(r.value["stat_id"].as_int()), id);
+    }
+    out.push_back(std::move(table));
+    out.push_back(std::move(base));
+    out.push_back(gp_track::stock_source(records));
+    return out;
+}
+
+std::string grand_prix_track_fallback()
+{
+    uintptr_t ctx = current_context();
+    if (!ctx || mode_of(ctx, "the session load") != "grand_prix")
+        return {};
+    Weekend w;
+    if (!weekend(holder_of(ctx), w) || !w.at)
+        return {};
+    gp_track::Fallback f = gp_track::fallback(w.track, track_sources());
+    if (f.replace)
+        *reinterpret_cast<uint8_t *>(w.at + offsetof(g::Weekend, track_stat_id)) = uint8_t(f.stat_id);
+    return f.line;
+}
+
+void prime_track_rows(const char *when)
+{
+    std::lock_guard g(tracks_mu);
+    read_track_rows(when);
 }
 
 std::string track_id(int stat_id)
@@ -364,7 +479,7 @@ std::string track_id(int stat_id)
     }
     std::string id = facts::track_of(stat_id, track_label(stat_id), records);
     if (id.empty())
-        once("track stat id " + std::to_string(stat_id) + " has no tracks row or track record");
+        once("track stat id " + std::to_string(stat_id) + " has no tracks row or track record; its track addon is off or not installed, and a saved Grand Prix or career that races it crashes at the session load");
     return id;
 }
 
@@ -405,6 +520,23 @@ void on_stage(int stage)
 
 }
 
+// Whether this game start is a shared session's: its direct start request (SWOFTY_DIRECT_START, or
+// swofty\direct_start.json, which the launcher removes before every other start) targets a room.
+bool room_boot()
+{
+    char env[1024] = {};
+    DWORD n = GetEnvironmentVariableA("SWOFTY_DIRECT_START", env, sizeof env);
+    std::string text;
+    if (n && n < sizeof env && env[0] == '@') {
+        std::string path(env + 1);
+        text = runtime::read_file(runtime::wide(path), size_t(1) << 16);
+    } else if (n && n < sizeof env)
+        text = env;
+    else
+        text = runtime::read_file(runtime::swofty_root() + L"direct_start.json", size_t(1) << 16);
+    return text == "room" || text.find("\"room\"") != std::string::npos;
+}
+
 void attach()
 {
     std::call_once(attached, [] {
@@ -421,6 +553,23 @@ void attach()
                         why.c_str());
         else if (!text.empty())
             swofty::log("[registry] stat ids: ids.json holds %zu id(s)", ids::store().size());
+        std::string room = runtime::read_file(runtime::swofty_root() + L"room_stat_ids.json", size_t(4) << 20);
+        if (!room.empty() && !room_boot()) {
+            swofty::log("[registry] stat ids: swofty\\room_stat_ids.json is left from an earlier shared session and this "
+                        "start is not one; this install's ids are used");
+            room.clear();
+        }
+        if (!room.empty()) {
+            std::vector<std::string> lines;
+            if (ids::store().lend_json(room, &lines, &why)) {
+                for (auto &l : lines)
+                    swofty::log("%s", l.c_str());
+                swofty::log("[registry] stat ids: the host's ids are lent for this shared session; ids.json is not "
+                            "written");
+            } else
+                swofty::log("[registry] stat ids: swofty\\room_stat_ids.json is unusable (%s); this install's ids are used",
+                            why.c_str());
+        }
         reg::set_stat_id_source([](const std::string &registry, const std::string &id, int64_t *out) {
             std::string line;
             int r = stat_id(reg::store(), ids::store(), registry, id, out, today(), &line);
@@ -448,6 +597,12 @@ void status(const std::string &addon, const std::string &line)
 {
     std::lock_guard g(status_mu);
     status_lines[addon.empty() ? std::string("swofty.core") : addon].push_back(line);
+}
+
+void left_out(const std::string &addon, int teams, int vehicles, int lists)
+{
+    std::lock_guard g(status_mu);
+    left_outs[addon] = {teams, vehicles, lists};
 }
 
 void write_room(const room::Report &report)
@@ -484,7 +639,7 @@ void boot_without_database(room::Report report)
         swofty::log("[registry] register: %s %zu database record(s) refused (late): %s", addon.c_str(), n,
                     report.reason.c_str());
     }
-    report.registry_asked = scheduler().planned_keys();
+    report.registry_planned = report.registry_asked = scheduler().planned_keys();
     save_ids();
     write_room(report);
     if (runtime::load_stage() != "early")
@@ -529,8 +684,41 @@ void box_picked(const char *entrant_list)
 void box_picked(const char *entrant_list, const void *mode_context)
 {
     attach();
+    game::prime_track_rows("the box press");
     uintptr_t ctx = mode_context ? reinterpret_cast<uintptr_t>(mode_context) : game::current_context();
     scheduler().content_picked(entrant_list ? entrant_list : "", game::mode_of(ctx, "the box press"));
+}
+
+namespace {
+
+constexpr DWORD MODE_WATCH_MS = 250;
+std::atomic<int> mode_now{int(facts::ModeKind::unknown)};
+std::once_flag mode_watch_once;
+
+facts::ModeKind read_mode_kind()
+{
+    swofty::mem::Trust trust(runtime::HEAP_TRUST_MS);
+    uintptr_t ctx = game::current_context();
+    uintptr_t holder = ctx ? game::holder_of(ctx) : 0;
+    std::string name = holder ? game::mode_name(holder) : std::string();
+    std::string mode = name.empty() ? std::string() : facts::mode_of(name);
+    return facts::mode_kind(ctx != 0, holder != 0, mode);
+}
+
+void note_mode(facts::ModeKind k, const char *how)
+{
+    if (mode_now.exchange(int(k), std::memory_order_relaxed) != int(k))
+        swofty::log("[apply] game mode now %s (%s)", facts::mode_kind_name(k), how);
+}
+
+void mode_watch_main()
+{
+    perf::background();
+    for (;; Sleep(MODE_WATCH_MS))
+        if (runtime::code_ready())
+            note_mode(read_mode_kind(), "the mode watch");
+}
+
 }
 
 void session_load(const char *source)
@@ -541,8 +729,21 @@ void session_load(const char *source)
     if (!flow && scheduler().in_session() && loaded_from_flow.load())
         return;
     loaded_from_flow = flow;
-    scheduler().session_load(game::at_session_load());
+    SessionFacts f = game::at_session_load();
+    if (facts::ModeKind k = facts::mode_kind(true, true, f.mode); k != facts::ModeKind::unknown)
+        note_mode(k, "the session load");
+    scheduler().session_load(f);
     write_reports(from.c_str());
+}
+
+facts::ModeKind mode_kind()
+{
+    return facts::ModeKind(mode_now.load(std::memory_order_relaxed));
+}
+
+void mode_watch()
+{
+    std::call_once(mode_watch_once, [] { std::thread(mode_watch_main).detach(); });
 }
 
 std::pair<std::string, std::string> session_mode_track()
@@ -550,6 +751,24 @@ std::pair<std::string, std::string> session_mode_track()
     attach();
     SessionFacts f = game::at_session_load();
     return {f.mode, f.track};
+}
+
+std::string current_mode(const char *where)
+{
+    return game::mode_of(game::current_context(), where);
+}
+
+std::string cached_track_label(int stat_id)
+{
+    return game::cached_track_label(stat_id);
+}
+
+void grand_prix_track_check()
+{
+    attach();
+    std::string line = game::grand_prix_track_fallback();
+    if (!line.empty())
+        swofty::log("[gp] %s", line.c_str());
 }
 
 void session_end(const char *source)
@@ -563,6 +782,7 @@ void window()
 {
     attach();
     scheduler().install_read();
+    game::prime_track_rows("the window stage");
 }
 
 int write_reports(const char *when)

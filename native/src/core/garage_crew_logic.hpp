@@ -58,6 +58,36 @@ inline bool session_of(uint64_t rsp, Read read, void *user, uint64_t *session)
            read(module + MODULE_SESSION, session, sizeof *session, user) && user_pointer(*session);
 }
 
+constexpr uint32_t GARAGES = 0x20;
+constexpr uint64_t SETUP_VECTOR_BEGIN = 0xa8;
+constexpr uint64_t SETUP_KEY = 0xc0;
+constexpr uint64_t SETUP_FLAG = 0x4b;
+
+inline bool setup_template_missing(uint64_t tmpl)
+{
+    return !user_pointer(tmpl);
+}
+
+inline bool scene_missing(uint64_t scene)
+{
+    return !user_pointer(scene);
+}
+
+struct SetupSkips {
+    uint32_t seen = 0;
+
+    bool first(uint64_t garage)
+    {
+        if (garage >= GARAGES)
+            return false;
+        uint32_t bit = 1u << garage;
+        if (seen & bit)
+            return false;
+        seen |= bit;
+        return true;
+    }
+};
+
 using OnDrop = void (*)(void *ctx, uint64_t record, uint32_t slot, Drop why);
 
 inline size_t compact(uint8_t *entries, size_t n, uint64_t session, bool known, Read read, void *user, OnDrop on_drop,

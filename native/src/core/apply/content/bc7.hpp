@@ -13,7 +13,7 @@
 #endif
 
 // BC7 encoder for logo slices: modes 5 and 6 only, block for block the same as the offline pipeline of Classic
-// Seasons (addons/rnd-tyres-thermal/tools/bc7enc.py, then the mode 5 pass of classic-seasons/tools/logos.py). The
+// Seasons (R&D: Tyres & Thermal Management's tools/bc7enc.py, then the mode 5 pass of Classic Seasons' tools/logos.py). The
 // sums add in numpy's order (one at a time, or eight lanes for sixteen values) and the file builds without fused
 // multiply-add, so the output equals the Python bytes.
 

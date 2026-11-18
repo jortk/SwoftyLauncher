@@ -12,13 +12,27 @@ name = "swofty-launcher"
 path = "src/main.rs"
 
 [dependencies]
-gpui-kit = "=0.8.0"
+gpui-kit = "=0.9.1"
+anyhow.workspace = true
+base64.workspace = true
+lsp-types = { version = "0.97", features = ["proposed"] }
+image = { version = "0.25", default-features = false }
+png.workspace = true
+raw-window-handle = "0.6"
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+swofty-ads.workspace = true
 swofty-builtins.workspace = true
 swofty-core.workspace = true
+swofty-i18n.workspace = true
+swofty-preview.workspace = true
+swofty-shaders.workspace = true
 ureq.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+swofty-ads = { workspace = true, features = ["view"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging"] }
 
 [build-dependencies]
 serde_json.workspace = true

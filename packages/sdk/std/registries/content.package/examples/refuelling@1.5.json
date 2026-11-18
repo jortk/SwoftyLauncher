@@ -1,0 +1,15 @@
+{
+  "content.package": {
+    "f1_2008": {
+      "entrant_list": "f1_2008",
+      "season": 2008,
+      "rules": {
+        "refuelling": true,
+        "race_fuel_kg": 90,
+        "refuel_stint_kg": 60,
+        "quali_fuel_kg": 45,
+        "race_start_fuel_from_quali": true
+      }
+    }
+  }
+}

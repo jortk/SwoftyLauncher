@@ -12,8 +12,8 @@
 #include "fuel_logic.hpp"
 #include "track_fuel.hpp"
 
-// tracks::set_track_fuel (SwoftyCareerOps version 4): Progressive Career's race weekend fuel copy (addons/
-// progressive/native/src/ui/fuel.cpp) moved into the core and driven by a request. It writes a track's fuel in
+// tracks::set_track_fuel (SwoftyCareerOps version 4): Progressive Career's race weekend fuel copy (its
+// native/src/ui/fuel.cpp) moved into the core and driven by a request. It writes a track's fuel in
 // one of the game's track data sets, from the same track in another set or as a burn per lap, keeps the bytes
 // it found and puts them back when the career unloads or on a restore request. A set is written only when the
 // sets the request names show their stock values on the check tracks; a restore puts back only what still

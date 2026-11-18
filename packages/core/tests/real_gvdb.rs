@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use swofty_core::heads;
+use swofty_core::livery_kits;
 use swofty_core::manifest::AddonManifest;
 use swofty_core::ops::{DbOps, apply_db_ops};
 use swofty_core::owned;
 use swofty_core::profile::Profile;
-use swofty_core::settings::render_ops;
+use swofty_core::settings::{OnAddons, render_ops};
 use swofty_formats::gvdb::Gvdb;
 
 #[test]
@@ -23,7 +25,7 @@ fn template_db_ops_resolve_against_the_real_database() {
     let m = AddonManifest::load(&template).unwrap();
     let mut doc: serde_json::Value =
         serde_json::from_slice(&std::fs::read(template.join("db/example.json")).unwrap()).unwrap();
-    render_ops(&mut doc, &m, &Profile::new("test")).unwrap();
+    render_ops(&mut doc, &m, &Profile::new("test"), &OnAddons::default()).unwrap();
     let ops: DbOps = serde_json::from_value(doc).unwrap();
     apply_db_ops(&mut db, &ops, &BTreeMap::<String, Vec<String>>::new()).unwrap();
     assert_eq!(
@@ -76,6 +78,97 @@ fn added_se_livery_unlock_is_owned_against_the_real_database() {
     );
     let stock = std::collections::HashSet::from([owned::item_key("eSELivery", "toro_rosso_miami_26")]);
     assert_eq!(owned::stock_collisions(&pristine, &stock), stock);
+}
+
+#[test]
+fn a_special_livery_of_an_unknown_team_kit_is_emptied_against_the_real_database() {
+    let Some(dir) = std::env::var_os("F1_25_DIR").map(PathBuf::from) else {
+        eprintln!("F1_25_DIR is not set; skipping");
+        return;
+    };
+    let Ok(data) = std::fs::read(dir.join("game_package/gamedatabases/gamedatabases.2025.bin")) else {
+        eprintln!("no gamedatabases.2025.bin under F1_25_DIR; skipping");
+        return;
+    };
+    let mut db = Gvdb::parse(&data).unwrap();
+    assert!(livery_kits::kits(&db).contains("2026-renault"));
+    assert_eq!(livery_kits::keep_kits(&mut db), []);
+    assert_eq!(db.to_bytes(), data);
+    let ops: DbOps = serde_json::from_str(
+        r#"{"schema_version":1,
+        "fields":{
+          "customisation.custom_se_liveries.se_liveries.se_livery":["_metadata_","id","compatible_vehicle","wep_override","team_customisation","name_loc_tag","desc_loc_tag","ui_priority"]
+        },
+        "ops":[
+          {"op":"add-row","table":"customisation.custom_se_liveries.se_liveries",
+           "from":"customisation.custom_se_liveries.se_liveries.se_livery[_metadata_=mclaren_monaco_2026]",
+           "set":{"_metadata_":"lotus_lx02","id":"22","team_customisation":"2026-lotus","ui_priority":"22"}},
+          {"op":"add-row","table":"customisation.custom_se_liveries.se_liveries",
+           "from":"customisation.custom_se_liveries.se_liveries.se_livery[_metadata_=mclaren_monaco_2026]",
+           "set":{"_metadata_":"lotus_lx09","id":"23","team_customisation":"2026-renault","ui_priority":"23"}}
+        ]}"#,
+    )
+    .unwrap();
+    apply_db_ops(&mut db, &ops, &BTreeMap::<String, Vec<String>>::new()).unwrap();
+    let rows = "customisation.custom_se_liveries.se_liveries";
+    let found = livery_kits::keep_kits(&mut db);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        (found[0].row.as_str(), found[0].kit.as_str()),
+        ("lotus_lx02", "2026-lotus")
+    );
+    assert_eq!(
+        db.get_text(&format!("{rows}.se_livery_21.team_customisation"))
+            .as_deref(),
+        Some("")
+    );
+    assert_eq!(
+        db.get_text(&format!("{rows}.se_livery_22.team_customisation"))
+            .as_deref(),
+        Some("2026-renault")
+    );
+    assert_eq!(
+        db.get_text(&format!("{rows}.se_livery_13.team_customisation"))
+            .as_deref(),
+        Some("2026-mclaren")
+    );
+}
+
+#[test]
+fn the_games_headless_driver_wears_the_stand_in_against_the_real_database() {
+    let Some(dir) = std::env::var_os("F1_25_DIR").map(PathBuf::from) else {
+        eprintln!("F1_25_DIR is not set; skipping");
+        return;
+    };
+    let Ok(data) = std::fs::read(dir.join("game_package/gamedatabases/gamedatabases.2025.bin")) else {
+        eprintln!("no gamedatabases.2025.bin under F1_25_DIR; skipping");
+        return;
+    };
+    let shipped = Gvdb::parse(&data).unwrap();
+    let mut db = shipped.clone();
+    let found = heads::wear_stand_ins(&mut db, &shipped, &std::collections::BTreeSet::new());
+    assert_eq!(
+        found,
+        [heads::Headless {
+            row: "nico_rosberg".into(),
+            head: "nico_rosberg".into(),
+            worn: heads::STAND_IN.into(),
+        }]
+    );
+    let rosberg = (0..db.instance_count("entrants.drivers", "driver").unwrap())
+        .find(|i| {
+            db.get_text(&format!("entrants.drivers.driver_{i}._metadata_"))
+                .as_deref()
+                == Some("nico_rosberg")
+        })
+        .unwrap();
+    assert_eq!(
+        db.get_text(&format!("entrants.drivers.driver_{rosberg}.head"))
+            .as_deref(),
+        Some(heads::STAND_IN)
+    );
+    assert!(heads::labels(&db).contains(heads::STAND_IN));
+    assert_eq!(db.records.len(), shipped.records.len());
 }
 
 #[test]
@@ -300,4 +393,18 @@ fn a_calendar_count_past_its_rows_comes_down_against_the_real_database() {
         )]
     );
     assert_eq!(db.get_text(count).as_deref(), Some("16"));
+}
+
+#[test]
+fn the_real_track_lists_hold_35_stock_tracks() {
+    let Some(dir) = std::env::var_os("F1_25_DIR").map(PathBuf::from) else {
+        eprintln!("F1_25_DIR is not set; skipping");
+        return;
+    };
+    let Ok(data) = std::fs::read(dir.join("game_package/gamedatabases/gamedatabases.2025.bin")) else {
+        eprintln!("no gamedatabases.2025.bin under F1_25_DIR; skipping");
+        return;
+    };
+    let listed = swofty_core::tracks::ListedTracks::of(&Gvdb::parse(&data).unwrap());
+    assert_eq!(listed.stock(), 35);
 }

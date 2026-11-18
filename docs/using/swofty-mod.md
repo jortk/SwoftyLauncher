@@ -16,11 +16,11 @@ You'll also see a panel on the home screen confirming you launched with Swofty L
 
 ## What's listed
 
-**ADDON SETTINGS** lists a tile for every enabled addon, mod and track in the active profile, in columns of three. Addons come first, then mods, then tracks. Each tile shows its name; the highlighted tile also shows its author, version and description.
+**ADDON SETTINGS** lists a tile for every enabled addon, mod and track in the active profile, in a row per folder of the launcher's Addons page: **Built In**, the categories, such as **Tracks**, and your own folders, in the order the Addons page has them. Each row is labelled with its folder's name. Addons in no folder go in an **Addons** row, and mods in a **Mods** row. A track addon has one tile, which shows its track. Each tile shows its name and icon; the highlighted tile also shows its author, version and description, cut short with "..." when it runs past the tile.
 
-Three columns fit on screen. When there are more, moving past the right edge slides the row along by a column, and moving left slides it back. Coming back from an addon's page returns to the tile you opened, with the row slid to show it.
+Two rows fit on screen, with the next one showing below them. Moving down past them slides the rows up by one, and moving up slides them back. Three tiles of a row fit across: moving past the right edge slides that row along by a tile, and moving left slides it back. Moving up or down lands on the same column of the next row, or its last tile. Coming back from an addon's page returns to the tile you opened, with the rows slid to show it.
 
-A page holds up to 24 tiles, eight columns. With more, the list continues on further pages, and the title shows the page, such as **PAGE 1/3**. The last column of a page holds **NEXT PAGE** and, from the second page on, **PREVIOUS PAGE**; each shows the first names on that page. **Back** on a later page returns to the page before it, with **NEXT PAGE** selected.
+A page holds up to 24 tiles. With more, the list continues on further pages, and the title shows the page, such as **PAGE 1/3**. The last row of a page ends with **NEXT PAGE** and, from the second page on, **PREVIOUS PAGE**; each shows the first names on that page. **Back** on a later page returns to the page before it, with **NEXT PAGE** selected.
 
 ## Change a setting
 

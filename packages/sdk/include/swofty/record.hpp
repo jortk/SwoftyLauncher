@@ -408,6 +408,10 @@ template <class T> using Edit = std::function<void(T &)>;
 #define SWOFTY_RECORD_REGISTRY(T, name)                                                                                \
     [[maybe_unused]] constexpr const char *swofty_registry_name(const T *) { return name; }
 
+// swofty_field_schema(const Type *, std::string_view field): the schema text of a field that takes fewer values
+// than its type (a char that is one of four operators), or empty for its type's schema. Define it next to
+// SWOFTY_RECORD, in the struct's namespace.
+
 #define SWOFTY_ENUM_NAME_(e) #e,
 // SWOFTY_ENUM(Type, value, ...): enumerator names for the JSON form, in declaration order from 0.
 #define SWOFTY_ENUM(T, ...)                                                                                            \
@@ -1158,6 +1162,8 @@ template <class T> struct Schema {
     {
         if constexpr (std::is_same_v<T, bool>)
             w.raw("{\"type\":\"boolean\"}");
+        else if constexpr (std::is_same_v<T, char>)
+            w.raw("{\"type\":\"string\",\"minLength\":1,\"maxLength\":1}");
         else if constexpr (std::is_integral_v<T>)
             w.raw("{\"type\":\"integer\"}");
         else if constexpr (std::is_floating_point_v<T>)
@@ -1281,6 +1287,14 @@ template <class T, auto... Keys> struct SchemaOf<Keyed<T, Keys...>> {
     }
 };
 
+template <class T> std::string_view field_schema(std::string_view field)
+{
+    if constexpr (requires { swofty_field_schema(static_cast<const T *>(nullptr), std::string_view{}); })
+        return swofty_field_schema(static_cast<const T *>(nullptr), field);
+    else
+        return {};
+}
+
 template <class T> void schema(Writer &w)
 {
     w.raw("{\"type\":\"object\",\"properties\":{");
@@ -1288,7 +1302,10 @@ template <class T> void schema(Writer &w)
         [&](const auto &f) {
             if constexpr (!std::is_same_v<std::remove_cvref_t<decltype(f)>, field_end>) {
                 w.key(f.name);
-                SchemaOf<std::remove_cvref_t<decltype(std::declval<T &>().*(f.member))>>::write(w);
+                if (std::string_view own = field_schema<T>(f.name); !own.empty())
+                    w.raw(own);
+                else
+                    SchemaOf<std::remove_cvref_t<decltype(std::declval<T &>().*(f.member))>>::write(w);
             }
         },
         swofty_fields(static_cast<const T *>(nullptr)));

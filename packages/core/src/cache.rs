@@ -97,6 +97,31 @@ pub fn prune_archives(dir: &Path, max_age: std::time::Duration, max_bytes: u64) 
     removed
 }
 
+/// Drop the oldest files directly in `dir` until the rest fit in `max_bytes`.
+pub fn prune_files(dir: &Path, max_bytes: u64) -> usize {
+    let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let meta = e.metadata().ok().filter(std::fs::Metadata::is_file)?;
+            Some((meta.modified().ok()?, meta.len(), e.path()))
+        })
+        .collect();
+    files.sort_by_key(|f| std::cmp::Reverse(f.0));
+    let (mut kept, mut removed) = (0u64, 0);
+    for (_, len, path) in files {
+        if kept + len > max_bytes {
+            if std::fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        } else {
+            kept += len;
+        }
+    }
+    removed
+}
+
 pub fn prune_packed(dir: &Path, max_age: std::time::Duration) -> usize {
     let mut removed = 0;
     for sub in children(dir) {
@@ -124,6 +149,30 @@ mod tests {
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(dir.join(".done"), "").unwrap();
         dir.to_path_buf()
+    }
+
+    #[test]
+    fn prune_files_keeps_the_newest_that_fit() {
+        let dir = std::env::temp_dir().join(format!("swofty-cache-files-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        let now = std::time::SystemTime::now();
+        for (i, name) in ["old", "mid", "new"].iter().enumerate() {
+            let path = dir.join(name);
+            std::fs::write(&path, [0u8; 10]).unwrap();
+            let at = now - std::time::Duration::from_secs(60 * (3 - i as u64));
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(at)
+                .unwrap();
+        }
+        assert_eq!(prune_files(&dir, 25), 1);
+        assert!(!dir.join("old").exists() && dir.join("mid").exists() && dir.join("new").exists());
+        assert!(dir.join("sub").is_dir());
+        assert_eq!(prune_files(&dir.join("missing"), 0), 0);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

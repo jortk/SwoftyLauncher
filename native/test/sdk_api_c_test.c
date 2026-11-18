@@ -20,6 +20,9 @@ _Static_assert(sizeof(SwoftyServices) == 32, "services table layout");
 _Static_assert(offsetof(SwoftyHookCall, context) == 32 && sizeof(SwoftyHookCall) == 40, "hook call layout");
 _Static_assert(sizeof(SwoftyLayerDesc) == 128, "layer descriptor layout");
 _Static_assert(sizeof(SwoftyText) == 16, "text layout");
+_Static_assert(SWOFTY_MEM_VERSION == 1 && offsetof(SwoftyMem, readable) == 8 && offsetof(SwoftyMem, invalidate) == 16 &&
+                   sizeof(SwoftyMem) == 24,
+               "memory table version 1 layout");
 _Static_assert(SWOFTY_TOO_SMALL == 4 && SWOFTY_SCOPE_CAREER == 2 && SWOFTY_SCOPE_AUTOMATIC == 3 && SWOFTY_PHASE_AFTER == 2, "codes");
 
 #define SWOFTY_C_SIZE(C, ns, T, n) _Static_assert(sizeof(C) == n, #C " size");

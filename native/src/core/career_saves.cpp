@@ -389,6 +389,13 @@ void career_saves_listed(const std::vector<career_saves::SlotRead> &slots, bool 
         hk::events::career_missing();
 }
 
+std::string career_saves_id_for_slot(const std::string &key)
+{
+    std::lock_guard<std::mutex> g(mu);
+    read_index_locked();
+    return index_.career_for_slot(key);
+}
+
 void career_saves_saved()
 {
     {

@@ -1,6 +1,7 @@
 #include "../../src/core/apply/content/logo_cache.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstdio>
 #include <map>
 #include <set>
@@ -210,6 +211,27 @@ int main()
     auto dup = shuffled;
     dup.insert(dup.end(), shuffled.begin(), shuffled.end());
     check(lc::key_archives(7, dup, inputs, again.env(), s2.stamps).key == s1b.key, "a listed archive counts once");
+
+    {
+        lc::Routes routes = {{"ui/a.erp", "logos_x_a.erp"}, {"ui/b.erp", "logos_x_b.erp"}};
+        std::set<std::string> present = {"logos_x_a.erp", "logos_x_b.erp"};
+        auto exists = [&](const std::string &f) { return present.count(f) > 0; };
+        int built = 0;
+        lc::Routes back;
+        check(lc::manifest_parse(lc::manifest_text(84, routes), exists, built, back) && built == 84 && back == routes,
+              "a manifest of a clean build comes back whole with its built count");
+        present.erase("logos_x_b.erp");
+        check(!lc::manifest_parse(lc::manifest_text(84, routes), exists, built, back) && back.empty(),
+              "a manifest naming a missing archive is not reused");
+        present.insert("logos_x_b.erp");
+        check(!lc::manifest_parse("ui/a.erp\tlogos_x_a.erp\nui/b.erp\tlogos_x_b.erp\n", exists, built, back) && back.empty(),
+              "a manifest written before the built count was kept is not reused");
+        check(!lc::manifest_parse(lc::manifest_text(0, {}), exists, built, back), "a manifest with no archives is not reused");
+        check(lc::cacheable(2, 2, 0), "a build that wrote every archive and refused nothing is cached");
+        check(!lc::cacheable(2, 3, 0), "a build that lost an archive is not cached");
+        check(!lc::cacheable(2, 2, 1), "a build with a refused slot is not cached");
+        check(!lc::cacheable(0, 0, 0), "a build with no archive is not cached");
+    }
 
     std::printf("%s\n", failures ? "FAILED" : "all logo cache checks passed");
     return failures ? 1 : 0;

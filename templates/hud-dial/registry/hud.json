@@ -1,0 +1,36 @@
+{
+  "hud.element": {
+    "dial": {
+      "dial": "f1_26",
+      "stock": "park",
+      "sprites": {
+        "base":  { "png": "art/base.png",  "bounds": [-60, -36, 60, 36] },
+        "ring":  { "png": "art/ring.png",  "bounds": [-24, -24, 24, 24] },
+        "solid": { "png": "art/solid.png", "bounds": [-4, -4, 4, 4] },
+        "fill":  { "png": "art/fill.png",  "bounds": [-40, 24, 40, 32] },
+        "lamp":  { "png": "art/lamp.png",  "bounds": [-56, -30, -40, -22] }
+      },
+      "elements": [
+        { "kind": "sprite", "id": "base", "sprite": "base", "layer": 20 },
+        { "kind": "text", "id": "gear", "style": "17_bold", "align": "centre", "box": 12,
+          "cap_height": 6, "at": [0, -6], "value": { "view_model": "view_model_data.hud_dial_gear" } },
+        { "kind": "text", "id": "speed", "style": "OSD_24_bold", "align": "centre", "box": 30,
+          "cap_height": 9.5, "at": [0, 10], "value": { "game": "speed_str" } },
+        { "kind": "sweep", "id": "rpm", "mask_sprite": "ring", "fill_sprite": "solid",
+          "pivot": [0, 0], "start": 225, "arc": [[0, 0], [1, -270]], "value": { "game": "revs" } },
+        { "kind": "gauge", "id": "ers", "sprite": "fill",
+          "path": [[-40, 28], [40, 28]], "value": { "game": "ers_stored" } },
+        { "kind": "sprite", "id": "pit", "sprite": "lamp",
+          "visible": { "view_model": "view_model_data.hud_dial_pit" } }
+      ],
+      "editor": {
+        "preview": { "game.revs": 0.62, "game.speed_str": "212", "game.ers_stored": 0.75,
+                     "view_model_data.hud_dial_gear": "6", "view_model_data.hud_dial_pit": true },
+        "team_colour": "#27F4D2"
+      },
+      "variants": {
+        "f2": { "dial": "f2", "remove": ["ers"] }
+      }
+    }
+  }
+}

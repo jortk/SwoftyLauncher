@@ -7,7 +7,7 @@ use swofty_core::manifest::AddonManifest;
 use swofty_core::ops::{CopyMode, DbOp, DbOps, DbReport, apply_db_ops_report};
 use swofty_core::profile::Profile;
 use swofty_core::rowkeys::{Names, RowKeys};
-use swofty_core::settings::render_ops;
+use swofty_core::settings::{OnAddons, render_ops};
 use swofty_formats::gvdb::Gvdb;
 
 fn arg(args: &[String], name: &str) -> Option<PathBuf> {
@@ -42,7 +42,7 @@ fn main() {
     for rel in files {
         let text = std::fs::read(addon.join(&rel)).expect("read the op file");
         let mut doc: serde_json::Value = serde_json::from_slice(&text).expect("op file json");
-        let file = render_ops(&mut doc, &manifest, &profile)
+        let file = render_ops(&mut doc, &manifest, &profile, &OnAddons::default())
             .map_err(|e| e.to_string())
             .and_then(|()| OpFile::from_value(doc, FileKind::Database).map_err(|e| e.to_string()));
         let file = match file {

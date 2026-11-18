@@ -14,6 +14,7 @@ fe_tiles	FeTile	-	open	generic tile-menu builder, Tile/Item base classes, item v
 game	Game	re-career-teams	open	game:: functions named in bulk from pretty-function strings, not yet sorted into a feature lane
 gamedb	Gdb	-	open	GVDB game value database: load, key lookup, table cursors, row counts
 hud	Hud	ui-re	open	in-race HUD: HUD screen VM, dynamic HUD component view-models (tyre/timing/MFD/minimap/...), HUD element base; logic/VM side (render lane owns the draw path)
+live	Live	osd-l1	open	in-process live game state for the std lib osd work: the component registry and its system keys, the per-car runtime inputs, results, gap, pit, penalty, marshal, tyre and controller layouts Halo reads natively
 loc	Loc	-	open	localisation: NeLocaleModule, per-language table sets, .lng path build, load, parse and key lookup
 protection	Prot	-	open	Denuvo stubs and .data1 bodies, signature/cert checks, VirtualProtect callers
 render	Render	overlay	open	D3D12/DXGI present path, swapchain overlay hooks, in-game immediate-mode HUD rendering

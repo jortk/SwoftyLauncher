@@ -1,6 +1,6 @@
 ---
 title: Host calls
-description: The calls a launcher plugin sends back to the launcher while it handles a request - progress, state, the game's clean files, folders, the running game, the profile's tracks and heads, and managing other addons.
+description: The calls a launcher plugin sends back to the launcher while it handles a request - progress, state, the game's clean files, folders, the save folder, the running game, the profile's tracks and heads, and managing other addons.
 ---
 
 # Host calls
@@ -18,7 +18,7 @@ fn overview(&mut self, host: &mut Host) -> Result<Value, String> {
     self.running = status["running"] == true;
     // a path, or null
     let addon_dir = host.path("addon_game_dir");
-    let saves = host.path("steam_save_dir");
+    let saves = host.path("save_dir");
     // this addon's state in the active profile, or null
     let on = self.enabled(host)?;
     let live = match (self.running, status["session"].as_str()) {
@@ -66,6 +66,7 @@ game_dir          1.0.10                  the game folder, or null              
 addon_game_dir    1.0.10                  the addon's folder in the game, or null
 registry_dir      1.6.0                   the folder of the core's reports: effective.json, conflicts.json
 steam_save_dir    1.0.10                  the Steam Cloud save folder, or null
+save_dir          1.9.29                  the folder the game reads the profile's saves from, or null
 game_status       1.0.10                  { running, pid, since, session }                      Game status
 profile_tracks    1.0.12                  the tracks in the profile's last build, or null       Profile tracks
 profile_heads     1.5.12                  the driver heads the profile's addons put, or null    Profile heads
@@ -142,11 +143,12 @@ game_original, game_original_lang   error: "the game is not available"
 { "id": 9, "method": "game_dir" }
 { "id": 10, "method": "addon_game_dir" }
 { "id": 11, "method": "steam_save_dir" }
+{ "id": 12, "method": "save_dir" }
 ```
 
 Career Editor finds its mailbox in the running game copy this way:
 
-```rust [addons/career-editor/launcher/src/main.rs]
+```rust [Career Mode Editor: launcher/src/main.rs]
 fn locate(&mut self, host: &mut Host) {
     if let Ok(v) = host.call("addon_game_dir", Value::Null)
         && let Some(p) = v.as_str()
@@ -170,6 +172,32 @@ fn locate(&mut self, host: &mut Host) {
 - The user comes from Steam's `loginusers.vdf`, else the user folder changed last.
 - It is `null` when that folder doesn't exist.
 - The saves are encrypted per Steam account, so a backup restores only on the same account.
+- It is Steam's folder whichever save the game reads, also on the EA app copy and with **Use launcher saves** on. `save_dir` names the save the game reads.
+
+**`save_dir`** *(launcher 1.9.29)* is the folder the game reads the active profile's saves from. Send it only when `hello.params.host_calls` lists `save_dir`. Career Editor backs it up, and falls back to `steam_save_dir` on an older launcher:
+
+```rust [Career Mode Editor: launcher/src/pages.rs]
+pub fn save_dir(app: &App, host: &mut Host) -> Result<PathBuf, String> {
+    let knows = app.host_calls.iter().any(|c| c == SAVE_DIR);
+    let method = if knows { SAVE_DIR } else { "steam_save_dir" };
+    host.call(method, Value::Null)?
+        .as_str()
+        .map(PathBuf::from)
+        .ok_or_else(|| no_save_dir(knows))
+}
+```
+
+```json
+{ "id": 12, "result": "/home/you/.local/share/swofty/saves/default/remote" }
+```
+
+- With **Use launcher saves** on, it is the profile's own store, `$DATA/saves/<profile>/remote/`: the core serves the game from there, not from Steam's folder.
+- Otherwise it is the active copy's own folder: Steam's `<steam>/userdata/<steamid3>/3059520/remote/`, or the EA app copy's `%LOCALAPPDATA%\F1 25\savegame\ea\profile\` (inside the EA app's Wine prefix on Linux).
+- Every profile of an EA app copy reads that copy's one save, with launcher saves on or off.
+- The Vanilla profile reads the active copy's own folder.
+- Steam's folder and the launcher store name the files `savegame@profile#<file>`; the EA app copy's folder names them `<file>`. A backup of one doesn't restore into the other.
+- It is `null` when no game is found or the folder doesn't exist, such as a launcher store before the profile's first Play.
+- A Rust helper gets it from `GameFiles::save_dir`, which is `None` on a launcher before 1.9.29.
 
 ## Game status {#game-status}
 
@@ -188,7 +216,7 @@ fn locate(&mut self, host: &mut Host) {
 
 *Launcher 1.0.12.* Career Editor lists every track a profile can race:
 
-```rust [addons/career-editor/launcher/src/tracks.rs]
+```rust [Career Mode Editor: launcher/src/tracks.rs]
 match host.call("profile_tracks", Value::Null) {
     Ok(Value::Null) => {
         Err("The launcher hasn't found F1 25, so it can't list the tracks in this profile.".into())
@@ -219,7 +247,7 @@ match host.call("profile_tracks", Value::Null) {
 
 *Launcher 1.5.12.* Send it only when `hello.params.host_calls` lists `profile_heads`, as Driver Manager does:
 
-```rust [addons/driver-manager/launcher/src/app.rs]
+```rust [Driver Manager: launcher/src/app.rs]
 fn profile_heads(&self, host: &mut Host) -> Vec<Choice> {
     if !self.host_calls.iter().any(|c| c == PROFILE_HEADS) {
         return Vec::new();

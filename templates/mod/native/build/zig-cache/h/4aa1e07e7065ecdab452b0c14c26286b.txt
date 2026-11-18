@@ -1,3 +1,0 @@
-0
-735 36601801 1000000000 d2cd8a51bbe601f8cb7368f91a5039f1 1 libc/mingw/misc/mingw_getsp.S
-12934 36505612 1000000000 778c2da649400cf96b67b7db24260521 1 libc/include/any-windows-any/_mingw_mac.h

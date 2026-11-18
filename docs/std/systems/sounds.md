@@ -278,4 +278,5 @@ events::on<sounds::events::BundleResolve>().before([](sounds::events::BundleReso
 - **Unknown:** when the game reads `audio.audio_car_data`, at boot or at session load. Until that's known, a box that wants a different sound for a car than other boxes gives the car its own vehicle variant.
 - **The reader expects 16-layer engine parts.** 2016 to 2018 bundles have fewer, and the core widens them.
 - **A car reaches its bundle through its switch name.** The car model's `bundleName` doesn't pick the sound.
+- **One switch name, one sound.** The game keeps one `audio_car_data` row per switch name. When a car names a switch that an earlier car already has, the car still applies and plays the earlier car's sound, and the log names that car.
 - **Commentary** (`audio.commentary`: track commentator overrides, speech lines) comes later.

@@ -1,6 +1,0 @@
-native/build/
-*.lib
-build/
-launcher/target/
-bin/
-*.obj

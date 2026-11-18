@@ -48,6 +48,12 @@ A page shows its rows in a table. Pages with a choice above the table, such as t
 
 **Calendar**, **Garage order** and **Line-ups** have **Move up** and **Move down** on each row.
 
+## Calendar order
+
+A career orders its rounds by each event's own date, not by the order of the list, and **Sort by date** on **Track lists** doesn't change that. Swapping events between rounds on **Calendar** changes which events run, not the order they run in. The weekend day and month in **Track settings** don't set the order either, and the DB Editor has no page for the event dates.
+
+**Events** on **Track lists** is how many rounds the game reads from the list. A lower count drops the rounds after it, and **Calendar** and the build log name them.
+
 **Driver Manager** creates new drivers. The **Drivers**, **Entrants** and **Line-ups** pages link to it: the link opens its page when it's installed, offers to turn it on when it's off, and opens its download page when it isn't installed.
 
 ## Heads from addons

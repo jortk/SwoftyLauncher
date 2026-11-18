@@ -66,6 +66,20 @@ static void open_frame(double, void *)
 
 int main()
 {
+    {
+        Dispatcher d;
+        uint32_t a = 0, b = 0;
+        expect(!d.garage_listened(), "idle parked-car updates have no listeners");
+        d.subscribe(1, SWOFTY_EVENT_GARAGE_PARKED_CAR, on_event, nullptr, &a);
+        d.subscribe(2, SWOFTY_EVENT_GARAGE_PARKED_CAR, on_event, nullptr, &b);
+        expect(d.garage_listened() && d.fire(SWOFTY_EVENT_GARAGE_PARKED_CAR, 7, 1, nullptr, 0) == 2 &&
+               g_events.back().a == 7 && g_events.back().b == 1, "parked garage event carries owner and native slot");
+        d.unsubscribe(a);
+        expect(d.garage_listened(), "second garage subscription keeps evaluation events active");
+        d.drop_owner(2);
+        expect(!d.garage_listened(), "unloading the last garage listener disables evaluation events");
+        g_events.clear();
+    }
     // Registration and result codes.
     {
         Dispatcher d;

@@ -1,0 +1,186 @@
+{
+  "id": "contrast_stretch",
+  "name": "Contrast Stretch",
+  "description": "Adaptive contrast. It measures the scene's darkest and brightest levels, eases the measurement over time, stretches them towards black and white, then shapes the dark, mid and light zones with a gain each.",
+  "params": [
+    {
+      "id": "minimum",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Black stretch",
+      "doc": "How much of the scene's darkest level is stretched down to black; 0 leaves blacks alone, 1 stretches fully."
+    },
+    {
+      "id": "maximum",
+      "type": "float",
+      "default": 0.2,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "White stretch",
+      "doc": "How much of the scene's brightest level is stretched up to white; 0 leaves whites alone, 1 stretches fully."
+    },
+    {
+      "id": "dark_threshold",
+      "type": "float",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Dark zone end",
+      "doc": "The brightness where the dark zone fades out; 0 turns the dark zone off."
+    },
+    {
+      "id": "dark_peak",
+      "type": "float",
+      "default": 1,
+      "min": 0.05,
+      "max": 1,
+      "step": 0.01,
+      "label": "Dark zone level",
+      "doc": "The level the dark zone's curve is set at, with Dark zone result giving what it becomes."
+    },
+    {
+      "id": "dark_max",
+      "type": "float",
+      "default": 1,
+      "min": 0.05,
+      "max": 2,
+      "step": 0.01,
+      "label": "Dark zone result",
+      "doc": "What the dark zone's level becomes; below the level darkens the zone, above it brightens."
+    },
+    {
+      "id": "mid_peak",
+      "type": "float",
+      "default": 0.5,
+      "min": 0.05,
+      "max": 1,
+      "step": 0.01,
+      "label": "Mid zone level",
+      "doc": "The level the mid zone's curve is set at, with Mid zone result giving what it becomes."
+    },
+    {
+      "id": "mid_max",
+      "type": "float",
+      "default": 0.5,
+      "min": 0.05,
+      "max": 2,
+      "step": 0.01,
+      "label": "Mid zone result",
+      "doc": "What the mid zone's level becomes; below the level darkens the midtones, above it brightens them."
+    },
+    {
+      "id": "light_threshold",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Light zone start",
+      "doc": "The brightness where the light zone fades in; 0 turns the light zone off."
+    },
+    {
+      "id": "light_peak",
+      "type": "float",
+      "default": 1,
+      "min": 0.05,
+      "max": 1,
+      "step": 0.01,
+      "label": "Light zone level",
+      "doc": "The level the light zone's curve is set at, with Light zone result giving what it becomes."
+    },
+    {
+      "id": "light_max",
+      "type": "float",
+      "default": 1,
+      "min": 0.05,
+      "max": 2,
+      "step": 0.01,
+      "label": "Light zone result",
+      "doc": "What the light zone's level becomes; below the level darkens the highlights, above it brightens them."
+    },
+    {
+      "id": "max_variance",
+      "type": "float",
+      "default": 1,
+      "min": 0.01,
+      "max": 4,
+      "step": 0.01,
+      "label": "Adaptation speed",
+      "doc": "The most the measured black and white may move per second, so the stretch eases in as the scene changes."
+    }
+  ],
+  "textures": [
+    {
+      "name": "cells",
+      "scale": 0.0625,
+      "format": "rgba16f"
+    },
+    {
+      "name": "cells2",
+      "scale": 0.0078125,
+      "format": "rgba16f"
+    },
+    {
+      "name": "stats_next",
+      "width": 1,
+      "height": 1,
+      "format": "rgba32f"
+    },
+    {
+      "name": "stats",
+      "width": 1,
+      "height": 1,
+      "format": "rgba32f",
+      "persistent": true
+    }
+  ],
+  "passes": [
+    {
+      "name": "meter",
+      "shader": "contrast_stretch.hlsl",
+      "entry": "meter",
+      "output": "cells"
+    },
+    {
+      "name": "meter-2",
+      "shader": "contrast_stretch.hlsl",
+      "entry": "meter2",
+      "inputs": [
+        "cells"
+      ],
+      "output": "cells2"
+    },
+    {
+      "name": "stats-calc",
+      "shader": "contrast_stretch.hlsl",
+      "entry": "stats_calc",
+      "inputs": [
+        "cells2",
+        "stats"
+      ],
+      "output": "stats_next"
+    },
+    {
+      "name": "stats-store",
+      "shader": "contrast_stretch.hlsl",
+      "entry": "stats_store",
+      "inputs": [
+        "stats_next"
+      ],
+      "output": "stats"
+    },
+    {
+      "name": "apply",
+      "shader": "contrast_stretch.hlsl",
+      "entry": "apply",
+      "inputs": [
+        "stats"
+      ]
+    }
+  ]
+}

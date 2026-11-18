@@ -99,3 +99,7 @@ Stock values per vehicle and track shader, and the constants checked in a race: 
 ## Open
 - No runtime test yet: a converted 2023 suit and helmet in F1 25.
 - The exe side beyond the parser (HeapIndex patching, static sampler table) is not catalogued.
+
+## Rust
+
+`packages/formats/src/material.rs` has `Material::parse`/`to_bytes` (the same model as `parse25`/`write25`, canonical or refused), `link_texture(slot, path)` for the `me_X` + `me_XHeapIndex` pair and `set_floats`. All 748 materials of `flow_race.erp` re-encode to their own bytes. Texture, binding, clip and preview writers: `docs/reference/ui/art-resources.md`.

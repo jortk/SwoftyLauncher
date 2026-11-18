@@ -1,0 +1,12 @@
+{
+  "content.package": {
+    "f1_1959": {
+      "$comment": "true, false or null",
+      "entrant_list": "f1_1959",
+      "season": 1959,
+      "rules": {
+        "tyre_warmers": "off"
+      }
+    }
+  }
+}

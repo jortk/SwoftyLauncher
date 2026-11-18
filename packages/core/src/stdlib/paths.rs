@@ -57,7 +57,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "career.season",
-        include_str!("../../../sdk/std/registries/career.season/1.0.json"),
+        include_str!("../../../sdk/std/registries/career.season/1.1.json"),
     ),
     (
         "career.wizard",
@@ -65,7 +65,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "content.package",
-        include_str!("../../../sdk/std/registries/content.package/1.1.json"),
+        include_str!("../../../sdk/std/registries/content.package/1.6.json"),
     ),
     (
         "driver.head",
@@ -93,7 +93,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "era.box",
-        include_str!("../../../sdk/std/registries/era.box/1.1.json"),
+        include_str!("../../../sdk/std/registries/era.box/1.2.json"),
     ),
     (
         "gloves",
@@ -102,6 +102,10 @@ const SCHEMAS: &[(&str, &str)] = &[
     (
         "helmet",
         include_str!("../../../sdk/std/registries/helmet/1.0.json"),
+    ),
+    (
+        "hud.element",
+        include_str!("../../../sdk/std/registries/hud.element/1.4.json"),
     ),
     (
         "hub.tab",
@@ -118,6 +122,10 @@ const SCHEMAS: &[(&str, &str)] = &[
     (
         "rules.drs",
         include_str!("../../../sdk/std/registries/rules.drs/1.0.json"),
+    ),
+    (
+        "session.points",
+        include_str!("../../../sdk/std/registries/session.points/1.0.json"),
     ),
     ("suit", include_str!("../../../sdk/std/registries/suit/1.0.json")),
     (
@@ -142,7 +150,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "track",
-        include_str!("../../../sdk/std/registries/track/1.0.json"),
+        include_str!("../../../sdk/std/registries/track/1.1.json"),
     ),
     (
         "track.data",

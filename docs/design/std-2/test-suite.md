@@ -37,6 +37,90 @@ It has two halves:
   - There is no deep link to a given slot: the deep-link manager's career activity resumes the mode's current slot only.
 - **`session`** (`session.start`): the game's settings-driven dev session. `DevSessionSetupChampionshipComponent` (vtable 0x1456bfed0) reads `DevSessionDataContract.*` keys with `Ne_Config_GetString` (`Game.setup_mode`, `Game.entrant_setup_mode`, `Entrants.entrant_list`, `Track.name`/`Track.layer`/`Track.list`, `Game.session_id` as one of the 19 session names, `Game.laps`) in `Sess_DevSession_Apply` (slot 25, 0x141125e80) and passes the built sessions to the session service at comp+0x398 (vcall +0x268). The switch is comp+0x350, which `Sess_DevSession_Enable` (0x141124ad0) sets to 0 in retail; writing 1 after `Sess_DevSession_Init` (slot 9, 0x1411244f0) turns it on, and a wrap of `Ne_Config_GetString` answers the keys. No key exists for weather, AI difficulty, team or driver, and a Time Trial has no championship, so it needs its own path (`Sess_TimeTrialMode_FillDescriptor`, 0x142936760). The benchmark mode (`Game_BenchmarkGameMode_BuildSessionSettings`, 0x1407a4860) fills SessionSettings itself and runs races only. Open: the order of slots 22 and 25 against the championship build, and the call that starts `StateLoadSession` from the front end. The command validates and fills today and answers `unavailable: needs <row>` until those rows have their verify rows.
 
+## Straight into a Grand Prix: `swofty test session`
+
+```sh
+swofty test fixture capture gp-base --from <a copy of userdata/<id>/3059520/remote> --store ~/fixtures
+swofty --profile default test session grand_prix cs_f1_2020 silverstone session=race laps=3 team=ferrari driver=vettel \
+    --fixture ~/fixtures/gp-base --lock /mnt/work/F1/f1-game.lock.d
+```
+
+In game on 2026-11-01 (Steam build, release CLI, profile `default` with Classic Seasons, a fixture made from a copy of the player's save):
+
+- `grand_prix cs_f1_2017 melbourne session=practice1 team=williams` (launcher 1.7.6 build): the cover is up from the first frame, the game boots behind it, and the player sits in the cs17 Williams of Lance Stroll in the garage at Albert Park, Practice 1 (`Look Around / Session Info / Go to Track`). Launch to garage is about 2 minutes: the profile build, the boot, and the session's broadcast intro, which runs under the cover.
+- `grand_prix cs_f1_2020 silverstone session=race laps=3 team=ferrari driver=vettel` (1.7.7 build): the cs20 Ferrari of Sebastian Vettel on the Silverstone grid after the race's grid rundown, 3 laps (`[direct] race laps 52 -> 3`), `Car Setup / Start Race`.
+
+No title, legal, main menu or loading screen is visible. The cover shows the start's steps (`Starting F1 25`, `Profile loaded`, `Weekend ready`, `Loading silverstone`, `Starting the session`, `Opening the garage` or `Lining up on the grid`).
+
+The words after the mode:
+
+```text
+grand_prix <box> <track> [team=<label part>] [driver=<label part>] [session=<name>] [laps=<1..100>]
+```
+
+- `box` is an entrant list label (`cs_f1_2017`, `f1_1990_gp`, `f1_2025`), `track` a track name (`melbourne`, `silverstone`).
+- `team=` and `driver=` pick the player's seat: the first entrant of the list whose `entrants.teams` / `entrants.drivers` label contains the text. Without them the player takes the list's first seat.
+- `session=` is `practice1`..`practice3`, `qualifying`, `race`, or a game session name (`practice_s`, `qualifying_o`, `race_2`, ...).
+- `laps=` sets a race's laps.
+- `weather=` and `ai_difficulty=` are accepted and not applied yet.
+- Without a box or track the start takes `f1_2025` at `melbourne`. It never continues a saved Grand Prix.
+- A box whose entrant list the game did not load fails the start (`[direct] session start failed: the entrant list 'cs_f1_2017' (stat id 114) is not loaded`) and the menu opens.
+
+The CLI writes the request to `<run folder>/direct_start.json` and starts the game with `SWOFTY_DIRECT_START=@<that file>`:
+
+```json
+{"target": "session", "mode": "grand_prix", "box": "cs_f1_2017", "track": "melbourne", "session": "practice1", "team": "williams"}
+```
+
+The game runs on a copy of the `--profile` profile (the active one without the flag), with the same addons in the same order and the same settings, so addon boxes and their database content are there. `swofty test shell --profile <p>` takes the same copy; `swofty test shell` without `--profile` keeps the minimal profile (core and `--addon` only).
+
+What the core does (`native/src/core/direct_start.cpp`), in order:
+
+1. The cover arms in `room_cover::setup()` for a `session` request and draws from the present hook's first frame.
+2. The title passes with the shared virtual pad (`title_skip.cpp`); the profile loads; `StateFTUE`'s finished link is held.
+3. The new weekend, on the Grand Prix mode entity E: setup mode `swofty_f1`, the entrant list by name into E+0xe18, one round at the track, the season build, E's components attached, `Sess_Build_DevWeekendStructure` (0x140b025f0) handed to the weekend service (registry component 0x14605ada0, slot 0x268), and the entrants filled from the list (0x142460230; it clears a saved Grand Prix's entrants first).
+4. The player's seat: the chosen entrant gets the profile's identity block (`[[[game manager+0x140]+0x1c0]+0x1c0]` slot 0x38, 0x40 bytes to +8) and the human flag (+0x48 = 0x10000000), between the entrants-changing bus messages (0x1424e2b90 with vtable 0x14578d4e8, 0x1424e2f00 with 0x14578d510).
+5. The season build leaves the weekend on track stat id 0 (or the saved weekend's), so the core writes the track's stat id to weekend+0x278 straight after the build, before the components attach and the sessions are built, and the box's content is picked (`box_picked`, as a box press does in the menus) so its `car.profile` layers apply. A profile that already holds a Grand Prix keeps its season, so the weekend is the saved one: the core writes the track's stat id to weekend+0x278 and makes session 0 the requested session (weekend sessions at +0x220, 0xa0 apart, id at +8, current index +0x238). Moving the current index to a later session instead crashed a race in `Ai_Build_TeamPerformanceCurves`.
+6. `StateFTUE` leaves by its exit link with the game's interrupt exit (kind 0xe) raised on the empty front of the interrupt queue (state +0xbf8, front at +0x30, kind at +0x10), so `StateFTUE::onStateExit` (0x1436d8390) despawns the front end's main scene and blocks until the scene's flags (+0x1048, +0x1049) and component set (+0xf0) are clear, which frees the front end's `PhysicsTerrain` (live counter 0x146cb5d50) before the track's is created; the core clears the kind when that exit returns, since the queue is shared with the parents, and `StateFrontend` (the menu) never starts, and `StateFrontendWorld` takes `session` (0x8c23ce89): `#e2dcf787 > StateSmokeTestSkipFEPreLaunchHold > StateCerberusServer > #d36d1718 > StateLoadSession`.
+7. `StateLoadSession`'s exit (0x1436e0e40) waits for its sync point (+0xcd0: request node +0x80, UI node +0xa0), which the loading screen sets in a menu start. 500 ms into the exit the core sets the UI node with `Vm_NodeSet_Bool` and the flow goes on to `StateSession`. Without it the game parks on a black screen after the load (`#8ad771dc` is the normal last child of the load, not the stop).
+8. For a race, `Game_ChampionshipGameMode_BuildSessionSettings` (0x1407b7b90) is hooked and the laps written to SessionSettings+0xdf0 (XOR +0xdf8).
+9. The front end's main scene (the menus' dark backdrop with red light streaks) is despawned by that `StateFTUE` exit (`Game_FrontendSceneManager_DespawnMainScene` 0x1428d9a90 on the node's +0xd20), as `StateFrontend`'s exit does in a menu start; the despawn the core makes when `StateSession` first updates finds it already gone. The interrupt's fade-out reason (bit 0 of the fade owner's mask) is released with the FrontEnd reason at that point.
+10. The cover comes off 1.5 s after the `garage_cockpit` screen opens. A race opens no screen of its own: its cover comes off at the first fade in after the intro video, when the fade owner's reasons (`[[g_Game_Root]+0xa0]+0x7b8`) drop from BroadcastFull to none with the state at 3, about 3 s after `StateSession` started; the broadcast's grid rundown follows and the grid comes two minutes or more later. Without either, the cover comes off 60 s after `StateSession` started updating, and at once when the start fails.
+
+The flow is logged as `[direct] ...` lines: the weekend before and after (`weekend ..., track stat id 0, current session 0 of: practice_1 race`), the seat (`the player drives for cs17_williams as lance_stroll (seat 6)`), `StateLoadSession exiting for 503 ms: its sync point is complete` and `the session's screen garage_cockpit is up`.
+
+## Straight into a Time Trial
+
+```sh
+swofty --profile f1-1990 test session time_trial f1_1990_gp silverstone team=ferrari \
+    --fixture ~/fixtures/gp-base --lock /mnt/work/F1/f1-game.lock.d
+```
+
+```text
+time_trial <box> <track> [team=<label part>] [weather=clear|wet]
+```
+
+- `box` is a box's Grand Prix list or its Time Trial list (`f1_1990_gp` and `f1_1990_tt` both load `f1_1990_tt`), or any entrant list a setup mode offers: `swofty_f1` when it offers the list, else the first setup mode that does (`setup_mode=` names one).
+- `team=` picks the player's car: the list's team whose label is the text, then holds it as a word (`ferrari` finds `ferrari_1990`), then contains it. Without it the player takes the list's first team.
+- `weather=` sets the Time Trial's weather (`settings.current_settings.tt_weather.value`, `dry` or `wet`).
+
+The request is the Grand Prix one with `"mode": "time_trial"`:
+
+```json
+{"target": "session", "mode": "time_trial", "box": "f1_1990_gp", "track": "silverstone", "team": "ferrari"}
+```
+
+`direct_start.cpp` calls the setup that `direct_start_tt.cpp` registers with `runtime::direct_start_register_time_trial`, on the flow thread while `StateFTUE` is held:
+
+1. The Time Trial mode: the game modes context's entry labelled `time_trial` (ctx+0x58..+0x60, mode at entry+0x38, label at mode+0x278, entity E at mode+0x260) made current with `Game_Game_SetCurrentGameMode`. `Game_GameModes_FindByName` returns championship modes only.
+2. 1.5 s later, the setup on E as the screens leave it: setup mode `swofty_f1` (or the first that offers the list) with its setter (0x14079f300), the entrant setup mode that lists the box's list into E+0xe10 (the setup mode's entrant setup modes are 12 inline pointers from +0x10, count +0x70) and the list into E+0xe18.
+3. The track: E's session settings (slot 0xd8, body 0x148731f80) read the track from 0x1407ddbf0, which looks up the VM string `game_mode_data.current_game_mode.track_info.current_track.track_file_name` in E's track system (E+0xf58, record name +0x78). The core's path setter cannot write that node, so the getter is wrapped: while it still reads the profile's track, it answers the requested record.
+4. The car: `Sess_TimeTrialMode_FillDescriptor` (0x142936760) takes the player's vehicle and team from the Time Trial component's hot load holder (the mode's component with vtable 0x1457b13d0, holder at +0x298: vehicle ref +0x2be engaged +0x2c2, team ref +0x2c4 engaged +0x2c8, written in game by the in-session hot load 0x14291a320). The core writes the chosen team's entrant record refs there (+0x58 team, +0x5c vehicle). Without them the fill takes the vehicle from a per-team table built for the list the screens picked, and the session faults in `Ai_Build_TeamPerformanceCurves` with no player vehicle.
+5. The flow leaves the front end as for a Grand Prix and loads `TimeTrial` (#ca472e10): intro video, intro cameras, the garage.
+6. When `garage_cockpit` opens, the front end's main scene (the menus' dark backdrop with red light streaks) is despawned: `StateFrontend`'s exit does it in a menu start (`Game_FrontendSceneManager_DespawnMainScene` 0x1428d9a90 on the state's +0xd20), and a direct start never enters `StateFrontend`, so the core finds that node (0x957880c6) in the flow graph and calls it on its scene manager.
+
+The log lines are `[direct] Time Trial: ...`: the mode, `setup mode swofty_f1 (...), entrant setup mode ..., list f1_1990_tt (...) for box f1_1990_gp`, `track silverstone (...)`, `team ferrari_1990 (team ref 01f70000, vehicle ref 01fe6f00) in the hot load holder ...`, then `the track getter read ...; it answers the chosen track ...` during the load.
+
 ## The agent's commands
 
 - **Skip a session:** post `MessageSetAdvanceDestination` (vtable 0x1457548b8) on the message bus, the same message the game's Simulate Session popup sends. Destination 2 is next session, 3 simulate, 4 skip to a session, 6 quick practice skip; the session type is the race (15) and so on.
@@ -84,7 +168,7 @@ The sandbox is a core feature at the save device's start (`Ne_SaveSystem2Win_Sta
 ## Rules
 
 - The test agent and test DLLs load only when `swofty test` builds the profile and passes a token for that run. Normal Play never loads them.
-- One game per machine. Tests queue on the existing game lock (`/mnt/work/.f1-game.lock.d` here), and `--take-over` closes a running game first.
+- One game per machine. Tests queue on the existing game lock (`/mnt/work/F1/f1-game.lock.d` here), and `--take-over` closes a running game first.
 - The CLI never accepts the offline play terms for the player: a run without them fails with exit code 2.
 - Artefacts have size caps. Frames are optional.
 

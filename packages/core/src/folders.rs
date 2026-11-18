@@ -2,7 +2,7 @@
 //! player's own. A folder's addons sit together in the load order, so moving
 //! a folder moves every addon in it.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use swofty_addon::manifest::Category;
@@ -269,63 +269,90 @@ pub fn locate(entries: &[Entry], id: &str) -> Option<(Option<Key>, usize)> {
 /// Moves the addon `id` to `spot` and returns the folder it is now in. Addons
 /// in Built In don't move, and nothing moves into Built In or above it.
 pub fn move_addon(entries: &mut Vec<Entry>, id: &str, spot: &Spot) -> Option<Option<Key>> {
-    let (from, j) = locate(entries, id)?;
-    if from == Some(Key::BuiltIn) {
-        return None;
+    move_addons(entries, &[id.to_owned()], spot)
+        .pop()
+        .map(|(_, place)| place)
+}
+
+/// Moves the addons `ids` to `spot` together, in their load order, and
+/// returns each one that moved with the folder it is now in. Addons in Built
+/// In don't move, nothing moves into Built In or above it, and a spot between
+/// two of the moving addons moves nothing.
+pub fn move_addons(entries: &mut Vec<Entry>, ids: &[String], spot: &Spot) -> Vec<(String, Option<Key>)> {
+    let picked: HashSet<&str> = ids.iter().map(String::as_str).collect();
+    let moving: Vec<String> = entries
+        .iter()
+        .flat_map(|e| match e {
+            Entry::Addon(id) => std::slice::from_ref(id),
+            Entry::Folder(Key::BuiltIn, _) => &[],
+            Entry::Folder(_, members) => members.as_slice(),
+        })
+        .filter(|id| picked.contains(id.as_str()))
+        .cloned()
+        .collect();
+    if moving.is_empty() {
+        return Vec::new();
     }
+    let moves = |id: &String| moving.contains(id);
+    let loose = |e: &Entry| matches!(e, Entry::Addon(id) if moves(id));
     let spot = match spot {
         Spot::In(Key::BuiltIn, _) => Spot::Top(floor(entries)),
         Spot::Top(i) => Spot::Top((*i).max(floor(entries))),
         s => s.clone(),
     };
-    match &spot {
+    let to = match &spot {
         Spot::Top(i) => {
-            let mut i = *i;
-            match &from {
-                None => {
-                    entries.remove(j);
-                    if j < i {
-                        i -= 1;
-                    }
-                }
-                Some(k) => remove_member(entries, k, j),
+            let row = |k: usize| entries.get(k).is_some_and(loose);
+            if *i > 0 && row(i - 1) && row(*i) {
+                return Vec::new();
             }
-            entries.insert(i.min(entries.len()), Entry::Addon(id.to_owned()));
-            Some(None)
+            i - entries[..(*i).min(entries.len())]
+                .iter()
+                .filter(|e| loose(e))
+                .count()
         }
-        Spot::In(key, i) => {
-            let mut i = *i;
-            match &from {
-                None => {
-                    entries.remove(j);
-                }
-                Some(k) => {
-                    remove_member(entries, k, j);
-                    if k == key && j < i {
-                        i -= 1;
-                    }
-                }
+        Spot::In(key, j) => {
+            let members = entries.iter().find_map(|e| match e {
+                Entry::Folder(k, m) if k == key => Some(m.as_slice()),
+                _ => None,
+            });
+            let members = members.unwrap_or_default();
+            let row = |k: usize| members.get(k).is_some_and(moves);
+            if *j > 0 && row(j - 1) && row(*j) {
+                return Vec::new();
             }
-            let members = match entries.iter_mut().find(|e| e.folder() == Some(key)) {
-                Some(Entry::Folder(_, members)) => members,
-                _ => {
-                    entries.push(Entry::Folder(key.clone(), Vec::new()));
-                    match entries.last_mut() {
-                        Some(Entry::Folder(_, members)) => members,
-                        _ => unreachable!(),
-                    }
-                }
-            };
-            members.insert(i.min(members.len()), id.to_owned());
-            Some(Some(key.clone()))
+            j - members[..(*j).min(members.len())]
+                .iter()
+                .filter(|id| moves(id))
+                .count()
+        }
+    };
+    entries.retain(|e| !loose(e));
+    for e in entries.iter_mut() {
+        if let Entry::Folder(k, members) = e
+            && *k != Key::BuiltIn
+        {
+            members.retain(|id| !moves(id));
         }
     }
-}
-
-fn remove_member(entries: &mut [Entry], key: &Key, j: usize) {
-    if let Some(Entry::Folder(_, members)) = entries.iter_mut().find(|e| e.folder() == Some(key)) {
-        members.remove(j);
-    }
+    let place = match spot {
+        Spot::Top(_) => {
+            let at = to.min(entries.len());
+            entries.splice(at..at, moving.iter().cloned().map(Entry::Addon));
+            None
+        }
+        Spot::In(key, _) => {
+            if !entries.iter().any(|e| e.folder() == Some(&key)) {
+                entries.push(Entry::Folder(key.clone(), Vec::new()));
+            }
+            if let Some(Entry::Folder(_, members)) = entries.iter_mut().find(|e| e.folder() == Some(&key)) {
+                let at = to.min(members.len());
+                members.splice(at..at, moving.iter().cloned());
+            }
+            Some(key)
+        }
+    };
+    moving.into_iter().map(|id| (id, place.clone())).collect()
 }
 
 /// Moves the folder `key` to the top-level index `to`, taken before the move.
@@ -503,6 +530,239 @@ mod tests {
             ],
             "nothing goes above Built In"
         );
+    }
+
+    fn moved(list: &[&str], place: Option<Key>) -> Vec<(String, Option<Key>)> {
+        list.iter().map(|id| ((*id).to_owned(), place.clone())).collect()
+    }
+
+    #[test]
+    fn ticked_addons_move_together_in_load_order() {
+        let mut entries = group(ids(&["swofty.core", "x.a", "x.b", "x.c", "x.d", "x.e"]), place);
+        assert_eq!(
+            move_addons(&mut entries, &ids(&["x.d", "x.b"]), &Spot::Top(6)),
+            moved(&["x.b", "x.d"], None),
+            "the order they were ticked in doesn't matter"
+        );
+        assert_eq!(
+            flatten(&entries),
+            ids(&["swofty.core", "x.a", "x.c", "x.e", "x.b", "x.d"])
+        );
+    }
+
+    #[test]
+    fn ticked_addons_drop_above_or_below_a_row() {
+        let order = ids(&["swofty.core", "x.a", "x.b", "x.c", "x.d", "x.e"]);
+        let mut above = group(order.clone(), place);
+        move_addons(&mut above, &ids(&["x.c", "x.e"]), &Spot::Top(1));
+        assert_eq!(
+            flatten(&above),
+            ids(&["swofty.core", "x.c", "x.e", "x.a", "x.b", "x.d"])
+        );
+        let mut below = group(order.clone(), place);
+        move_addons(&mut below, &ids(&["x.a", "x.c"]), &Spot::Top(5));
+        assert_eq!(
+            flatten(&below),
+            ids(&["swofty.core", "x.b", "x.d", "x.a", "x.c", "x.e"])
+        );
+        let mut top = group(order, place);
+        move_addons(&mut top, &ids(&["x.b", "x.d"]), &Spot::Top(0));
+        assert_eq!(
+            flatten(&top),
+            ids(&["swofty.core", "x.b", "x.d", "x.a", "x.c", "x.e"]),
+            "nothing goes above Built In"
+        );
+    }
+
+    #[test]
+    fn ticked_addons_drop_into_a_folder() {
+        let mut entries = group(
+            ids(&["swofty.core", "x.a", "s.one", "s.two", "x.b", "x.c"]),
+            place,
+        );
+        assert_eq!(
+            move_addons(&mut entries, &ids(&["x.a", "x.c"]), &Spot::In(seasons(), 1)),
+            moved(&["x.a", "x.c"], Some(seasons()))
+        );
+        assert_eq!(
+            entries,
+            vec![
+                Entry::Folder(Key::BuiltIn, ids(&["swofty.core"])),
+                Entry::Folder(seasons(), ids(&["s.one", "x.a", "x.c", "s.two"])),
+                Entry::Addon("x.b".into()),
+            ]
+        );
+        assert_eq!(
+            move_addons(&mut entries, &ids(&["s.one", "x.c"]), &Spot::In(seasons(), 4)),
+            moved(&["s.one", "x.c"], Some(seasons())),
+            "to the end of the folder they are in"
+        );
+        assert_eq!(
+            flatten(&entries),
+            ids(&["swofty.core", "x.a", "s.two", "s.one", "x.c", "x.b"])
+        );
+    }
+
+    #[test]
+    fn ticked_addons_from_several_folders_land_together() {
+        let ai = Key::Category(Category::Ai);
+        let order = ids(&["swofty.core", "x.a", "s.one", "s.two", "ai.one", "ai.two", "x.b"]);
+        let mut out = group(order.clone(), place);
+        assert_eq!(
+            move_addons(&mut out, &ids(&["ai.two", "s.one", "x.a"]), &Spot::Top(4)),
+            moved(&["x.a", "s.one", "ai.two"], None)
+        );
+        assert_eq!(
+            out,
+            vec![
+                Entry::Folder(Key::BuiltIn, ids(&["swofty.core"])),
+                Entry::Folder(seasons(), ids(&["s.two"])),
+                Entry::Folder(ai.clone(), ids(&["ai.one"])),
+                Entry::Addon("x.a".into()),
+                Entry::Addon("s.one".into()),
+                Entry::Addon("ai.two".into()),
+                Entry::Addon("x.b".into()),
+            ]
+        );
+        let mut into = group(order, place);
+        assert_eq!(
+            move_addons(&mut into, &ids(&["s.two", "x.b"]), &Spot::In(ai.clone(), 0)),
+            moved(&["s.two", "x.b"], Some(ai.clone()))
+        );
+        assert_eq!(
+            flatten(&into),
+            ids(&["swofty.core", "x.a", "s.one", "s.two", "x.b", "ai.one", "ai.two"])
+        );
+    }
+
+    #[test]
+    fn a_drop_between_two_ticked_addons_moves_nothing() {
+        let order = ids(&["swofty.core", "x.a", "x.b", "x.c", "s.one", "s.two", "s.three"]);
+        let before = group(order, place);
+        let mut entries = before.clone();
+        assert!(move_addons(&mut entries, &ids(&["x.a", "x.b", "s.three"]), &Spot::Top(2)).is_empty());
+        assert!(
+            move_addons(
+                &mut entries,
+                &ids(&["s.one", "s.two", "x.c"]),
+                &Spot::In(seasons(), 1)
+            )
+            .is_empty()
+        );
+        assert_eq!(entries, before);
+        assert!(!move_addons(&mut entries, &ids(&["x.a", "x.c"]), &Spot::Top(2)).is_empty());
+        assert_eq!(
+            flatten(&entries),
+            ids(&["swofty.core", "x.a", "x.c", "x.b", "s.one", "s.two", "s.three"]),
+            "a drop next to one ticked addon gathers the others there"
+        );
+    }
+
+    #[test]
+    fn ticked_built_in_addons_stay_put() {
+        let mut entries = group(ids(&["swofty.core", "tsm.mods", "x.a", "x.b"]), place);
+        assert!(move_addons(&mut entries, &ids(&["swofty.core", "tsm.mods"]), &Spot::Top(3)).is_empty());
+        assert_eq!(
+            move_addons(
+                &mut entries,
+                &ids(&["tsm.mods", "x.b"]),
+                &Spot::In(Key::BuiltIn, 0)
+            ),
+            moved(&["x.b"], None)
+        );
+        assert_eq!(flatten(&entries), ids(&["swofty.core", "tsm.mods", "x.b", "x.a"]));
+    }
+
+    fn move_one_before_multi(entries: &mut Vec<Entry>, id: &str, spot: &Spot) -> Option<Option<Key>> {
+        let (from, j) = locate(entries, id)?;
+        if from == Some(Key::BuiltIn) {
+            return None;
+        }
+        let remove_member = |entries: &mut Vec<Entry>, key: &Key, j: usize| {
+            if let Some(Entry::Folder(_, members)) = entries.iter_mut().find(|e| e.folder() == Some(key)) {
+                members.remove(j);
+            }
+        };
+        let spot = match spot {
+            Spot::In(Key::BuiltIn, _) => Spot::Top(floor(entries)),
+            Spot::Top(i) => Spot::Top((*i).max(floor(entries))),
+            s => s.clone(),
+        };
+        match &spot {
+            Spot::Top(i) => {
+                let mut i = *i;
+                match &from {
+                    None => {
+                        entries.remove(j);
+                        if j < i {
+                            i -= 1;
+                        }
+                    }
+                    Some(k) => remove_member(entries, k, j),
+                }
+                entries.insert(i.min(entries.len()), Entry::Addon(id.to_owned()));
+                Some(None)
+            }
+            Spot::In(key, i) => {
+                let mut i = *i;
+                match &from {
+                    None => {
+                        entries.remove(j);
+                    }
+                    Some(k) => {
+                        remove_member(entries, k, j);
+                        if k == key && j < i {
+                            i -= 1;
+                        }
+                    }
+                }
+                if !entries.iter().any(|e| e.folder() == Some(key)) {
+                    entries.push(Entry::Folder(key.clone(), Vec::new()));
+                }
+                if let Some(Entry::Folder(_, members)) = entries.iter_mut().find(|e| e.folder() == Some(key))
+                {
+                    members.insert(i.min(members.len()), id.to_owned());
+                }
+                Some(Some(key.clone()))
+            }
+        }
+    }
+
+    #[test]
+    fn one_ticked_addon_moves_as_a_single_drag_did() {
+        let order = ids(&[
+            "swofty.core",
+            "tsm.mods",
+            "x.a",
+            "s.one",
+            "s.two",
+            "s.three",
+            "x.b",
+            "ai.one",
+            "ai.two",
+            "x.c",
+        ]);
+        let start = group(order.clone(), place);
+        let mut spots: Vec<Spot> = (0..=start.len() + 1).map(Spot::Top).collect();
+        for key in [
+            seasons(),
+            Key::Category(Category::Ai),
+            Key::Own("f1".into()),
+            Key::BuiltIn,
+        ] {
+            spots.extend((0..=4).map(|j| Spot::In(key.clone(), j)));
+        }
+        for id in &order {
+            for spot in &spots {
+                let (mut old, mut new, mut many) = (start.clone(), start.clone(), start.clone());
+                let was = move_one_before_multi(&mut old, id, spot);
+                assert_eq!(move_addon(&mut new, id, spot), was, "{id} to {spot:?}");
+                assert_eq!(new, old, "{id} to {spot:?}");
+                let placed = move_addons(&mut many, std::slice::from_ref(id), spot);
+                assert_eq!(placed.first().map(|(_, k)| k.clone()), was, "{id} to {spot:?}");
+                assert_eq!(many, old, "{id} to {spot:?}");
+            }
+        }
     }
 
     #[test]

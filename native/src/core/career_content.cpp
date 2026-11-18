@@ -203,7 +203,10 @@ bool db_list_stat(const std::string &label, int64_t &out, void *)
     return true;
 }
 
-void resolve(Slot &s, bool now)
+uintptr_t game_manager_slot();
+content::Loaded loaded_lists(uintptr_t slot, int64_t id);
+
+void resolve(Slot &s, bool now, bool building = false)
 {
     if (s.resolved || s.state != SWOFTY_CAREER_CONTENT_LIVE || !runtime::db_table()->available())
         return;
@@ -215,29 +218,45 @@ void resolve(Slot &s, bool now)
     content::Requirements r = content::requirements(s.desc, db);
     s.mode = r.mode;
     s.group = r.group;
-    if (!r.ok) {
-        s.why = r.why;
-        if (s.retry.failed(t, r.why))
+    std::string why = r.why;
+    uintptr_t gm = game_manager_slot();
+    content::Loaded l;
+    if (r.ok && gm) {
+        l = loaded_lists(gm, r.group);
+        if (!l.known && !building) {
+            s.retry.next = t + content::RETRY_MS;
+            return;
+        }
+        why = content::loaded_why(s.desc, r.group, l);
+    }
+    if (!why.empty()) {
+        s.why = why;
+        if (s.retry.failed(t, why))
             swofty::log("[career] content '%s' (%s) not ready: %s; no tile and its mode keeps the stock gate until it is, "
                         "checked again every %llu ms",
-                        s.desc.id.c_str(), s.owner.c_str(), r.why.c_str(), (unsigned long long)content::RETRY_MS);
+                        s.desc.id.c_str(), s.owner.c_str(), why.c_str(), (unsigned long long)content::RETRY_MS);
         return;
     }
     s.why.clear();
     s.resolved = true;
     if (!r.warn.empty())
         swofty::log("[career] content '%s': %s", s.desc.id.c_str(), r.warn.c_str());
-    swofty::log("[career] content '%s' ready%s: mode %s statId %lld, data group %s (entrant list stat_id %lld), suffix %s "
-                "(F1CAREER_%s%s%s)",
+    std::string slots_seen = !gm      ? "; loaded list slots not checked: g_Game_Manager does not resolve"
+                             : l.known ? " of " + std::to_string(l.slots) + " loaded list slots"
+                                       : "; loaded list slots not checked: the entrants system +0x560 holds no list "
+                                         "slots on this build";
+    swofty::log("[career] content '%s' ready%s: mode %s statId %lld, data group %s (entrant list stat_id %lld%s), suffix "
+                "%s (F1CAREER_%s%s%s)",
                 s.desc.id.c_str(), s.retry.tries ? (" after " + std::to_string(s.retry.tries + 1) + " checks").c_str() : "",
                 s.desc.mode.c_str(), (long long)r.mode, s.desc.data_group.c_str(), (long long)r.group,
-                s.desc.suffix.c_str(), s.desc.suffix.c_str(), r.f2 ? ", F2CAREER" : "", r.icons ? ", ICONS" : "");
+                slots_seen.c_str(), s.desc.suffix.c_str(), s.desc.suffix.c_str(), r.f2 ? ", F2CAREER" : "",
+                r.icons ? ", ICONS" : "");
 }
 
-void resolve_all(bool now)
+void resolve_all(bool now, bool building = false)
 {
     for (size_t i = 0; i < used(); i++)
-        resolve(slots[i], now);
+        resolve(slots[i], now, building);
 }
 
 bool ready(const Slot &s)
@@ -289,6 +308,20 @@ bool readable(const void *p, size_t n, void *)
 }
 
 const content::Access ACCESS{setup_component, group_index, readable, nullptr};
+
+uintptr_t game_manager_slot()
+{
+    static const uintptr_t slot = swofty::api->resolve("g_Game_Manager");
+    return slot;
+}
+
+content::Loaded loaded_lists(uintptr_t slot, int64_t id)
+{
+    uintptr_t gm = 0, entrants = 0;
+    if (!mem::read(slot, gm) || !gm || !mem::read(gm + runtime::manager_entrants_system(), entrants) || !entrants)
+        return {};
+    return content::loaded_list(reinterpret_cast<const void *>(entrants), id, ACCESS);
+}
 
 const char *nestr(const NeStr *s)
 {
@@ -551,7 +584,7 @@ void site_entry(SwoftyContext *c)
                         list->items_begin ? size_t(list->items_end - list->items_begin) : size_t(0));
         return;
     }
-    resolve_all(true);
+    resolve_all(true, true);
     shown_from_records();
     last_list = list;
     uint32_t career = content::career_of(runtime::career_start_picked());

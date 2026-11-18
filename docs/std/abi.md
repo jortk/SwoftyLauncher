@@ -195,6 +195,8 @@ typedef struct SwoftyCareerOps {
     int (*set_track_fuel)(SwoftyText request_json, char *report, size_t cap, size_t *len);
     int (*set_logo)(const char *team_id, const char *logo_id);                 /* version 5 */
     int (*set_look)(const char *driver_ref, const char *look_ref);             /* version 6 */
+    int (*current_round)(int32_t *season_index, int32_t *round, int32_t *rounds);   /* version 7 */
+    int (*team_stat)(const char *team_ref, uint32_t *out);                     /* version 7 */
 } SwoftyCareerOps;
 
 enum { SWOFTY_REFUSED = 5 };

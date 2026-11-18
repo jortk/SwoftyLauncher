@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <set>
@@ -12,6 +13,7 @@ namespace swofty_core::apply::ids {
 
 struct Pool {
     std::vector<std::pair<int64_t, int64_t>> ranges;
+    int64_t cap = INT64_MAX;
 };
 
 using CareerMap = std::map<std::string, std::map<std::string, int64_t>>;
@@ -33,6 +35,11 @@ public:
     std::string dump() const;
     void clear();
 
+    using Lent = std::map<std::string, std::map<std::string, int64_t>>;
+    bool lend_json(const std::string &text, std::vector<std::string> *lines, std::string *why = nullptr);
+    std::vector<std::string> lend(const Lent &lent);
+    bool lent() const;
+
     void define_pool(const std::string &registry, Pool pool);
     bool has_pool(const std::string &registry) const;
     void set_live(const std::string &registry, const std::vector<std::string> &records);
@@ -41,6 +48,7 @@ public:
     bool database_holds(const std::string &registry, int64_t id, const std::string &label, std::string *row = nullptr) const;
 
     Result get(const std::string &registry, const std::string &record) const;
+    std::vector<int64_t> ids_of(const std::string &registry) const;
     Result allocate(const std::string &registry, const std::string &record, const std::string &today);
     Result pin(const std::string &registry, const std::string &record, int64_t id, const std::string &today,
                const std::string &label = {});
@@ -54,12 +62,14 @@ public:
     bool dirty() const;
     void saved();
     std::size_t size() const;
+    std::size_t deduped() const;
 
 private:
     struct Entry {
         int64_t id = -1;
         std::string since;
         int64_t pin = -1;
+        bool lent = false;
     };
 
     bool held_locked(const std::string &registry, int64_t id, std::string *holder) const;
@@ -79,7 +89,9 @@ private:
     std::map<std::string, Pool> pools_;
     std::map<std::string, std::set<std::string>> live_;
     std::map<std::string, std::map<int64_t, std::string>> db_;
+    std::size_t deduped_ = 0;
     bool dirty_ = false;
+    bool lent_ = false;
 };
 
 Store &store();

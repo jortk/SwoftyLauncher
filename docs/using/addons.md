@@ -16,7 +16,7 @@ The two cards at the top of the **Addons** page are the ways in:
 
 A file that isn't an addon, and that no addon such as the Simplified Importer imports, opens a dialog that names it. The dialog lists up to five files. **Go to Simplified Importer** opens the [Simplified Importer](/using/mods), and **Read the addon docs** opens the [addon reference](/reference/addons/) in your browser.
 
-The launcher copies the addon to `$DATA/addons/<id>/`, opens **Addons** and highlights it. Installing an addon with an id that's already installed replaces it. A new addon starts off in every profile.
+The launcher copies the addon to `$DATA/addons/<id>/`, opens **Addons** and highlights it. Installing an addon with an id that's already installed replaces it. A new addon joins only the active profile, turned off, at the end of the list. Installed from `vanilla`, it joins no profile.
 
 ## Find an addon
 
@@ -35,13 +35,30 @@ On a window less than 760 pixels tall, the install cards shrink to one row.
 
 ## Turn addons on or off
 
-Use the switch on a row to turn an addon on or off in the active [profile](/using/profiles). An addon keeps its place in the list when it is off; its row is dimmed and has no load order number. A new addon starts off in every profile. The next time you press **Play**, the launcher builds the profile with the change.
+Use the switch on a row to turn an addon on or off in the active [profile](/using/profiles). An addon keeps its place in the list when it is off; its row is dimmed and has no load order number. The next time you press **Play**, the launcher builds the profile with the change.
 
 Some addons, such as Driver Manager, change what your careers store. Turning one of those off asks first: careers you played with it may not load without it. Select **Turn off anyway** to go ahead, or **Cancel** to leave it on.
 
 **Turn off all** turns off every addon except those that show **Always on** and those that would ask about your saves; the launcher names those. **Undo** on the message that follows turns the same addons back on in their old order.
 
-In the `vanilla` profile the list is read-only. Switch to a modded profile to turn addons on.
+In the `vanilla` profile the list is read-only and shows every installed addon. Switch to a modded profile to turn addons on.
+
+## Turn on, turn off, move or uninstall several addons
+
+Hold **Ctrl** (**Cmd** on macOS) to show a tick box on every row. Ctrl-click a row, or click its tick box, to tick or untick it. A plain click on a row opens its panel. While at least one addon is ticked, a bar above the list shows how many and has **Turn on**, **Turn off**, **Uninstall** and **Clear**. **Escape** also clears the ticks. The ticks clear after an action from the bar.
+
+- **Turn on** and **Turn off** change the active [profile](/using/profiles) the way a row's switch does. Always-on addons and shader-only addons are skipped, and a message says how many. **Turn off** leaves on the addons whose turning off warns about your saves, and a message names them.
+- **Uninstall** asks once for all the ticked addons, then removes them as **Uninstall** in a panel does. Built-in addons are skipped, and a message says how many.
+
+Drag a ticked row to move every ticked addon with it, also those a search, a filter or a closed folder hides. They keep their order and land together where you drop them, in a folder or outside folders, the way one dragged row does. The dragged card shows how many addons move. Ticked addons in Built In stay where they are, and a drop on a ticked row moves nothing. The ticks stay after the move, and **Escape** during the drag cancels it and keeps them. Dragging a row that isn't ticked moves only that row and leaves the ticks as they are.
+
+The list keeps its scroll position after an uninstall. Ticks are not available in the `vanilla` profile.
+
+## Add an addon to a profile
+
+Each modded profile lists only its own addons and the built-in ones. To use an addon you installed from another profile, select **Add addons** above the list, tick the ones you want and confirm, or select **Add to** with the profile's name on its card in the Addon Browser. It joins the profile turned off, at the end of the list.
+
+**Remove from** with the profile's name, in the addon's panel, takes it out of this profile only. It stays installed for your other profiles, and its settings come back if you add it again.
 
 ## Folders
 
@@ -60,34 +77,34 @@ Folders are shared by every profile. The launcher saves them in `$DATA/folders.j
 
 ## Load order
 
-The list is the load order, top to bottom, and the number on a row is its place among the addons that are on. When two addons change the same thing, the one lower in the list wins. A folder's addons load together. Dragging a folder by its handle moves all of them and keeps their order. Drag a row, or use the arrows in its panel, to move an addon. The arrows move it within its folder. Rows that are always on have no drag handle. SwoftyMod and Simplified for Swofty always load first: nothing can be dragged above them.
+The list is the load order, top to bottom, and the number on a row is its place among the addons that are on. When two addons change the same thing, the one lower in the list wins. A folder's addons load together. Dragging a folder by its handle moves all of them and keeps their order. Drag a row, or use the arrows in its panel, to move an addon. The arrows move it within its folder. To move several addons at once, tick them and drag one of them; see [Turn on, turn off, move or uninstall several addons](#turn-on-turn-off-move-or-uninstall-several-addons). **Escape** during a drag cancels it. Rows that are always on have no drag handle. SwoftyMod and Simplified for Swofty always load first: nothing can be dragged above them.
 
 When the launcher opens a profile whose addons aren't grouped by folder, it moves each folder's addons up to the first of them and keeps their order. That can change which addon wins between two in different folders.
 
-After a conflict check, a row that is on shows **Loses to** with the number of addons lower in the list that replace some of its changes, or **Wins over** with the number it replaces. The badges go away when an addon is turned on, turned off or moved, until the next check.
+After a conflict check, a row that is on shows a quiet **Overlaps** badge with the number of addons that also change some of what it changes. The lower one in the list wins, whichever of them an addon's own rows say. An overlap is not a problem, so nothing asks you to fix it. The badges go away when an addon is turned on, turned off or moved, until the next check.
 
-An addon loads after every addon it requires, whatever their places in the list. The Addons page shows a box under each row that has a problem, and a banner at the top counts them. Red boxes are problems, amber boxes are warnings:
+An addon loads after every addon it requires, whatever their places in the list. A row that has a problem shows a warning triangle by its name. Hover it for what is wrong, or select the row to open its panel, which lists the problem with a button where one helps:
 
 ```
-Classic Career         Needs Classic Seasons (shared) above it     [Move Classic Seasons (shared) above] [Order for me]
-Progressive Career     Needs F1 2019, which is off                 [Turn F1 2019 on]
+Classic Career         Needs F1 2019, which is off                 [Turn F1 2019 on]
 Classic Career         Needs F1 2020, which isn't installed        [Install F1 2020]
 More Driver Models     Changes rows that Classic Seasons adds, so it needs Classic Seasons above it
-Supercars              Supercars adds teams to every session (with Pedro's Mugello)
+F1 2012 Season         F1 2012 has more teams than this track has garages (with Pedro's Mugello)
 ```
 
-- **Needs X above it** is a required addon, or one the addon loads after, listed below it. **Move X above** puts X directly above the row. **Order for me** reorders the whole profile with the smallest change that puts every addon below what it needs, and keeps the rest of your order. If addons need each other above themselves, the banner names them and **Order for me** is not offered.
+- When addons load below something they need, a bar at the top of the page says how many, with one large **Fix load order** button. It reorders the profile with the smallest change that puts every addon below what it needs, and keeps the rest of your order. If a folder would pull an addon back above what it needs, the addon leaves that folder and a message names it. The page checks the new order afterwards and checks conflicts again, so you see the result.
+- If addons need each other above themselves, the bar is red, names them and has a **Turn off X** button.
 - **Needs X, which is off** and **Needs X, which isn't installed** stop Play. **Turn X on** and **Install X** fix them. A version outside the required range says which version is installed and opens the Addon Browser.
 - **Can't be on with X** is a declared conflict. **Turn X off** fixes it.
-- **Changes rows that X adds** comes from the profile's last build: the addon's database changes waited for rows X adds. Check conflicts after moving addons to see it clear.
-- Addons in Built In, such as Simplified for Swofty, don't move, so they get no **Needs X above it** or **Changes rows that X adds** box and **Order for me** leaves them in place. The build still loads them after every addon they require or load after.
+- **Changes rows that X adds** comes from the profile's last build: the addon's database changes waited for rows X adds. **Fix load order** puts it below X.
+- Addons in Built In, such as Simplified for Swofty, don't move and never show an order problem. **Fix load order** leaves them in place, and the addons below them win where they overlap. The build still loads them after every addon they require or load after.
 - **Your career K needs X, which is off** shows on X's row when a saved career lists X among the addons it needs. It also shows when X is not installed or outside the range the career needs.
-- An amber **loads below it and replaces N of its changes** is a conflict from the last check. **Move X above** makes the row win instead.
-- An amber clash is a known bad pairing, such as Supercars with a community track. The list is in `packages/core/src/order_clashes.json`.
+- A clash is a known bad pairing, such as F1 2012 Season with Mugello. The list is in `packages/core/src/order_clashes.json`.
+- Problems that **Fix load order** can't help, such as a missing addon, show as a count by the page title: **2 addons need attention**.
 
 The Play log lists a required addon listed below its dependent as a warning. The build loads it first anyway.
 
-The panel of an addon shows the same box.
+The panel of an addon lists the same problems.
 
 A row whose addon asks to remove records the game's database ships with shows a badge such as **12 removals skipped**. The build leaves those records in place, and the panel's **Conflicts** section says so. See [Removing stock records](/reference/ops/database#removing-stock-records).
 
@@ -107,13 +124,13 @@ Change a value under **Settings** in the addon's panel. **Reset to defaults** pu
 
 ## Remove an addon
 
-Select **Remove** in the addon's panel and confirm. Removing an addon deletes its files and takes it out of every profile. Built-in addons can't be removed.
+Select **Uninstall** in the addon's panel and confirm. Uninstalling an addon deletes its files and takes it out of every profile. Built-in addons can't be uninstalled.
 
 Removing a DB Editor addon deletes its changes. To keep them, select **Export** › **Share addon (.zip)** in the [DB Editor](/using/db-editor) first.
 
 ## Addons that can't be used
 
-An addon made for a newer Swofty Launcher, or one whose `swofty.json` is damaged, is listed under **Can't be used** with the reason, such as "It needs a newer Swofty Launcher (unknown field `hud`)". The launcher leaves it out of builds, and **Remove** deletes it. The rest of your addons work as before. Installing such an addon is refused with the same reason.
+An addon made for a newer Swofty Launcher, or one whose `swofty.json` is damaged, is listed under **Can't be used** with the reason, such as "It needs a newer Swofty Launcher (unknown field `hud`)". The launcher leaves it out of builds, and **Uninstall** deletes it. The rest of your addons work as before. Installing such an addon is refused with the same reason.
 
 A profile saved by a newer launcher keeps the settings this launcher doesn't know, and saves them back unchanged.
 

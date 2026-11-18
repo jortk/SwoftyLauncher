@@ -13,7 +13,10 @@
 #include <string>
 #include <vector>
 
+#include "game_message_log_logic.hpp"
+#include "hud_leaves_logic.hpp"
 #include "perf.hpp"
+#include "text_entry.hpp"
 
 // Message popups (NeUIMessageSystem). The game raises every popup the same way: construct a message
 // by its UIMD id (Ui_Message_Construct, 0x1442d9bf0: system, out handle, fixed-capacity id string,
@@ -32,9 +35,11 @@
 // Every construct passes through the wrap below, which records the system pointer (the game
 // constructs messages from boot on, the online-services wait box first). Requests queue from any
 // thread and are shown from the flow tick.
-// While a launcher netplay command drives the LAN menus, the wrap hands it the LAN Game dialog and
-// the Join via IP prompt instead of queueing them (runtime::netplay_popup): the caller gets an empty
-// handle, which the handle setter and release accept, and netplay answers the response callback.
+// The wrap offers every message to the session plugin first (runtime::session_host_message). One the plugin
+// takes is not queued: the caller gets an empty handle, which the handle setter and release accept, and the
+// plugin answers the response callback.
+//
+// The wrap also logs each stock message id once per session (game_message_log_logic.hpp).
 //
 // Toasts go through the same system as hud_main messages, the queue the race HUD's central
 // notification (hud_notifications_dynamic, F1HM bound to #ui_messages.hud_main_queue.hud_main) draws.
@@ -44,6 +49,8 @@
 std::string settings_addon(const void *from, std::string &dll);
 void *ui_vm_message_system();
 bool ui_vm_set_path(const std::string &path, int type, const void *value);
+uintptr_t ui_vm_node_token(const std::string &path);
+uintptr_t ui_vm_epoch();
 
 namespace {
 
@@ -107,7 +114,7 @@ constexpr const char *ICONS[] = {"generic",  "diagonal",           "black",     
                                  "red",      "safety_car",         "virtual_safety_car",
                                  "virtual_safety_car_green", "flag_rival_won"};
 constexpr const char *SET_PREFIXES[] = {"ui_menu_data.hud_", "view_model_data.hud.", "view_model_data.hud_"};
-constexpr size_t MAX_SETS = 64;
+constexpr size_t MAX_SETS = 512;
 
 constexpr unsigned TOAST_SECONDS[] = {2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30};
 constexpr size_t MAX_TOASTS = 8, MAX_TOAST_TEXT = 200;
@@ -124,10 +131,28 @@ std::deque<Toast> toasts;
 std::atomic<bool> toast_missing;
 std::deque<Set> sets;
 std::atomic<size_t> sets_pending;
+std::atomic<uint32_t> sets_dropped;
+runtime::hud_leaves::Table leaf_table;
+std::mutex game_messages_lock;
+runtime::game_message_log::Seen game_messages;
+thread_local bool opening;
 
 uintptr_t rel32(uintptr_t at)
 {
     return at + 4 + *reinterpret_cast<const int32_t *>(at);
+}
+
+void log_game_message(const char *name, bool built)
+{
+    bool first, last;
+    {
+        std::lock_guard<std::mutex> hold(game_messages_lock);
+        first = game_messages.first(name);
+        last = game_messages.last();
+    }
+    if (first)
+        swofty::log("[popup] game message '%s'%s%s", name, built ? "" : " (not constructed)",
+                    last ? " (further messages are not logged)" : "");
 }
 
 Handle *construct_hook(void *s, Handle *out, FixedId *id, Callback *cb, const char *a5, uint64_t a6)
@@ -141,11 +166,18 @@ Handle *construct_hook(void *s, Handle *out, FixedId *id, Callback *cb, const ch
     const char *name = id && swofty::mem::readable(id, sizeof(FixedId)) && id->data && swofty::mem::readable(id->data, 1)
                            ? id->data
                            : nullptr;
-    if (name && out && cb && swofty::mem::readable(cb, sizeof *cb) && runtime::netplay_popup(name, cb->fn, cb->ctx)) {
+    if (name && text_entry::is_entry_message(name)) {
+        text_entry::state.begin(GetTickCount64());
+        swofty::log("[popup] '%.64s' takes typed text; core hotkeys are held back until it closes", name);
+    }
+    if (name && out && cb && swofty::mem::readable(cb, sizeof *cb) && runtime::session_host_message(name, cb->fn, cb->ctx)) {
         *out = Handle{s, nullptr};
         return out;
     }
-    return h_construct.call<Handle *>(s, out, id, cb, a5, a6);
+    Handle *r = h_construct.call<Handle *>(s, out, id, cb, a5, a6);
+    if (runtime::game_message_log::stock(name, opening))
+        log_game_message(name, r && swofty::mem::readable(r, sizeof *r) && r->msg);
+    return r;
 }
 
 bool make_id(FixedId &id, const char *name)
@@ -168,8 +200,11 @@ Handle open(void *s, const char *name)
     Handle h{};
     FixedId id{};
     Callback cb{};
-    if (make_id(id, name))
+    if (make_id(id, name)) {
+        opening = true;
         reinterpret_cast<Construct_t *>(a_construct)(s, &h, &id, &cb, nullptr, 0);
+        opening = false;
+    }
     return h;
 }
 
@@ -326,6 +361,12 @@ int set_enqueue(std::string path, int type, std::string text, int32_t number, co
     }
     if (!api_available())
         return SWOFTY_ASSET_UNAVAILABLE;
+    int registered = leaf_table.type_of(path);
+    if (registered >= 0 && registered != type) {
+        swofty::log("[hud] set by %s refused: '%.120s' is registered as type %d, not %d", by.c_str(), path.c_str(),
+                    registered, type);
+        return SWOFTY_ASSET_INVALID;
+    }
     if (text.size() > MAX_TOAST_TEXT)
         text.resize(MAX_TOAST_TEXT);
     std::lock_guard<std::mutex> g(queue_lock);
@@ -337,6 +378,7 @@ int set_enqueue(std::string path, int type, std::string text, int32_t number, co
     if (sets.size() >= MAX_SETS) {
         swofty::log("[hud] set queue full (%zu); dropping the oldest, from %s", sets.size(), sets.front().by.c_str());
         sets.pop_front();
+        sets_dropped++;
     }
     sets.push_back({std::move(path), std::move(text), by, type, number});
     sets_pending = sets.size();
@@ -363,7 +405,128 @@ void apply_set(const Set &q)
                     ok ? "" : " (the parent node did not resolve)");
 }
 
-const SwoftyHud hud_table = {SWOFTY_HUD_VERSION, api_available, api_toast, api_set};
+int leaves_register(const SwoftyHudLeaf *leaves, uint32_t n, uint32_t *ids)
+{
+    std::string by = who(__builtin_return_address(0));
+    if (!leaves || !ids)
+        return SWOFTY_ASSET_INVALID;
+    if (!api_available())
+        return SWOFTY_ASSET_UNAVAILABLE;
+    int rc = SWOFTY_ASSET_OK;
+    for (uint32_t i = 0; i < n; i++) {
+        ids[i] = ~0u;
+        if (!leaves[i].path || leaves[i].size < offsetof(SwoftyHudLeaf, text_cap) + sizeof(uint32_t)) {
+            rc = SWOFTY_ASSET_INVALID;
+            continue;
+        }
+        std::string path = leaves[i].path;
+        if (!path.empty() && path[0] == '#')
+            path.erase(0, 1);
+        if (leaf_table.register_leaf(path, leaves[i].type, leaves[i].text_cap, by, ids[i]) != runtime::hud_leaves::OK) {
+            swofty::log("[hud] leaf registration by %s refused: '%.120s' (type %u) is not a hud_* leaf or is already "
+                        "registered with another type",
+                        by.c_str(), path.c_str(), leaves[i].type);
+            rc = SWOFTY_ASSET_INVALID;
+        }
+    }
+    static std::atomic<bool> first{true};
+    if (first.exchange(false) || n > 64)
+        swofty::log("[hud] %u leaves registered by %s (%zu in the table)", n, by.c_str(), leaf_table.size());
+    return rc;
+}
+
+int leaves_set(const uint32_t *ids, const void *const *values, uint32_t n)
+{
+    if (!ids || !values)
+        return SWOFTY_ASSET_INVALID;
+    return leaf_table.set(ids, values, n) == runtime::hud_leaves::OK ? SWOFTY_ASSET_OK : SWOFTY_ASSET_INVALID;
+}
+
+int leaves_begin()
+{
+    leaf_table.begin();
+    return SWOFTY_ASSET_OK;
+}
+
+int leaves_end()
+{
+    leaf_table.end();
+    return SWOFTY_ASSET_OK;
+}
+
+uint32_t leaves_generation()
+{
+    return leaf_table.generation();
+}
+
+int leaves_stats(SwoftyHudStats *out)
+{
+    if (!out || out->size < offsetof(SwoftyHudStats, applied_last_tick) + sizeof(uint32_t))
+        return SWOFTY_ASSET_INVALID;
+    auto s = leaf_table.stats();
+    SwoftyHudStats full{sizeof(SwoftyHudStats), s.applied_last_tick, s.queued, sets_dropped.load(), s.registered,
+                        s.cap_per_tick, s.failed, s.generation, s.resyncs, uint32_t(sets_pending.load())};
+    memcpy(out, &full, std::min<size_t>(out->size, sizeof full));
+    return SWOFTY_ASSET_OK;
+}
+
+const SwoftyHud hud_table = {SWOFTY_HUD_VERSION, api_available, api_toast, api_set,        leaves_register,
+                             leaves_set,        leaves_begin, leaves_end,   leaves_generation, leaves_stats};
+
+struct EpochWatch {
+    uintptr_t epoch = 0;
+    std::vector<std::string> parents;
+    std::vector<uintptr_t> tokens;
+    size_t next = 0, known = 0;
+};
+
+void leaves_watch(uint64_t now)
+{
+    static EpochWatch w;
+    static uint64_t next_check;
+    if (!leaf_table.size() || now < next_check)
+        return;
+    next_check = now + 250;
+    if (w.known != leaf_table.size()) {
+        w.known = leaf_table.size();
+        w.parents = leaf_table.parents();
+        w.tokens.assign(w.parents.size(), 0);
+        w.epoch = ui_vm_epoch();
+        w.next = 0;
+    }
+    bool rebuilt = false;
+    uintptr_t e = ui_vm_epoch();
+    if (e != w.epoch) {
+        if (w.epoch)
+            rebuilt = true;
+        w.epoch = e;
+    }
+    for (size_t k = 0; k < 4 && !w.parents.empty(); k++) {
+        size_t i = w.next++ % w.parents.size();
+        uintptr_t t = ui_vm_node_token(w.parents[i]);
+        if (w.tokens[i] && t != w.tokens[i])
+            rebuilt = true;
+        if (t)
+            w.tokens[i] = t;
+    }
+    if (rebuilt) {
+        swofty::log("[hud] view model rebuilt (generation %u); re-sending %zu leaves", leaf_table.generation() + 1,
+                    leaf_table.size());
+        leaf_table.rebuilt();
+        w.tokens.assign(w.parents.size(), 0);
+    }
+}
+
+bool apply_leaf(const runtime::hud_leaves::Leaf &l)
+{
+    perf::Pause game;
+    bool ok = l.type == 0 ? ui_vm_set_path(l.path, 0, l.want_text.c_str()) : ui_vm_set_path(l.path, int(l.type), &l.want_num);
+    static std::atomic<int> told;
+    if (!ok && !l.failed && told.fetch_add(1) < 16)
+        swofty::log("[hud] leaf %s by %s did not resolve yet (the parent node is missing); retrying", l.path.c_str(),
+                    l.by.c_str());
+    return ok;
+}
 
 unsigned toast_test_every;
 uint64_t toast_test_next;
@@ -471,9 +634,14 @@ int popup_show(const std::string &title, const std::string &body, const std::str
     return enqueue(title, body, by);
 }
 
-int hud_toast(const std::string &text, const std::string &detail, float seconds, const std::string &by)
+int hud_toast(const std::string &text, const std::string &detail, float seconds, const std::string &by, const std::string &icon)
 {
-    return toast_enqueue(text, detail, seconds, "", by);
+    return toast_enqueue(text, detail, seconds, icon, by);
+}
+
+void hud_rebuilt()
+{
+    leaf_table.rebuilt();
 }
 
 void popup_setup()
@@ -532,11 +700,27 @@ void popup_setup()
                 (unsigned long long)(a_release - base), (unsigned long long)(uintptr_t(id_vt) - base));
 }
 
+bool typing(const char *what)
+{
+    if (!text_entry::state.active(GetTickCount64()))
+        return false;
+    if (what && text_entry::state.first_suppression())
+        swofty::log("[popup] %s ignored: a text box has focus", what);
+    return true;
+}
+
 void popup_tick()
 {
     toast_test_tick();
     set_test_tick();
     dev_set_tick();
+    if (leaf_table.size()) {
+        static const uint32_t leaf_probe = perf::probe("core", "hud leaves");
+        perf::Scope p(leaf_probe);
+        uint64_t now = GetTickCount64();
+        leaves_watch(now);
+        leaf_table.drain(now, apply_leaf);
+    }
     if (sets_pending.load(std::memory_order_relaxed)) {
         std::deque<Set> now_sets;
         {

@@ -352,6 +352,57 @@ fn av_error(e: Error) -> Error {
     }
 }
 
+/// The EA app's proxy failed to start offline play's file: an antivirus
+/// blocked it (logged since `since`), or removed it after the session staged
+/// it at `staged`, so the proxy found no file.
+pub fn stub_blocked(game: &Path, proxy_logs: &[String], since: i64, staged: Option<i64>) -> Option<Block> {
+    let logged = proxy_logs.iter().any(|log| {
+        crate::ea_diag::proxy_virus_block(log, EAC_EXE, since)
+            || staged.is_some_and(|at| crate::ea_diag::proxy_file_missing(log, EAC_EXE, at))
+    });
+    logged.then(|| stub_removed(game))
+}
+
+/// Offline play's file in the anti-cheat launcher's place, as an antivirus
+/// blocked or removed it.
+pub fn stub_removed(game: &Path) -> Block {
+    Block {
+        program: game.join(EAC_EXE),
+        code: crate::quarantine::ERROR_VIRUS_INFECTED,
+    }
+}
+
+/// When the session staged offline play, or last put its file back: the
+/// journal's last write.
+pub fn staged_at(journal: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(journal).ok()?.modified().ok()
+}
+
+const STUB: &str = "f1op_stub.exe";
+
+/// The extension's stub when it is the one file missing from the extension
+/// folder, with the hook still beside it: an antivirus removed it.
+pub fn stub_removed_from_extension(data: &Path) -> Option<PathBuf> {
+    let dir = extension_dir(data);
+    let stub = dir.join(STUB);
+    let rest = REQUIRED
+        .iter()
+        .filter(|n| **n != STUB)
+        .all(|n| dir.join(n).is_file());
+    (rest && !stub.is_file()).then_some(stub)
+}
+
+pub fn stub_removed_text(data: &Path, stub: &Path) -> String {
+    format!(
+        "{STUB} is missing from {} while f1op_hook.dll is still there, so an antivirus most likely removed it. \
+         Restore {STUB} from the antivirus's quarantine (Windows Security > Virus & threat protection > \
+         Protection history) and add an exclusion for the Swofty data folder ({}) and the F1 25 folder, or \
+         the antivirus removes it again",
+        stub.parent().unwrap_or(stub).display(),
+        data.display()
+    )
+}
+
 fn virus_code(code: i32) -> bool {
     crate::quarantine::is_virus_code(code)
 }
@@ -690,7 +741,15 @@ pub fn heal_stale_backup(game: &Path, journal: &Path) -> Result<Vec<String>> {
         }
         std::fs::remove_file(journal).map_err(io_err(journal))?;
     }
-    notes.extend(heal_launcher(game, None)?);
+    notes.extend(heal_disk(game)?);
+    Ok(notes)
+}
+
+/// Put the game folder back from what is in it, with no journal to go by:
+/// the anti-cheat launcher from its backup, and the hook out of the loader's
+/// slot.
+fn heal_disk(game: &Path) -> Result<Vec<String>> {
+    let mut notes = heal_launcher(game, None)?;
     // A hook left in the loader's slot is ours: the journal is what normally
     // owns it, and staging cannot drop the new one while it is there.
     let hook = game.join("swofty/mods/core/f1op_hook.dll");
@@ -899,17 +958,134 @@ struct JournalLine {
     sha256: String,
 }
 
-/// Replay the journal backwards, verifying digests before touching anything.
-/// Returns one line per action for logging.
-pub fn restore(journal: &Path, force: bool) -> Result<Vec<String>> {
-    let text = std::fs::read_to_string(journal).map_err(io_err(journal))?;
-    let mut lines = Vec::new();
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        lines.push(
-            serde_json::from_str::<JournalLine>(line)
-                .map_err(|e| Error::Other(format!("{}: {e}", journal.display())))?,
-        );
+/// The marker a rewrite leaves in a journal that had unreadable lines, so a
+/// later restore still knows the record is incomplete.
+const DAMAGED: &str = "damaged";
+
+/// The journal as it reads from disk. The extension appends one JSON line per
+/// change, and a PC that stops mid-session can leave the file's tail torn or
+/// zero-filled, so a line that does not parse is counted, never fatal.
+pub(crate) struct Journal {
+    pub(crate) lines: Vec<serde_json::Value>,
+    /// Unreadable lines after the last record: an append the PC stopped in.
+    torn: usize,
+    /// Unreadable lines with records after them.
+    lost: usize,
+    /// A rewrite of this journal dropped unreadable lines.
+    marked: bool,
+}
+
+impl Journal {
+    /// `None` when there is no journal.
+    pub(crate) fn read(journal: &Path) -> Result<Option<Self>> {
+        let bytes = match std::fs::read(journal) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(io_err(journal)(e)),
+        };
+        Ok(Some(Self::parse(&bytes)))
     }
+
+    fn parse(bytes: &[u8]) -> Self {
+        let pad = |c: char| c.is_whitespace() || c == '\0';
+        let mut j = Self {
+            lines: Vec::new(),
+            torn: 0,
+            lost: 0,
+            marked: false,
+        };
+        for raw in bytes.split(|b| *b == b'\n') {
+            let raw = String::from_utf8_lossy(raw);
+            let head = raw.trim_start_matches(pad);
+            let body = head.trim_end_matches(pad);
+            // Zero-filled bytes stand where a write never reached the disk.
+            let zeros_before = raw[..raw.len() - head.len()].contains('\0');
+            let zeros_after = head[body.len()..].contains('\0');
+            if body.is_empty() {
+                j.torn += usize::from(zeros_before);
+                continue;
+            }
+            // A record is an object that names its operation.
+            let line = serde_json::from_str::<serde_json::Value>(body)
+                .ok()
+                .filter(|l| JournalLine::deserialize(l).is_ok());
+            let Some(line) = line else {
+                j.torn += 1;
+                continue;
+            };
+            if line.get(DAMAGED).and_then(serde_json::Value::as_bool) == Some(true) {
+                j.marked = true;
+                continue;
+            }
+            j.lost += j.torn + usize::from(zeros_before);
+            j.torn = usize::from(zeros_after);
+            j.lines.push(line);
+        }
+        j
+    }
+
+    /// Whether a change the session made may be missing from the record: a
+    /// line did not parse, or the journal holds no record at all.
+    pub(crate) fn damaged(&self) -> bool {
+        self.torn > 0 || self.lost > 0 || self.marked || self.lines.is_empty()
+    }
+
+    fn note(&self) -> String {
+        match (self.lost, self.torn) {
+            (0, 0) if self.lines.is_empty() => "offline play's record of this session is empty".to_owned(),
+            (0, 0) => "offline play's record of this session lost lines in an earlier repair".to_owned(),
+            (0, n) => format!(
+                "skipped {n} unfinished line(s) at the end of offline play's record; the PC stopped while it was \
+                 being written"
+            ),
+            (n, t) => format!(
+                "skipped {} unreadable line(s) in offline play's record, {n} of them before its last entry",
+                n + t
+            ),
+        }
+    }
+
+    /// Write the readable lines back in place of the journal, through a
+    /// synced temporary file. A journal that had unreadable lines keeps a
+    /// marker saying so.
+    pub(crate) fn write(&self, journal: &Path) -> Result<()> {
+        use std::io::Write;
+        let mut text: String = self.lines.iter().map(|l| format!("{l}\n")).collect();
+        if self.damaged() {
+            text.push_str(&format!("{}\n", serde_json::json!({"op": "meta", DAMAGED: true})));
+        }
+        let tmp = journal.with_extension("jsonl.tmp");
+        std::fs::File::create(&tmp)
+            .and_then(|mut f| {
+                f.write_all(text.as_bytes())?;
+                f.sync_all()
+            })
+            .map_err(io_err(&tmp))?;
+        with_retry(journal, || std::fs::rename(&tmp, journal))?;
+        crate::sync_dir(journal.parent());
+        Ok(())
+    }
+}
+
+/// Replay the journal backwards, verifying digests before touching anything.
+/// Returns one line per action for logging. Lines that cannot be read are
+/// skipped and named in the first line returned.
+pub fn restore(journal: &Path, force: bool) -> Result<Vec<String>> {
+    let j = Journal::read(journal)
+        .and_then(|j| j.ok_or_else(|| io_err(journal)(std::io::ErrorKind::NotFound.into())))?;
+    let mut done = replay(&j, force)?;
+    if j.torn > 0 || j.lost > 0 {
+        done.insert(0, j.note());
+    }
+    Ok(done)
+}
+
+fn replay(j: &Journal, force: bool) -> Result<Vec<String>> {
+    let lines: Vec<JournalLine> = j
+        .lines
+        .iter()
+        .filter_map(|l| JournalLine::deserialize(l).ok())
+        .collect();
     // Best effort: every entry is attempted so one locked or changed file
     // never strands the rest half-modded. The all-important launcher rename
     // still happens even if a stub or hook delete is blocked. Transient locks
@@ -1041,16 +1217,33 @@ pub fn restore(journal: &Path, force: bool) -> Result<Vec<String>> {
     Ok(done)
 }
 
-/// Restore any pending staging (crash recovery, `swofty restore`). Returns
-/// true when something was restored.
-pub fn restore_pending(data: &Path) -> Result<bool> {
+/// Restore any pending staging in `game` (crash recovery, `swofty restore`).
+/// Returns `None` when nothing was staged, else what there is to say about
+/// it, which is nothing for a journal that read cleanly.
+///
+/// A journal with unreadable lines is what a PC that stopped mid-session
+/// leaves. Every line that does read is replayed, and because the change an
+/// unreadable line recorded is unknown, the launcher's slot is then put back
+/// from the game folder itself, as [`heal_stale_backup`] does.
+pub fn restore_pending(data: &Path, game: &Path) -> Result<Option<Vec<String>>> {
     let journal = journal_path(data);
-    if !journal.exists() {
-        return Ok(false);
+    let Some(j) = Journal::read(&journal)? else {
+        return Ok(None);
+    };
+    let mut notes = Vec::new();
+    if j.damaged() {
+        notes.push(j.note());
+        if let Err(e) = replay(&j, false) {
+            notes.push(format!(
+                "what is left of the record could not be replayed ({e}); recovered from the backup instead"
+            ));
+        }
+        notes.extend(heal_disk(game)?);
+    } else {
+        replay(&j, false)?;
     }
-    restore(&journal, false)?;
     std::fs::remove_file(&journal).map_err(io_err(&journal))?;
-    Ok(true)
+    Ok(Some(notes))
 }
 
 /// What the anti-cheat launcher's slot holds while a session is staged.
@@ -1067,7 +1260,7 @@ pub enum Slot {
 }
 
 struct Staging {
-    lines: Vec<serde_json::Value>,
+    journal: Journal,
     copy: usize,
     rename: Option<usize>,
     slot: PathBuf,
@@ -1076,18 +1269,10 @@ struct Staging {
 }
 
 fn staging(journal: &Path) -> Result<Option<Staging>> {
-    let text = match std::fs::read_to_string(journal) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(io_err(journal)(e)),
+    let Some(journal) = Journal::read(journal)? else {
+        return Ok(None);
     };
-    let mut lines = Vec::new();
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        lines.push(
-            serde_json::from_str::<serde_json::Value>(line)
-                .map_err(|e| Error::Other(format!("{}: {e}", journal.display())))?,
-        );
-    }
+    let lines = &journal.lines;
     let field =
         |l: &serde_json::Value, k: &str| l.get(k).and_then(serde_json::Value::as_str).map(str::to_owned);
     let Some(copy) = lines.iter().position(|l| {
@@ -1110,7 +1295,7 @@ fn staging(journal: &Path) -> Result<Option<Staging>> {
         Some(_) => Slot::Unknown,
     };
     Ok(Some(Staging {
-        lines,
+        journal,
         copy,
         rename,
         slot,
@@ -1149,20 +1334,17 @@ pub fn restage(a: &Artifacts, journal: &Path) -> Result<Option<Slot>> {
                 "sha256": have,
             });
             match s.rename {
-                Some(i) => s.lines[i]["sha256"] = have.into(),
+                Some(i) => s.journal.lines[i]["sha256"] = have.into(),
                 None => {
-                    s.lines.insert(s.copy, entry);
+                    s.journal.lines.insert(s.copy, entry);
                     s.copy += 1;
                 }
             }
         }
     }
     with_retry(&s.slot, || std::fs::copy(&a.stub, &s.slot))?;
-    s.lines[s.copy]["sha256"] = sha256_file(&s.slot)?.into();
-    let text: String = s.lines.iter().map(|l| format!("{l}\n")).collect();
-    let tmp = journal.with_extension("jsonl.tmp");
-    std::fs::write(&tmp, text).map_err(io_err(&tmp))?;
-    with_retry(journal, || std::fs::rename(&tmp, journal))?;
+    s.journal.lines[s.copy]["sha256"] = sha256_file(&s.slot)?.into();
+    s.journal.write(journal)?;
     Ok(Some(s.slot_state))
 }
 
@@ -1684,7 +1866,7 @@ mod tests {
         );
         assert_eq!(std::fs::read_to_string(&launcher).unwrap(), "genuine, repaired");
         assert!(!hook.exists());
-        assert!(restore_pending(&d).unwrap());
+        assert_eq!(restore_pending(&d, &d.join("game")).unwrap(), Some(Vec::new()));
         assert!(!journal.exists());
         std::fs::remove_dir_all(&d).ok();
     }
@@ -1738,8 +1920,157 @@ mod tests {
         std::fs::remove_file(&parked).unwrap();
         let err = restore(&journal, false).unwrap_err().to_string();
         assert!(err.contains("staged backup is missing"), "{err}");
-        assert!(restore_pending(&d).is_err());
+        assert!(restore_pending(&d, &d.join("game")).is_err());
         assert!(journal.exists());
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    fn put_back(d: &Path, text: &[u8]) -> Vec<String> {
+        let (journal, launcher, parked, hook) = staged(d);
+        std::fs::write(&journal, text).unwrap();
+        let notes = restore_pending(d, &d.join("game")).unwrap().unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&launcher).unwrap(),
+            "genuine",
+            "{notes:?}"
+        );
+        assert!(!parked.exists(), "{notes:?}");
+        assert!(!hook.exists(), "{notes:?}");
+        assert!(!journal.exists(), "{notes:?}");
+        assert_eq!(restore_pending(d, &d.join("game")).unwrap(), None);
+        notes
+    }
+
+    fn journal_text(d: &Path) -> Vec<String> {
+        let (journal, ..) = staged(d);
+        std::fs::read_to_string(journal)
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn a_healthy_journal_reads_and_restores_as_before() {
+        let d = temp("journal-healthy");
+        let (journal, ..) = staged(&d);
+        let before = std::fs::read(&journal).unwrap();
+        let j = Journal::read(&journal).unwrap().unwrap();
+        assert!(!j.damaged());
+        assert_eq!((j.lines.len(), j.torn, j.lost), (4, 0, 0));
+        j.write(&journal).unwrap();
+        assert_eq!(std::fs::read(&journal).unwrap(), before);
+        assert_eq!(slot(&journal).unwrap(), Some(Slot::Staged));
+        assert_eq!(put_back(&d, &before), Vec::<String>::new());
+        assert!(!d.join("game/swofty/offline-recovery").exists());
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn a_torn_last_line_is_skipped() {
+        let d = temp("journal-torn");
+        let mut lines = journal_text(&d);
+        lines.push(r#"{"op":"copy","from":"","to":"C:\\Games\\F1 25\\swo"#.into());
+        let text = lines.join("\n");
+        let (journal, ..) = staged(&d);
+        std::fs::write(&journal, &text).unwrap();
+        assert_eq!(slot(&journal).unwrap(), Some(Slot::Staged));
+        let notes = put_back(&d, text.as_bytes());
+        assert!(
+            notes[0].starts_with("skipped 1 unfinished line(s) at the end"),
+            "{notes:?}"
+        );
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn a_zero_filled_tail_is_skipped() {
+        let d = temp("journal-zeros");
+        let mut text = (journal_text(&d).join("\n") + "\n").into_bytes();
+        text.extend([0; 4096]);
+        let notes = put_back(&d, &text);
+        assert!(
+            notes[0].starts_with("skipped 1 unfinished line(s) at the end"),
+            "{notes:?}"
+        );
+
+        let mut text = journal_text(&d).join("\n").into_bytes();
+        text.extend([0; 512]);
+        let notes = put_back(&d, &text);
+        assert!(
+            notes[0].starts_with("skipped 1 unfinished line(s) at the end"),
+            "{notes:?}"
+        );
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn an_unreadable_line_before_the_last_never_strands_the_launcher() {
+        let d = temp("journal-middle");
+        // The line that parked the game's launcher is the one lost.
+        let mut lines = journal_text(&d);
+        lines[1] = "\u{0}\u{0}\u{0}garbage".into();
+        let notes = put_back(&d, (lines.join("\n") + "\n").as_bytes());
+        assert!(notes[0].contains("1 of them before its last entry"), "{notes:?}");
+        assert!(
+            notes.iter().any(|n| n.starts_with("restored EAAntiCheat")),
+            "{notes:?}"
+        );
+
+        // The line that placed offline play's file is the one lost: the
+        // replay finds an unknown file in the slot, and the backup wins.
+        let mut lines = journal_text(&d);
+        lines[2] = "not json".into();
+        let notes = put_back(&d, (lines.join("\n") + "\n").as_bytes());
+        assert!(
+            notes.iter().any(|n| n.contains("could not be replayed")),
+            "{notes:?}"
+        );
+        assert!(
+            notes.iter().any(|n| n.starts_with("kept the staged file at")),
+            "{notes:?}"
+        );
+
+        // A line that is JSON but names no operation is as unreadable.
+        let mut lines = journal_text(&d);
+        lines[1] = "{}".into();
+        let notes = put_back(&d, (lines.join("\n") + "\n").as_bytes());
+        assert!(notes[0].contains("1 of them before its last entry"), "{notes:?}");
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn an_empty_or_zero_filled_journal_restores_from_the_backup() {
+        let d = temp("journal-empty");
+        let notes = put_back(&d, b"");
+        assert_eq!(notes[0], "offline play's record of this session is empty");
+        let notes = put_back(&d, &[0; 2048]);
+        assert!(notes[0].starts_with("skipped 1 unfinished line(s)"), "{notes:?}");
+        put_back(&d, b"\n\n");
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn a_rewrite_of_a_damaged_journal_still_says_it_was_damaged() {
+        let d = temp("journal-marked");
+        let mut lines = journal_text(&d);
+        lines[1] = "garbage".into();
+        let (journal, launcher, parked, _) = staged(&d);
+        std::fs::write(&journal, lines.join("\n") + "\n").unwrap();
+        let j = Journal::read(&journal).unwrap().unwrap();
+        assert_eq!((j.lines.len(), j.torn, j.lost), (3, 0, 1));
+        j.write(&journal).unwrap();
+        assert!(!journal.with_extension("jsonl.tmp").exists());
+        let again = Journal::read(&journal).unwrap().unwrap();
+        assert_eq!((again.lines.len(), again.torn, again.lost), (3, 0, 0));
+        assert!(again.damaged());
+        let notes = restore_pending(&d, &d.join("game")).unwrap().unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&launcher).unwrap(),
+            "genuine",
+            "{notes:?}"
+        );
+        assert!(!parked.exists());
         std::fs::remove_dir_all(&d).ok();
     }
 
@@ -2167,6 +2498,104 @@ mod tests {
         restore(&journal, false).unwrap();
         assert_eq!(std::fs::read_to_string(&launcher).unwrap(), "original");
         assert!(!parked.exists());
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn a_stub_missing_beside_its_backup_is_not_an_antivirus_block_without_the_log_line() {
+        let d = temp("stub-missing");
+        let game = d.join("game");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::write(game.join(EAC_BAK), "real").unwrap();
+        assert_eq!(stub_blocked(&game, &[], 0, None), None);
+        let other = "20\t[2026-11-01T01:57:04.895Z]\tINFO\tcreateProcess ok".to_owned();
+        assert_eq!(stub_blocked(&game, &[other], 0, None), None);
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn the_proxy_log_names_the_blocked_stub_even_while_it_is_present() {
+        let d = temp("stub-logged");
+        let game = d.join("game");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::write(game.join(EAC_BAK), "real").unwrap();
+        let log = format!(
+            "20\t[2026-11-01T01:57:04.895Z]\tERROR   \t(eax::services::process::ProcessWin::createProcess)\t[PROCESS] \
+             Create Process: Operation did not complete successfully because the file contains a virus or \
+             potentially unwanted software. | exe=[{}] | OS ErrorCode:  0xe1\n",
+            game.join(EAC_EXE).display()
+        );
+        let block = stub_blocked(&game, &[log], 0, None).unwrap();
+        assert_eq!(block.code, 225);
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    fn missing_line(game: &Path, at: &str) -> String {
+        format!(
+            "17\t[{at}]\tERROR   \t(eax::services::process::ProcessWin::createProcess)\t[PROCESS] Create Process: \
+             The system cannot find the file specified. | exe=[{}] | OS ErrorCode:  0x2\n",
+            game.join(EAC_EXE).display()
+        )
+    }
+
+    #[test]
+    fn the_proxy_finding_no_stub_after_staging_is_an_antivirus_removal() {
+        let game = Path::new(r"C:\Program Files\EA Games\F1 25");
+        let staged = crate::catalog::epoch("2026-11-13T09:59:49Z").unwrap();
+        let log = missing_line(game, "2026-11-13T10:00:00.698Z");
+        let block = stub_blocked(game, std::slice::from_ref(&log), 0, Some(staged)).unwrap();
+        assert_eq!(block, stub_removed(game));
+        assert_eq!(block.blocker(), Some(crate::app_control::Blocker::Antivirus));
+        assert!(block.text().contains("antivirus"), "{}", block.text());
+        assert_eq!(stub_blocked(game, std::slice::from_ref(&log), 0, None), None);
+        let restaged = crate::catalog::epoch("2026-11-13T10:12:00Z").unwrap();
+        assert_eq!(stub_blocked(game, &[log], 0, Some(restaged)), None);
+    }
+
+    #[test]
+    fn a_genuine_ea_repair_leaves_no_antivirus_trace_in_the_proxy_log() {
+        let game = Path::new(r"C:\Program Files\EA Games\F1 25");
+        let staged = crate::catalog::epoch("2026-11-12T05:50:00Z").unwrap();
+        let started = format!(
+            "17\t[2026-11-12T05:54:53.240Z]\tINFO    \t(eax::services::process::ProcessWin::createProcess)\t\
+             [PROCESS] exe=[{}], args=[] | PID: 16136 | \n",
+            game.join(EAC_EXE).display()
+        );
+        assert_eq!(stub_blocked(game, &[started], 0, Some(staged)), None);
+    }
+
+    #[test]
+    fn the_staging_time_is_the_journals_last_write() {
+        let d = temp("staged-at");
+        let journal = d.join("staging.jsonl");
+        assert_eq!(staged_at(&journal), None);
+        std::fs::write(&journal, "{}\n").unwrap();
+        let at = staged_at(&journal).unwrap();
+        assert!(at.elapsed().unwrap_or_default() < std::time::Duration::from_secs(60));
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn names_the_stub_when_only_it_is_gone_from_the_extension() {
+        let d = temp("ext-stub-gone");
+        let dir = extension_dir(&d);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in REQUIRED {
+            std::fs::write(dir.join(name), "x").unwrap();
+        }
+        assert_eq!(stub_removed_from_extension(&d), None);
+        std::fs::remove_file(dir.join(STUB)).unwrap();
+        let stub = stub_removed_from_extension(&d).unwrap();
+        assert_eq!(stub, dir.join(STUB));
+        let text = stub_removed_text(&d, &stub);
+        assert!(text.contains("antivirus most likely removed it"), "{text}");
+        assert!(
+            text.contains("quarantine") && text.contains("exclusion"),
+            "{text}"
+        );
+        assert!(text.contains(&d.display().to_string()), "{text}");
+        std::fs::remove_file(dir.join("f1op_hook.dll")).unwrap();
+        assert_eq!(stub_removed_from_extension(&d), None);
         std::fs::remove_dir_all(&d).ok();
     }
 }

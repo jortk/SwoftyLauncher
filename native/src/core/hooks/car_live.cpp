@@ -10,20 +10,26 @@
 #include <unordered_set>
 #include <vector>
 
+#include "../apply/content/race_fuel.hpp"
+#include "../perf.hpp"
 #include "../registry/table.hpp"
 #include "car_live.hpp"
 #include "car_profile.hpp"
 #include "context.hpp"
 #include "core_events.hpp"
 #include "hooks.hpp"
+#include "player_facts.hpp"
+#include "../view_state.hpp"
 #include "session_points.hpp"
 
 // The live car operations on the running game (car_live.hpp): g_Sess_VehicleTable and g_Sess_VehicleCount
 // resolve once the code is ready, memory reads and writes are checked (swofty::mem), writes run only on the
-// flow thread (the one that ticks on_frame), and nothing is handed over on an exe that isn't the KB build,
-// whose field offsets these are. car.built and car.reset are game points: the mid-hook on site_Car_LiveCarBuilt
+// flow thread (the one that ticks on_frame), and nothing is handed over on an exe outside car_live::CAR_BUILDS,
+// the builds whose field offsets these are. car.built and car.reset are game points: the mid-hook on site_Car_LiveCarBuilt
 // and the detour on Car_Systems_Reset_Thunk sit there while an addon subscribes, and the events fire from the next
 // frame (car_live.hpp, Ops::take).
+
+extern "C" __declspec(dllexport) const SwoftyLive *SwoftyCoreLive(void);
 
 namespace swofty_core::hooks {
 namespace {
@@ -34,6 +40,15 @@ struct CoreTag {};
 using Ops = car_live::Ops<CoreTag>;
 
 std::atomic<uint32_t> g_flow_tid{0};
+
+const car_live::CarBuild *car_build()
+{
+    static const car_live::CarBuild *build = [] {
+        runtime::ImageId id = runtime::image_id();
+        return car_live::car_build_for(id.stamp, id.size);
+    }();
+    return build;
+}
 
 bool on_flow_thread()
 {
@@ -59,6 +74,7 @@ constexpr Row ROWS[] = {
     {"site_Ai_TableGripInput", true},
     {"CarF1Aero.lift_scale", true},
     {"CarF1Aero.drag_scale", true},
+    {"CarF1Aero.slipstream", true},
     {"CarBrakeEcu.brake_bias", true},
     {"CarBrakeEcu.brake_pressure", true},
     {"CarSuspTyreType.grip_multiplier", false},
@@ -76,6 +92,70 @@ constexpr Row ROWS[] = {
     {"Game_Get_ModelNodeId", true},
     {"PitStopInstance.car", false},
     {"Car_FuelEcu_SetMode_Thunk", true},
+    {"EngineModeAvail.fuel", true},
+    {"site_Ai_BuildSystem_RecordPushed", true},
+    {"AiSystem.records_begin", true},
+    {"AiCarRecord.vehicle_index", true},
+    {"AiCarRecord.driver_config", true},
+    {"AiDriverConfig.blocking_fraction_of_follow_speed", true},
+    {"AiDriverConfig.blocking_fraction_of_follow_speed_at_race_start", true},
+    {"AiDriverConfig.blocking_max_blocking_distance", true},
+    {"AiDriverConfig.blocking_max_blocking_distance_at_race_start", true},
+    {"AiDriverConfig.alongside_speed_difference_for_limited_zone_yielding", true},
+    {"AiDriverConfig.alongside_yield_overtake_rate", true},
+    {"AiDriverConfig.alongside_min_presence_within_buffer", false},
+    {"AiDriverConfig.divebomb_defense_max_presence_alongside", false},
+    {"AiDriverConfig.divebomb_defense_max_time_to_ignore", false},
+    {"AiDriverConfig.divebomb_defense_max_track_offset", false},
+    {"AiDriverConfig.divebomb_defense_max_track_radius", false},
+    {"AiDriverConfig.offset_variation_max_offset", true},
+    {"AiDriverConfig.offset_variation_offset_limit_at_corner_start", true},
+    {"AiDriverConfig.offset_variation_offset_limit_blend_distance", true},
+    {"AiDriverConfig.offset_variation_half_width_scaling_graph", true},
+    {"AiDriverConfig.offset_variation_radius_scalar_graph", true},
+    {"AiDriverConfig.overtake_attacker_close_enough_car_lengths", true},
+    {"AiDriverConfig.overtake_braking_zone_abort_overtake_time", true},
+    {"AiDriverConfig.overtake_close_range_car_lengths_to_continue_overtake", true},
+    {"AiDriverConfig.overtake_close_range_car_lengths_to_start_overtake", true},
+    {"AiDriverConfig.overtake_oppertunist_overtake_time", true},
+    {"AiDriverConfig.overtake_oppertunist_overtake_track_speed_difference", false},
+    {"AiDriverConfig.overtake_danger_overtake_continue_time_adjustment", true},
+    {"AiDriverConfig.overtake_danger_overtake_full_heat_time_adjustment", false},
+    {"AiDriverConfig.overtake_danger_overtake_initiate_time_adjustment", true},
+    {"AiDriverConfig.overtake_danger_overtake_pull_out_time", true},
+    {"AiDriverConfig.overtake_regular_overtake_continue_time_adjustment", true},
+    {"AiDriverConfig.overtake_regular_overtake_full_heat_time_adjustment", false},
+    {"AiDriverConfig.overtake_regular_overtake_initiate_time_adjustment", true},
+    {"AiDriverConfig.overtake_regular_overtake_pull_out_time", true},
+    {"AiDriverConfig.overtake_overlap_percentage", true},
+    {"AiDriverConfig.overtake_concede_speed_diff", true},
+    {"AiDriverConfig.overtake_concede_slowdown_speed_diff", true},
+    {"AiDriverConfig.overtake_concede_time_vs_behind", true},
+    {"AiDriverConfig.space_seeking_added_buffer", true},
+    {"AiDriverConfig.space_seeking_speed_below_follow", true},
+    {"AiDriverConfig.space_seeking_first_speed_below_follow", true},
+    {"AiDriverConfig.space_seeking_car_in_front_needed", true},
+    {"AiDriverConfig.space_seeking_remember_crowed", false},
+    {"AiDriverConfig.space_seeking_concede_overtake_blocked_by_crowed_time", true},
+    {"AiDriverConfig.space_seeking_total_queue_needed", true},
+    {"AiDriverConfig.space_seeking_distance_braking_point", true},
+    {"AiDriverConfig.space_seeking_time_to_switch_sides", true},
+    {"AiDriverConfig.space_seeking_track_distance_needed", true},
+    {"AiDriverConfig.space_seeking_track_abort_distance", true},
+    {"AiDriverConfig.space_seeking_cars_moving_away_speed_to_ignore", true},
+    {"AiDriverConfig.space_seeking_can_start_track_radius", true},
+    {"AiDriverConfig.blocking_start_blocking_intersection_time", false},
+    {"AiDriverConfig.blocking_start_blocking_maximum_time_to_corner", true},
+    {"AiDriverConfig.blocking_start_blocking_minimum_time_to_corner", true},
+    {"AiDriverConfig.blocking_time_to_corner_for_end_merge_rate", true},
+    {"AiDriverConfig.blocking_time_to_corner_for_start_merge_rate", true},
+    {"AiDriverConfig.blocking_end_blocking_time_to_corner_vs_offset", true},
+    {"AiDriverConfig.blocking_blocking_offset_from_car_behind", true},
+    {"AiDriverConfig.blocking_blocking_speed_differential", true},
+    {"AiDriverConfig.blocking_blocking_threat_time_modifier", true},
+    {"AiDriverConfig.blocking_blocking_variable_offset_fraction", true},
+    {"AiDriverConfig.blocking_avoidance_decrease_rate", true},
+    {"AiDriverConfig.blocking_merge_back_to_racing_line", false},
 };
 
 bool row_ready(const char *name)
@@ -226,12 +306,34 @@ bool within(const car_profile::Entry &e)
 
 std::unordered_set<std::string> g_logged;
 
-void apply_profiles(uint32_t index)
+car_profile::Memo g_profiled;
+
+car_profile::Memo::Key profile_key(bool ai)
 {
+    car_profile::Memo::Key k;
+    k.store = swofty_core::registry::store().generation();
+    auto facts = core().current();
+    k.epoch = facts ? facts->epoch : 0;
+    k.tick = GetTickCount64() / 1000;
+    k.session = session_type();
+    k.ai = ai;
+    return k;
+}
+
+void apply_profiles(uint32_t index, bool force = false)
+{
+    static const uint32_t probe = perf::probe("core", "car_live profiles");
+    perf::Scope scope(probe);
+    uint32_t is_ai = 1;
+    Ops::op_car(index, nullptr, &is_ai);
+    auto key = profile_key(is_ai != 0);
+    if (force)
+        g_profiled.forget(index);
+    if (g_profiled.fresh(index, key))
+        return;
+    g_profiled.note(index, key);
     auto entries = profile_entries();
-    uint32_t ai = 1;
-    Ops::op_car(index, nullptr, &ai);
-    auto report = car_profile::Applier<Ops>::evaluate(entries, session_type(), within, index, ai != 0);
+    auto report = car_profile::Applier<Ops>::evaluate(entries, session_type(), within, index, is_ai != 0);
     for (const auto &id : report.needs_identity)
         if (g_logged.insert("identity:" + id).second)
             swofty::log("[cars] car.profile %s skipped: its cars selector needs the car's vehicle, team or driver (T121)",
@@ -248,26 +350,138 @@ void apply_profiles(uint32_t index)
 }
 
 uint64_t g_epoch = 0;
+player_facts::Cache g_players;
+
+void sync_players()
+{
+    auto facts = core().current();
+    if (!facts)
+        return;
+    auto change = player_facts::sync<Ops>(g_players, *facts, session_control_mode);
+    if (!change)
+        return;
+    const bool seen = facts->epoch == g_epoch;
+    update_facts([&](Facts &f) {
+        f.player = std::move(change->player);
+        f.participants = std::move(change->participants);
+    });
+    if (seen)
+        g_epoch = core().current()->epoch;
+}
+
+// A box's fuel rules (apply/content/race_fuel.hpp): the era picker hands over the pressed box's rules, and every frame
+// the plan reads each car's fuel and pit stop counter (the live snapshot) and writes the fuel it decides.
+std::mutex g_fuel_lock;
+apply::content::FuelRules g_fuel_rules;
+bool g_fuel_new = false;
+apply::content::FuelPlan g_fuel_plan;
+std::atomic<bool> g_tyres_kept{false};
+std::atomic<uint32_t> g_session_type{0};   // the live session type, read each frame while a box rule needs it
+
+void fuel_tick()
+{
+    apply::content::FuelRules rules;
+    {
+        std::lock_guard<std::mutex> g(g_fuel_lock);
+        if (g_fuel_new) {
+            g_fuel_new = false;
+            g_fuel_plan.reset();
+        }
+        if (!g_fuel_rules.any() && !g_fuel_rules.tyres_kept())
+            return;
+        rules = g_fuel_rules;
+    }
+    const SwoftyLive *live = SwoftyCoreLive();
+    SwoftyLiveSession ses{};
+    if (!live || live->session(&ses) != SWOFTY_ASSET_OK || !(ses.have & SWOFTY_LIVE_SHAVE_TYPE)) {
+        g_session_type.store(0, std::memory_order_relaxed);
+        return;
+    }
+    g_session_type.store(ses.type, std::memory_order_relaxed);
+    if (!rules.any())
+        return;
+    if (!apply::content::fuel_quali_session(ses.type) && !apply::content::fuel_race_session(ses.type))
+        return;
+    uint32_t n = 0;
+    if (Ops::op_count(&n) != SWOFTY_ASSET_OK || !n)
+        return;
+    n = std::min<uint32_t>(n, apply::content::FuelPlan::MAX);
+    apply::content::FuelCar cars[apply::content::FuelPlan::MAX];
+    mem::Trust trust(runtime::HEAP_TRUST_MS);
+    for (uint32_t i = 0; i < n; i++) {
+        SwoftyLiveCar c{};
+        auto &f = cars[i];
+        if (live->car(i, &c) != SWOFTY_ASSET_OK || !(c.flags & SWOFTY_LIVE_CAR_RACER) ||
+            Ops::fuel_of(i, f.fuel, f.capacity) != SWOFTY_ASSET_OK)
+            continue;
+        f.present = true;
+        f.lap = c.lap;
+        f.pit_stops_ok = (c.have & SWOFTY_LIVE_HAVE_PIT_LANE) != 0;
+        f.pit_stops = c.pit_stops;
+    }
+    for (const auto &w : g_fuel_plan.tick(rules, ses.type, ses.generation, cars, n)) {
+        int r = Ops::op_set(w.car, nullptr, SWOFTY_CAR_FUEL_MASS, w.kg);
+        if (r != SWOFTY_ASSET_OK)
+            g_fuel_plan.failed(w.car);
+        swofty::log("[fuel] car %u: %s, %.1f -> %.1f kg%s", w.car, w.why, cars[w.car].fuel, w.kg,
+                    r == SWOFTY_ASSET_OK ? "" : " (not written yet)");
+    }
+}
 
 void frame(double, void *)
 {
+    static const uint32_t unlock_probe = perf::probe("core", "car_live unlock_tick");
+    static const uint32_t apply_probe = perf::probe("core", "car_live apply_car");
+    static const uint32_t flush_probe = perf::probe("core", "car_live flush");
     g_flow_tid = GetCurrentThreadId();
+    sync_players();
     auto facts = core().current();
     bool changed = facts && facts->epoch != g_epoch;
     if (facts)
         g_epoch = facts->epoch;
     if (changed) {
+        mem::invalidate();
+        Ops::racecraft_forget();
         uint32_t n = 0;
         if (Ops::op_count(&n) == SWOFTY_ASSET_OK)
             for (uint32_t i = 0; i < n; i++)
                 apply_profiles(i);
         Ops::flush();
     }
-    for (const auto &p : Ops::take()) {
+    {
+        mem::Trust trust(runtime::HEAP_TRUST_MS);
+        perf::Scope scope(unlock_probe);
+        Ops::unlock_tick();
+        Ops::racecraft_tick();
+    }
+    const view::State view_now = view::current();
+    const bool in_replay = view_now.valid && (view_now.flags & view::REPLAY);
+    if (Ops::resume_due(in_replay)) {
+        uint32_t n = 0;
+        if (Ops::op_count(&n) == SWOFTY_ASSET_OK) {
+            mem::Trust trust(runtime::HEAP_TRUST_MS);
+            for (uint32_t i = 0; i < n; i++) {
+                apply_profiles(i, true);
+                Ops::apply_car(i);
+            }
+        }
+    }
+    uint32_t profiled = 0, applied = 0;
+    for (const auto &p : Ops::take_frame()) {
         swofty::cars::live::Car car(p.index, reinterpret_cast<void *>(p.car));
-        if (p.what != Ops::What::setup)
-            apply_profiles(p.index);
-        Ops::apply_car(p.index);
+        uint32_t bit = 1u << p.index;
+        const bool hold = Ops::skip_in_replay(p.what, in_replay);
+        bool rebuilt = p.what == Ops::What::built || p.what == Ops::What::reset;
+        if (!hold && p.what != Ops::What::setup && (rebuilt || !(profiled & bit))) {
+            profiled |= bit;
+            apply_profiles(p.index, rebuilt);
+        }
+        if (!hold && !(applied & bit)) {
+            applied |= bit;
+            mem::Trust trust(runtime::HEAP_TRUST_MS);
+            perf::Scope scope(apply_probe);
+            Ops::apply_car(p.index);
+        }
         switch (p.what) {
         case Ops::What::built: events::car_built(car); break;
         case Ops::What::reset: events::car_reset(car, false); break;
@@ -276,7 +490,10 @@ void frame(double, void *)
         case Ops::What::damage: events::car_damage(car, p.part, p.progress); break;
         }
     }
+    mem::Trust trust(runtime::HEAP_TRUST_MS);
+    perf::Scope scope(flush_probe);
     Ops::flush();
+    fuel_tick();
 }
 
 void setup()
@@ -297,15 +514,18 @@ void setup()
     e.flow_thread = on_flow_thread;
     e.enabled = [] { return runtime::enabled("events", nullptr); };
     e.row_ready = row_ready;
-    if (!runtime::same_build()) {
-        swofty::log("[cars] live car operations off: the field offsets are the KB build's and this is not that build");
+    const car_live::CarBuild *build = car_build();
+    if (!build) {
+        runtime::ImageId id = runtime::image_id();
+        swofty::log("[cars] live car operations off: build %u (image 0x%x) has no checked car layouts", id.stamp, id.size);
     } else {
         e.table = swofty::api->resolve("g_Sess_VehicleTable");
         e.count = swofty::api->resolve("g_Sess_VehicleCount");
         if (!e.table || !e.count)
             swofty::log("[cars] live car operations off: g_Sess_VehicleTable or g_Sess_VehicleCount does not resolve");
         else
-            swofty::log("[cars] live car operations on: %zu fields", sizeof car_live::FIELDS / sizeof car_live::FIELDS[0]);
+            swofty::log("[cars] live car operations on (%s): %zu fields", build->name,
+                        sizeof car_live::FIELDS / sizeof car_live::FIELDS[0]);
         if (uintptr_t fn = swofty::api->resolve("Car_Engine_ComputeDerived_Thunk"))
             e.engine_derived = [fn](uintptr_t engine) {
                 reinterpret_cast<void (*)(void *)>(fn)(reinterpret_cast<void *>(engine));
@@ -333,15 +553,69 @@ void setup()
                 swofty::log("[cars] %s off: needs %s", f.name, f.needs);
         swofty::log("[session] session.pit_stop stationary time and tyre change off: needs PitStopInstance.car");
         swofty::log("[cars] refit_tyres off: needs Car_Tyre_SetWearFactor, CarChassis.tyre_physics_group and the car to tyre component path");
-        swofty::log("[cars] set_fuel_mode is not offered: the fuel mode call is not bound");
+        if (uintptr_t fn = swofty::api->resolve("Car_FuelEcu_SetMode_Thunk"))
+            e.fuel_set_mode = [fn](uintptr_t ecu, int mode) {
+                reinterpret_cast<void (*)(void *, int)>(fn)(reinterpret_cast<void *>(ecu), mode);
+            };
+        else
+            swofty::log("[cars] fuel_ecu fields off: Car_FuelEcu_SetMode_Thunk does not resolve");
+        e.mode_avail = [rva = build->mode_avail_rva] {
+            uintptr_t at = swofty::api->module_base() + rva, ptr = 0;
+            return mem::read(at, ptr) && mem::object_like(ptr) ? ptr : uintptr_t(0);
+        };
     }
     Ops::bind(std::move(e));
     const SwoftyEvents *ev = runtime::events_table();
     uint32_t token = 0;
-    if (ev && ev->on_frame)
+    if (ev && ev->on_frame) {
+        runtime::frame_probe_name("car_live");
         ev->on_frame(frame, nullptr, &token);
+    }
 }
 
+}
+
+void race_fuel_rules(const apply::content::FuelRules &rules)
+{
+    std::lock_guard<std::mutex> g(g_fuel_lock);
+    if (rules.line == g_fuel_rules.line && rules.package == g_fuel_rules.package)
+        return;
+    g_fuel_rules = rules;
+    g_fuel_new = true;
+    g_tyres_kept.store(rules.tyres_kept(), std::memory_order_relaxed);
+    if (rules.any() || !rules.line.empty())
+        swofty::log("[fuel] %s", rules.line.empty() ? "the game's own fuel" : rules.line.c_str());
+}
+
+// The pit stop tyre change wrap (pit_box.cpp) asks whether to skip the change for this tyre component and call flag.
+bool race_tyres_keep(uintptr_t tyre_component, bool pit_stop_call)
+{
+    bool rule = g_tyres_kept.load(std::memory_order_relaxed);
+    uint32_t type = g_session_type.load(std::memory_order_relaxed);
+    if (!rule || !pit_stop_call)
+        return false;
+    uint32_t damage = 0;
+    uint64_t count = 0;
+    if (swofty::mem::read(tyre_component + apply::content::TYRE_WHEEL_COUNT, count) && count <= 16)
+        for (uint64_t i = 0; i < count; i++) {
+            uint32_t f = 0;
+            if (swofty::mem::read(tyre_component + apply::content::TYRE_WHEELS + i * apply::content::TYRE_WHEEL_STRIDE +
+                                      apply::content::TYRE_WHEEL_FLAGS,
+                                  f))
+                damage |= f;
+        }
+    uintptr_t entity = 0, car = 0;
+    uint8_t vehicle = 0xff;
+    if (swofty::mem::read(tyre_component + 0x20, entity) && entity && swofty::mem::read(entity + 0x58, car) && car)
+        swofty::mem::read(car + car_live::CAR_VEHICLE_ID, vehicle);
+    auto pick = apply::content::race_tyre_change_pick(rule, type, pit_stop_call, damage);
+    if (pick == apply::content::TyreChange::game)
+        return false;
+    swofty::log("[tyres] vehicle %u pit stop in the race: %s (tyre record flags %#x)", unsigned(vehicle),
+                pick == apply::content::TyreChange::kept ? "tyres kept (box rule race_tyre_change false)"
+                                                         : "tyres changed (a tyre record carries a damage flag)",
+                damage);
+    return pick == apply::content::TyreChange::kept;
 }
 
 void declare_car_points(Table &t)
@@ -372,7 +646,7 @@ void declare_car_points(Table &t)
 
 void arm_car_points()
 {
-    if (!runtime::same_build())
+    if (!car_build())
         return;
     g_built->keep(true);
     g_built->install(false, "the core");
@@ -397,16 +671,21 @@ void arm_car_points()
 namespace {
 
 constexpr const char *LEVERS = "swofty_core.dll (car levers)";
+constexpr const char *RACECRAFT = "swofty_core.dll (ai racecraft)";
 bool g_levers_offered = false;
 
 void engine_torque(SwoftyContext *c)
 {
-    c->xmm0.f32[0] = swofty_core::hooks::Ops::drive_torque(c->rbx, c->xmm0.f32[0], c->xmm7.f32[0],
-                                                          [&] {
-                                                              float limiter = 0;
-                                                              swofty::mem::read(c->rbx + 0x2528, limiter);
-                                                              return limiter;
-                                                          }());
+    c->xmm0.f32[0] = swofty_core::hooks::Ops::drive_torque_with(c->rbx, c->xmm0.f32[0], c->xmm7.f32[0], [&] {
+        float limiter = 0;
+        swofty::mem::read(c->rbx + 0x2528, limiter);
+        return limiter;
+    });
+}
+
+void ai_system_built(SwoftyContext *c)
+{
+    swofty_core::hooks::Ops::racecraft_pushed(c->rbx);
 }
 
 void ai_grip(SwoftyContext *c)
@@ -421,7 +700,7 @@ namespace runtime {
 std::vector<CoreMixins> car_levers_mixins()
 {
     std::vector<CoreMixins> out;
-    if (g_levers_offered || !code_ready() || !same_build())
+    if (g_levers_offered || !code_ready() || !swofty_core::hooks::car_build())
         return out;
     g_levers_offered = true;
     std::vector<SwoftyMixin> mixins;
@@ -433,6 +712,15 @@ std::vector<CoreMixins> car_levers_mixins()
         mixins.push_back({"site_Ai_TableGripInput", SWOFTY_MIXIN_SITE, 100, (void *)&ai_grip, nullptr});
     else
         swofty::log("[cars] ai.grip_scale off: needs site_Ai_TableGripInput");
+    bool racecraft_rows = true;
+    for (const char *row : swofty_core::hooks::car_live::RACECRAFT_ROWS)
+        racecraft_rows = racecraft_rows && swofty_core::hooks::row_ready(row);
+    if (racecraft_rows && swofty::api->resolve("site_Ai_BuildSystem_RecordPushed"))
+        out.push_back({RACECRAFT,
+                       {{"site_Ai_BuildSystem_RecordPushed", SWOFTY_MIXIN_SITE, 50, (void *)&ai_system_built, nullptr}}});
+    else
+        swofty::log("[ai] ai.<group>.<key> fields off: need AiSystem.records_begin, AiCarRecord.vehicle_index and "
+                    "driver_config and site_Ai_BuildSystem_RecordPushed");
     if (!mixins.empty())
         out.push_back({LEVERS, std::move(mixins)});
     return out;

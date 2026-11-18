@@ -98,7 +98,7 @@ Every call that returns a `Result` uses the shared [result codes](./#result-code
 
 ## Registering a content
 
-Call `add()` from the check function you pass to `SWOFTY_ADDON`, which runs before the core's mixin commit. Progressive Career's tile (`addons/progressive/native/src/ui/tile.cpp`):
+Call `add()` from the check function you pass to `SWOFTY_ADDON`, which runs before the core's mixin commit. Progressive Career's tile (`native/src/ui/tile.cpp` in that addon):
 
 ```cpp
 content::Result r = content::add({.id = "progressive",

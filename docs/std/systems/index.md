@@ -48,6 +48,7 @@ Shipped in 1.6.0:
 - **[Career](./career)** `swofty/systems/career.hpp`: `career::modes`, `contents`, `seasons`, `calendars`, `ratings`, `characters`, `wizards`, `hub_tabs`, `rnd_trees`, `markets`.
 - **[UI and strings](./ui)** `swofty/systems/ui.hpp`: `ui::strings`, `addon_options`.
 - **[Sessions](./sessions)** `swofty/systems/sessions.hpp`: `sessions::Rules`, `set_control`.
+- **[Laps](./laps)** `swofty/systems/laps.hpp`: the `laps.recorded` and `laps.sealing` payloads.
 - **[Tracks](./tracks)** `swofty/systems/tracks.hpp`: `tracks::set_track_fuel`, `copy_track_fuel`, `restore_track_fuel`.
 - **[AI](./ai)** `swofty/systems/ai.hpp`: the `ai.controller.update` payload.
 - **[The spectator camera](./graphics#the-spectator-camera)** `swofty/systems/spectator.hpp`: `spectator::set_active`, `follow`, `set_camera`, `current`.
@@ -119,8 +120,8 @@ The pools are small and differ per table:
 
 - entrant lists: 0 to 255;
 - drivers: 0 to 254, with 58 free. Entrant records pack the driver id in 14 bits, so the real ceiling may be higher, and it needs reverse engineering;
-- teams: up to 514;
-- vehicles: up to 1,023. Classic Seasons 0.6.4's vehicle ids already run to 599;
+- teams: up to 16382;
+- vehicles: up to 16,382 (14 bits, like drivers). Classic Seasons 0.6.4's vehicle ids already run to 599;
 - vehicle packages: 0 to 255;
 - heads: from 265;
 - setup modes and seasons: 31 or lower (they're mask bits). The free setup mode ids are 5, 7 and 16 to 31, which is 18.
@@ -133,10 +134,12 @@ The game reserves its value map for the records in the database file before it l
 
 - **Separate budgets.** The core applies edits from addons made for 1.5 and earlier first, and counts them on their own. It then admits 1.6 records against the room that's left, whole addons in load order. Refusing a 1.6 addon never removes an older addon's edit.
 - **A whole addon is refused,** never part of one, with a log line naming it.
+- **Slack.** The reservation is the file's records, the older edits, the planned 1.6 keys, a 4,096-record margin and 5% of the older edits and planned keys. A plan just under 838,860 records sizes the map up to 2^21.
+- **Refused before layout.** Addons are refused before their rows are laid out. When the boot counts more new keys than the plan left room for, the core lays the rows out again without the addons past the room. Rows already laid out go into the database together or not at all, so no table claims a row that was never created.
 - **The safety net.** If the pre-size is unavailable, such as after a game update, the room is about 92,000 records: 838,860 minus the records the game loads, minus a 4,096 margin. The core reports how full the database is after each boot. When it's short, the next launch moves the older addons' edits to the file route (the 1.5.11 fix), padded past 838,860 records, so the game reserves a big enough map for the file. That costs one restart, and the launcher still never learns what 1.6 addons register.
 
 ```text
-[registry] room: value map sized for 1,677,721 records before load (older addons' edits 84,112; 1.6 records 15,020)
+[registry] room: value map sized for 1,677,721 records before load (older addons' edits 84,112; 1.6 records 15,020); 842,076 of 1,677,721 records used; sizing: planned 15,020 1.6 key(s), boot asked 15,020; reserved for 851,074 (4,957 slack) past the game's own growth point 838,860: sized up
 [registry] room: pre-size unavailable on this game build; 81,240 of 91,904 records used
 [registry] register: mod.bigpack refused 14,980 records: past the database room (10,664 left); nothing from mod.bigpack applied
 ```

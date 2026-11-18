@@ -9,7 +9,8 @@
 namespace runtime::room_cover {
 
 constexpr uint64_t FADE_MS = 300;
-constexpr uint64_t CAP_MS = 60000;
+constexpr uint64_t CAP_MS = 150000;
+constexpr uint64_t SESSION_CAP_MS = 180000;
 constexpr uint64_t SETTLE_MS = 1500;
 
 enum class Signal { waiting, shown, failed };
@@ -21,12 +22,22 @@ inline const char *why_name(Why w)
     return w == Why::shown ? "shown" : w == Why::failed ? "failed" : w == Why::timeout ? "timeout" : "none";
 }
 
+enum class Kind { none, room, session };
+
+inline Kind request_kind(const std::string &env, const std::string &file_text)
+{
+    std::string target;
+    json::Value v;
+    if (!env.empty() && env[0] != '@')
+        target = env;
+    else if (!file_text.empty() && json::parse(file_text, v))
+        target = v["target"].str();
+    return target == "room" ? Kind::room : target == "session" ? Kind::session : Kind::none;
+}
+
 inline bool request_is_room(const std::string &env, const std::string &file_text)
 {
-    if (!env.empty() && env[0] != '@')
-        return env == "room";
-    json::Value v;
-    return !file_text.empty() && json::parse(file_text, v) && v["target"].str() == "room";
+    return request_kind(env, file_text) == Kind::room;
 }
 
 constexpr uint64_t EASE_MS = 260;
@@ -124,10 +135,12 @@ private:
 
 class Cover {
 public:
-    void arm()
+    void arm(uint64_t cap_ms = CAP_MS)
     {
-        if (phase_ == Phase::idle)
+        if (phase_ == Phase::idle) {
             phase_ = Phase::armed;
+            cap_ = cap_ms;
+        }
     }
 
     bool armed() const { return phase_ != Phase::idle; }
@@ -168,7 +181,7 @@ private:
             }
             if (seen_ && now >= seen_at_ + SETTLE_MS)
                 return finish(now, Why::shown, FADE_MS, e);
-            if (now >= up_at_ + CAP_MS)
+            if (now >= up_at_ + cap_)
                 return finish(now, Why::timeout, FADE_MS, e);
             return 1;
         case Phase::fading: {
@@ -194,7 +207,7 @@ private:
 
     Phase phase_ = Phase::idle;
     Why why_ = Why::none;
-    uint64_t up_at_ = 0, off_at_ = 0, seen_at_ = 0;
+    uint64_t up_at_ = 0, off_at_ = 0, seen_at_ = 0, cap_ = CAP_MS;
     bool seen_ = false;
 };
 

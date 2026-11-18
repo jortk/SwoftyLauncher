@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "example.hud-dial",
+  "name": "HUD Dial",
+  "version": "0.1.0",
+  "author": "Your Name",
+  "description": "A small dial in the 2026 car HUD: a speed text, a gear text, an RPM sweep, an ERS bar and a pit lamp, with one custom leaf written from native code.",
+  "license": "MIT",
+  "kind": ["ui", "native"],
+  "compat": { "game": "f1_25", "game_builds": [">=25251167"] },
+  "requires": [{ "id": "swofty.core", "version": ">=0.1.0" }],
+  "experimental_features": ["telemetry"],
+  "operations": {
+    "hud": ["registry/hud.json"],
+    "native": [{ "dll": "native/hud_dial.dll" }]
+  }
+}

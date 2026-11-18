@@ -1,0 +1,1 @@
+# One line per "site_*" name, or live-state table name, that native/src/core resolves by name (swofty::api->resolve) while the generated headers do not export it: the guard that needs it logs "off ... does not resolve". Format: name, tab, reason.

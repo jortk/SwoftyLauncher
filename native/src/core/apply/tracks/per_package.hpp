@@ -4,6 +4,7 @@
 
 #include <swofty/json.hpp>
 
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -22,7 +23,26 @@ struct Entry {
     bool offered = true;
     int order = 0;
     std::optional<float> burn;
+    std::optional<float> pit_speed;   // pit.speed_limit, km/h (TrackDataTrack +0x21c)
+    std::optional<int32_t> laps;      // laps: the race's laps at full race length (TrackDataTrack +0xe0 number_of_laps)
 };
+
+// Race laps the core writes: a whole number from 1 to 999 (0 or anything else leaves the track's own).
+inline std::optional<int32_t> laps_of(const swofty::json::Value &v)
+{
+    if (!v.is_int() || v.as_int() < 1 || v.as_int() > 999)
+        return std::nullopt;
+    return int32_t(v.as_int());
+}
+
+// A pit speed limit the core writes: above 0 and at most 400 km/h.
+inline std::optional<float> pit_speed_of(const swofty::json::Value &pit)
+{
+    if (!pit.is_object() || !pit["speed_limit"].is_number())
+        return std::nullopt;
+    double v = pit["speed_limit"].as_double();
+    return v > 0 && v <= 400 ? std::optional<float>(float(v)) : std::nullopt;
+}
 
 struct Entries {
     std::map<std::string, Entry> by_track;
@@ -105,6 +125,8 @@ inline Entries resolve_entries(const Base &base, const std::vector<std::pair<std
         const swofty::json::Value &fuel = rec["fuel"];
         if (fuel.is_object() && fuel["burn_per_lap"].is_number())
             e.burn = float(fuel["burn_per_lap"].as_double());
+        e.pit_speed = pit_speed_of(rec["pit"]);
+        e.laps = laps_of(rec["laps"]);
         out.by_track[t->id] = std::move(e);
     }
     return out;

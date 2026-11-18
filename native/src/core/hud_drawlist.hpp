@@ -898,6 +898,7 @@ struct Image {
     uint32_t width = 0, height = 0;
     std::vector<uint8_t> rgba;
     uint32_t generation = 0;
+    std::string source;
 };
 
 class Registry {
@@ -945,6 +946,12 @@ class Registry {
         im.rgba = std::move(rgba);
         im.generation++;
         return at;
+    }
+
+    void set_source(int slot, const std::string &source)
+    {
+        if (slot >= 0 && size_t(slot) < images_.size())
+            images_[size_t(slot)].source = source;
     }
 
     int find_image(const std::string &id) const

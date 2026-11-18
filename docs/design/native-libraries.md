@@ -114,15 +114,17 @@ subscribe to it instead of hooking the same entry points:
 | `on_present(fn)` | `fn(swapchain, known, caller)` before the original `Present`, one present at a time. `known` is the swapchain's creation record (queue, caller chain, frame generation, Streamline, colour space), or null for a swapchain created before `arm_swapchain` |
 | `on_presented(fn)` | `fn(swapchain, hr)` after the original `Present` |
 | `on_resize(fn)` | `fn(swapchain)` before `ResizeBuffers` and `ResizeBuffers1` |
-| `on_exec(fn)` / `on_barrier(fn)` | Observers in subscription order. One that returns `true` has made the call itself through `exec_original` / `barrier_original`, and the rest are skipped |
+| `on_exec(fn)` | `fn(queue, n, lists, plan)` before the original `ExecuteCommandLists`. `plan.after(i, step)` runs `step(queue)` after `lists[0..i]` and `plan.at_end(step)` after the last list; the game's lists are submitted in segments between the steps, steps after the same list in subscription order. With no steps the original is called once |
+| `on_barrier(fn)` | Observer in subscription order. One that returns `true` has made the call itself through `barrier_original`, and the rest are skipped |
 | `on_setname(fn)` | `fn(object, name)` before the original `SetName` |
 
 The overlay (`hud.cpp`) and shader packs (`grade.cpp`) subscribe to it.
 
 The overlay records each swapchain's creation queue and the modules on the creation call stack, and draws only on
-swapchains it saw created, on their creation queue, when no frame generation module created or
-presents them. A swapchain whose creation passed through Streamline's frame generation hook
-(`sl.dlss_g.dll`) is drawn on only while the game's hardware settings have `frame_gen mode="0"`. Submissions use a ring of three command lists behind one fence and never wait in
+swapchains it saw created, on their creation queue. A swapchain a frame generation module created or presents, or whose
+creation passed through Streamline's frame generation hook (`sl.dlss_g.dll`) while the game's hardware settings do not have
+`frame_gen mode="0"`, is not drawn on at `Present`: `Present` only builds the frame, and an `on_exec` step renders it into
+the game's `BackBuffer` resource after the list that moves it from `RENDER_TARGET` to `PRESENT`. Submissions use a ring of three command lists behind one fence and never wait in
 `Present`. A device removal stops the overlay for the rest of the session.
 
 Paint callbacks tessellate into one vertex list (`hud_drawlist.hpp`) split into batches that share a
@@ -177,10 +179,12 @@ Reads run on the flow thread and give you the most recent frame's values. You ca
 Hooks: session and participant data come from the session witnesses `Sess_Veh_UpdateWheelMap`
 0x142e90560, `Sess_ParticipantVec_PushBack` 0x140af2ab0, `Sess_Select_Entrants` 0x1424a2350,
 `Sess_Startup_VehicleAiLoop` 0x142505f30 and `Game_GameModule_OnSessionEnter` 0x14080c300. The
-per-car physics/telemetry struct isn't catalogued yet, so you'll need to find it to implement this
-library.
+per-car physics/telemetry struct isn't catalogued. The car, participant and session fields are decoded
+from the game's own UDP packets in the `sendto` hook (`native/src/core/udp_ids.cpp`,
+`native/src/core/udp_telemetry_logic.hpp`), so they fill while the game's UDP telemetry output is on.
 
-Status: stub. `native/src/core/telemetry.cpp` returns `unavailable` from every call.
+Status: implemented for the session clock, the UDP-fed fields and the overtake, collision and retirement events;
+see the [telemetry reference](/reference/std/telemetry).
 
 ## 4. Database read
 

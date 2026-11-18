@@ -3,10 +3,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "apply/facts.hpp"
@@ -41,7 +44,10 @@ constexpr const char *HOST = "swofty_f1";
 constexpr const char *SELECTED_ADDON_TILE = "selected_addon_tile";
 constexpr const char *ADDON_TILES_VISIBLE = "addon_tiles_visible";
 constexpr const char *IMAGE_ARRAY = "#overrides.home_screen.tiles_solo_6x6";
-constexpr size_t MAX_BOXES = 64;
+// FeTile_Add_EraTile takes the tile index as a byte (the count of tiles added so far; the tiles themselves go into
+// a growing vector and VM list), so the addon row holds up to 255 boxes, index 0..254.
+constexpr size_t MAX_BOXES = 255;
+constexpr uint32_t ONLY_ANY = 0, ONLY_GRAND_PRIX = 1, ONLY_TIME_TRIAL = 2;
 constexpr size_t LIST_NAME_MAX = 63;
 constexpr size_t TEXT_MAX = 255;
 constexpr size_t NODE_REFS = 0x24;
@@ -77,7 +83,13 @@ struct Box {
     std::string owner;
     size_t seq = 0;
     std::string time_trial;
+    uint32_t only = ONLY_ANY;
 };
+
+inline bool shown(const Box &box, bool time_trial)
+{
+    return box.only == ONLY_ANY || box.only == (time_trial ? ONLY_TIME_TRIAL : ONLY_GRAND_PRIX);
+}
 
 inline bool plain_name(const std::string &s)
 {
@@ -92,6 +104,8 @@ inline std::string check(Box &box, const std::vector<Box> &have)
 {
     if (!plain_name(box.entrant_list))
         return "entrant_list must be 1 to 63 letters, digits or underscores";
+    if (box.only > ONLY_TIME_TRIAL)
+        return "only must be 0 (both pickers), 1 (Grand Prix) or 2 (Time Trial)";
     if (box.time_trial == box.entrant_list)
         box.time_trial.clear();
     if (!box.time_trial.empty() && !plain_name(box.time_trial))
@@ -106,7 +120,7 @@ inline std::string check(Box &box, const std::vector<Box> &have)
         if (h.entrant_list == box.entrant_list)
             return "a box for this entrant list is already registered by " + h.owner;
     if (have.size() >= MAX_BOXES)
-        return "the core holds at most 64 boxes";
+        return "the core holds at most 255 boxes";
     return {};
 }
 
@@ -118,6 +132,18 @@ inline std::string image_of(const Box &box)
 inline bool time_trial_mode(std::string_view label)
 {
     return swofty_core::apply::facts::mode_of(label) == "time_trial";
+}
+
+struct FrontEndLeave {
+    bool restore = false, clear_selected = false, forget_pick = false;
+};
+
+inline FrontEndLeave leaving_front_end(std::string_view mode_label, bool selected_is_box)
+{
+    std::string mode = swofty_core::apply::facts::mode_of(mode_label);
+    if (mode != "driver_career" && mode != "my_team" && mode != "story" && mode != "f1_world")
+        return {};
+    return {true, selected_is_box, true};
 }
 
 inline const std::string &list_for(const Box &box, bool time_trial)
@@ -173,9 +199,9 @@ inline std::vector<size_t> time_trial_keep(const std::vector<ListCars> &lists)
 // matches the selected list's, and pushes one entrant per distinct vehicle ref (EntrantRecord +0x5c) of them,
 // plus 4 entries of its own. A stock F1 2025 Time Trial draws 11 cars (f1_custom_team, leaderboard f1) and
 // spawns 15 vehicles. A list an addon copies from f1_2025 keeps leaderboard f1, so F1 2012 Season's
-// bdx_s5_2012 (12 vehicles) made it 27, past the 26-slot vehicle table. Classic Seasons' lists use leaderboard
-// classic. A stock press in Time Trial narrows swofty_f1 whenever one of its lists is oversized, to no list at
-// all when none fits; at each Time Trial load the core also counts the distinct cars of every list of the
+// bdx_s5_2012 (12 vehicles) made it 27, past the 26-slot vehicle table. A package's list has a descriptor of its
+// own since 1.7.20 (content.package leaderboard), so only the lists that share one count together. A stock press in Time Trial narrows swofty_f1 whenever one of
+// its lists is oversized, to no list at all when none fits; at each Time Trial load the core also counts the distinct cars of every list of the
 // selected list's leaderboard and drops whole lists, addon lists first, until they fit 22 (26 less the 4).
 inline bool time_trial_narrows(const std::vector<ListCars> &lists, const std::vector<size_t> &keep)
 {
@@ -240,7 +266,6 @@ constexpr size_t ESM_VEHICLE_FLAGS = 0x258;
 constexpr uint32_t TAKES_LIST = 1, TAKES_POOL_A = 2, TAKES_POOL_B = 4;
 constexpr size_t ES_POOL_A = 0x338;
 constexpr size_t ES_POOL_B = 0x348;
-constexpr size_t GM_ENTRANTS_SYSTEM = 0x290;
 constexpr size_t POOL_SLOT = 0x10;
 constexpr size_t MAX_POOL = 8192;
 
@@ -321,13 +346,16 @@ inline size_t distinct_cars(const std::vector<uint32_t> &refs)
     return d.size();
 }
 
-// Leaderboard descriptor stat ids of the stock leaderboards.leaderboard_descriptor rows, for the log only.
+// Leaderboard descriptor stat ids of the stock leaderboards.leaderboard_descriptor rows, for the log only; an id past
+// the stock rows is a descriptor an addon's package or database operations added.
 inline std::string leaderboard_text(unsigned id)
 {
     static constexpr const char *STOCK[] = {"f1", "classic", "f1_26", "f2", nullptr, "f2_26"};
     std::string out = std::to_string(id);
     if (id < std::size(STOCK) && STOCK[id])
         out += std::string(", ") + STOCK[id];
+    else if (id >= std::size(STOCK))
+        out += ", added";
     return out;
 }
 
@@ -371,6 +399,16 @@ inline int64_t time_trial_fallback(const std::vector<ListCars> &lists, const std
         if (fits(i))
             return int64_t(i);
     return -1;
+}
+
+// The index in lists of the list a Time Trial session loads after the 24-car guard, -1 while the session's own
+// selected list stays. The leaderboard budget is computed for this list, not for the one selected before the swap.
+inline int64_t time_trial_loaded(const ListCars &selected, const ListCars &first, const std::vector<ListCars> &lists,
+                                 const std::vector<std::string> &prefer)
+{
+    if (!oversized(selected.cars) && !oversized(first.cars))
+        return -1;
+    return time_trial_fallback(lists, prefer);
 }
 
 constexpr size_t ENTRANT_SETUP_MAX_ENTRANTS = 0x268;
@@ -431,6 +469,181 @@ inline std::string time_trial_swap(const std::string &list, int64_t cars, const 
         why += "; the session draws at most " + std::to_string(TT_MAX_CARS) + " cars (max_entrants " +
                std::to_string(limit_was) + " -> " + std::to_string(TT_MAX_CARS) + " until the session ends)";
     return why;
+}
+
+// The core's restore stack of entrant setup mode list arrays (the lists at +0x130, their count at +0x230). An addon
+// box press narrows swofty_f1's modes to one list, a stock box press on a Time Trial picker keeps the lists past 23 cars
+// out, and a Time Trial load leaves whole lists of its leaderboard out (time_trial set on the last two). Each entry
+// holds the array before (lists, count) and after (kept_lists, kept); it is put back only while the mode still holds
+// what the core left, so a list array changed since is not overwritten.
+constexpr size_t ESM_LISTS = 0x130;
+constexpr size_t ESM_LIST_COUNT = 0x230;
+constexpr size_t ESM_LIST_SLOTS = 32;
+
+inline void **esm_lists(uint8_t *esm)
+{
+    return reinterpret_cast<void **>(esm + ESM_LISTS);
+}
+
+inline int64_t &esm_list_count(uint8_t *esm)
+{
+    return *reinterpret_cast<int64_t *>(esm + ESM_LIST_COUNT);
+}
+
+struct ListCut {
+    uint8_t *setup = nullptr;
+    int64_t count = 0, kept = 0;
+    void *lists[ESM_LIST_SLOTS] = {};
+    void *kept_lists[ESM_LIST_SLOTS] = {};
+    bool time_trial = false;
+    GridLimit grid;
+};
+
+inline bool put_back_cut(ListCut &n)
+{
+    n.grid.restore();
+    if (!n.setup || n.kept < 0 || n.count < 0 || size_t(n.kept) > ESM_LIST_SLOTS || size_t(n.count) > ESM_LIST_SLOTS ||
+        esm_list_count(n.setup) != n.kept || memcmp(esm_lists(n.setup), n.kept_lists, size_t(n.kept) * sizeof(void *)))
+        return false;
+    memcpy(esm_lists(n.setup), n.lists, size_t(n.count) * sizeof(void *));
+    esm_list_count(n.setup) = n.count;
+    return true;
+}
+
+// The lists an entry left out of its mode, in the mode's order before the cut.
+inline std::vector<void *> left_out(const ListCut &n)
+{
+    std::vector<void *> out;
+    int64_t kept = std::clamp<int64_t>(n.kept, 0, int64_t(ESM_LIST_SLOTS));
+    for (int64_t i = 0; i < n.count && size_t(i) < ESM_LIST_SLOTS; ++i)
+        if (std::find(n.kept_lists, n.kept_lists + kept, n.lists[i]) == n.kept_lists + kept)
+            out.push_back(n.lists[i]);
+    return out;
+}
+
+struct CutsPutBack {
+    size_t put = 0, failed = 0;
+};
+
+// Puts entries back from the top of the stack (only the Time Trial ones when time_trial_only) and drops them. An entry
+// whose mode no longer holds what it left is handed to failed and is not counted as put back.
+template <class Failed> CutsPutBack put_back_cuts(ListCut *stack, size_t &used, bool time_trial_only, Failed failed)
+{
+    CutsPutBack r;
+    for (size_t i = used; i-- > 0;) {
+        if (time_trial_only && !stack[i].time_trial)
+            continue;
+        if (put_back_cut(stack[i])) {
+            r.put++;
+        } else {
+            r.failed++;
+            failed(stack[i]);
+        }
+    }
+    size_t keep = 0;
+    if (time_trial_only)
+        for (size_t i = 0; i < used; ++i)
+            if (!stack[i].time_trial)
+                stack[keep++] = stack[i];
+    used = keep;
+    return r;
+}
+
+// A Time Trial load's leaderboard cut of `list` out of `esm`. The first cut of a mode pushes an entry when the stack has
+// room; a later one extends the Time Trial entry that already holds the mode. False when the stack is full: the list stays.
+inline bool cut_list(ListCut *stack, size_t &used, size_t capacity, uint8_t *esm, void *list)
+{
+    int64_t count = esm_list_count(esm);
+    if (count < 0 || size_t(count) > ESM_LIST_SLOTS)
+        return false;
+    bool known = false;
+    for (size_t i = 0; i < used; ++i)
+        known = known || (stack[i].time_trial && stack[i].setup == esm && stack[i].kept == count);
+    if (!cut_recordable(used, capacity, known))
+        return false;
+    void **arr = esm_lists(esm);
+    if (!known) {
+        ListCut &n = stack[used++];
+        n = {};
+        n.setup = esm;
+        n.count = count;
+        memcpy(n.lists, arr, size_t(count) * sizeof(void *));
+        n.time_trial = true;
+        n.kept = count;
+        memcpy(n.kept_lists, n.lists, sizeof(n.lists));
+    }
+    int64_t w = 0;
+    for (int64_t i = 0; i < count; ++i)
+        if (arr[i] != list)
+            arr[w++] = arr[i];
+    esm_list_count(esm) = w;
+    for (size_t i = used; i-- > 0;)
+        if (stack[i].time_trial && stack[i].setup == esm) {
+            stack[i].kept = w;
+            memcpy(stack[i].kept_lists, arr, size_t(w) * sizeof(void *));
+            break;
+        }
+    return true;
+}
+
+// The 24-car guard's hold on a Time Trial session's entrant setup mode: the list of at most 23 cars it moved into slot 0
+// (fit, from `slot`, where the first list went) and the max_entrants it lowered (limit_was, 0 when untouched).
+struct TtHold {
+    uint8_t *esm = nullptr;
+    int32_t limit_was = 0;
+    size_t slot = 0;
+    void *first = nullptr;
+    void *fit = nullptr;
+};
+
+inline void swap_into_first(TtHold &h, uint8_t *esm, size_t slot)
+{
+    void **arr = esm_lists(esm);
+    h.esm = esm;
+    h.slot = slot;
+    h.first = arr[0];
+    h.fit = arr[slot];
+    arr[slot] = h.first;
+    arr[0] = h.fit;
+}
+
+inline void put_back_hold(const TtHold &h)
+{
+    if (!h.esm)
+        return;
+    auto &limit = *reinterpret_cast<int32_t *>(h.esm + ENTRANT_SETUP_MAX_ENTRANTS);
+    if (h.limit_was && limit == time_trial_limit(h.limit_was))
+        limit = h.limit_was;
+    void **arr = esm_lists(h.esm);
+    if (h.first && h.slot < ESM_LIST_SLOTS && arr[0] == h.fit && arr[h.slot] == h.first) {
+        arr[h.slot] = arr[0];
+        arr[0] = h.first;
+    }
+}
+
+// Ends the hold. The leaderboard cut of the same load was made on the swapped array and is recorded against it, so the
+// Time Trial entries are put back first: undoing the swap first changes the array, and the cut lists would stay out.
+// With `cuts` (the session unload) they are put back whether or not a swap is held; otherwise only while one is.
+template <class Failed> CutsPutBack end_hold(ListCut *stack, size_t &used, TtHold &held, bool &holding, bool cuts, Failed failed)
+{
+    CutsPutBack r;
+    if (cuts || (holding && held.first))
+        r = put_back_cuts(stack, used, true, failed);
+    if (holding) {
+        holding = false;
+        put_back_hold(held);
+    }
+    return r;
+}
+
+inline std::string put_back_failed_line(const std::vector<std::string> &names, int64_t now, int64_t kept, bool time_trial)
+{
+    std::string list;
+    for (const auto &name : names)
+        list += (list.empty() ? "" : ", ") + name;
+    return std::string("the lists the ") + (time_trial ? "Time Trial guard" : "box narrowing") +
+           " left out of an entrant setup mode could not be put back: its lists changed since (" + std::to_string(now) +
+           " now, " + std::to_string(kept) + " left), so " + (list.empty() ? "none" : list) + " stay out of it";
 }
 
 constexpr size_t VEHICLE_SLOT = 8;
@@ -608,6 +821,20 @@ inline bool saved_predates(const IdAliases &aliases, const std::vector<uint16_t>
     return false;
 }
 
+inline bool saved_predates(const IdAliases &aliases, const std::vector<uint16_t> &teams,
+                           const std::vector<uint16_t> &vehicles, const std::vector<uint16_t> &drivers)
+{
+    if (saved_predates(aliases, teams))
+        return true;
+    for (uint16_t v : vehicles)
+        if (v && v != NO_TEAM && aliases.vehicles.count(v))
+            return true;
+    for (uint16_t d : drivers)
+        if (d && d != NO_TEAM && aliases.drivers.count(d))
+            return true;
+    return false;
+}
+
 inline std::vector<uint16_t> distinct_teams(const std::vector<uint16_t> &teams)
 {
     std::vector<uint16_t> out;
@@ -708,10 +935,57 @@ inline std::string track_missing(const swofty_core::apply::tracks::Base &base, c
     std::string code = track_code_of(track);
     if (base.by_code(code))
         return {};
+    // A stock track is in every build, also when the base holds no tracks because no track addon is on.
+    if (track.starts_with("game/") && swofty_core::apply::tracks::stock_venue(code))
+        return {};
     std::string why = "the saved weekend's track " + track + " is not a track of this build";
     if (swofty_core::apply::tracks::is_dormant(code))
         why += " (" + code + " is a dormant row with no track archive; the addon that fills it is off)";
     return why;
+}
+
+struct CareerListPick {
+    int64_t index = -1;
+    std::string line;
+};
+
+inline CareerListPick career_list(const std::vector<std::string> &lists, const std::string &data_group,
+                                  const std::vector<std::string> &content, const std::string &setup_mode)
+{
+    CareerListPick p;
+    std::string head = "the game left the entrants manager's list empty in a Driver Career (setup mode " +
+                       (setup_mode.empty() ? std::string("?") : setup_mode) + " offers " + std::to_string(lists.size()) +
+                       " lists); ";
+    auto find = [&](const std::string &name) -> int64_t {
+        if (name.empty())
+            return -1;
+        for (size_t i = 0; i < lists.size(); ++i)
+            if (lists[i] == name)
+                return int64_t(i);
+        return -1;
+    };
+    p.index = find(data_group);
+    if (p.index >= 0) {
+        p.line = head + "loading " + lists[size_t(p.index)] + ", the list named like the career's data group";
+        return p;
+    }
+    for (const std::string &c : content) {
+        p.index = find(c);
+        if (p.index >= 0) {
+            p.line = head + "loading " + lists[size_t(p.index)] + ", the list of the content the career runs";
+            return p;
+        }
+    }
+    p.line = head + "no list is named like the career's data group (" + (data_group.empty() ? std::string("none") : data_group) +
+             ") or its content";
+    return p;
+}
+
+inline std::string career_stop(const CareerListPick &pick)
+{
+    return "Driver Career load stopped: " + pick.line +
+           ". F1 25 closes now instead of crashing on it; start a new Driver Career, or turn the addons back on that the "
+           "career was made with";
 }
 
 inline std::string continue_stop(const std::string &track_why, const ContinuePick &pick, bool list_missing)
@@ -868,9 +1142,493 @@ private:
     std::vector<Swap> swaps_;
 };
 
+// A box's tyre warmer rule (content.package rules.tyre_warmers) applies through the host setup mode's
+// has_tyre_warmers byte (+0x1c8, re/db structs/GameSetupMode.h, written by the mode loader 0x142a14f20). The swap
+// writes the box's value and remembers the game's; put_back restores it wherever the byte still holds the swap's value.
+constexpr size_t MODE_TYRE_WARMERS = 0x1c8;
+
+class WarmerSwaps {
+public:
+    void swap(uint8_t *mode, bool warmers)
+    {
+        if (!mode)
+            return;
+        uint8_t &field = mode[MODE_TYRE_WARMERS];
+        uint8_t want = warmers ? 1 : 0;
+        Swap *s = find(mode);
+        if (!s) {
+            swaps_.push_back({mode, field, want});
+            s = &swaps_.back();
+        }
+        s->written = want;
+        field = want;
+    }
+
+    size_t put_back()
+    {
+        size_t n = 0;
+        for (auto &s : swaps_) {
+            uint8_t &field = s.mode[MODE_TYRE_WARMERS];
+            if (field != s.written)
+                continue;
+            field = s.original;
+            n++;
+        }
+        swaps_.clear();
+        return n;
+    }
+
+    // Drops the swaps without reading or writing the modes, which the game may have freed.
+    size_t forget()
+    {
+        size_t n = swaps_.size();
+        swaps_.clear();
+        return n;
+    }
+
+    size_t active() const { return swaps_.size(); }
+
+private:
+    struct Swap {
+        uint8_t *mode;
+        uint8_t original, written;
+    };
+    Swap *find(const uint8_t *mode)
+    {
+        for (auto &s : swaps_)
+            if (s.mode == mode)
+                return &s;
+        return nullptr;
+    }
+    std::vector<Swap> swaps_;
+};
+
+// A box's race time limit (content.package rules.race_time_limit_s) applies through the host setup mode's
+// race_time_limit_in_seconds (+0xb4, three u32, re/db structs/GameSetupMode.h, copied by the mode loader 0x142a14f20
+// from the comma list; classic 7200,7200,7200). The swap writes the box's seconds into all three and remembers the
+// game's; put_back restores them wherever the three still hold the swap's value.
+constexpr size_t MODE_RACE_TIME_LIMIT = 0xb4;
+constexpr size_t RACE_TIME_LIMITS = 3;
+
+class TimeLimitSwaps {
+public:
+    void swap(uint8_t *mode, uint32_t seconds)
+    {
+        if (!mode)
+            return;
+        uint32_t *field = limits(mode);
+        Swap *s = find(mode);
+        if (!s) {
+            swaps_.push_back({mode, {field[0], field[1], field[2]}, seconds});
+            s = &swaps_.back();
+        }
+        s->written = seconds;
+        for (size_t i = 0; i < RACE_TIME_LIMITS; ++i)
+            field[i] = seconds;
+    }
+
+    size_t put_back()
+    {
+        size_t n = 0;
+        for (auto &s : swaps_) {
+            uint32_t *field = limits(s.mode);
+            bool ours = true;
+            for (size_t i = 0; i < RACE_TIME_LIMITS; ++i)
+                ours = ours && field[i] == s.written;
+            if (!ours)
+                continue;
+            for (size_t i = 0; i < RACE_TIME_LIMITS; ++i)
+                field[i] = s.original[i];
+            n++;
+        }
+        swaps_.clear();
+        return n;
+    }
+
+    // Drops the swaps without reading or writing the modes, which the game may have freed.
+    size_t forget()
+    {
+        size_t n = swaps_.size();
+        swaps_.clear();
+        return n;
+    }
+
+    size_t active() const { return swaps_.size(); }
+
+private:
+    struct Swap {
+        uint8_t *mode;
+        uint32_t original[RACE_TIME_LIMITS];
+        uint32_t written;
+    };
+    static uint32_t *limits(uint8_t *mode) { return reinterpret_cast<uint32_t *>(mode + MODE_RACE_TIME_LIMIT); }
+    Swap *find(const uint8_t *mode)
+    {
+        for (auto &s : swaps_)
+            if (s.mode == mode)
+                return &s;
+        return nullptr;
+    }
+    std::vector<Swap> swaps_;
+};
+
+// A box's weekend (content.package rules.weekend_mode) applies by exchanging the weekend options container of the host
+// setup mode with the one of a helper setup mode (+0x190..+0x1a8: four qwords the mode loader 0x142a14f20 fills from
+// weekend_options_0: the practice, qualifying and race groups and the length options they offer). It is an exchange,
+// not a copy: each container stays owned by exactly one mode object, so a game rebuild that frees every mode while a
+// swap is in place still frees each container once (forget). The swap is held for the whole weekend and undone by the
+// next press of another box, a stock box or a picker build without an addon list. Only one host mode takes the
+// helper's container: a second host mode keeps its own (one container cannot sit in two modes).
+// The options tag (+0x00: the options_system game_setup_mode tag Sess_Parse_GameSetupMode resolves from the row's
+// options_tag through 0x142a1a740 and stores at 0x142a187e4) decides which values the weekend menu offers
+// (options_system.context tag restrictions); it is exchanged with the weekend options so the menu offers the helper's.
+constexpr size_t MODE_OPTIONS_TAG = 0x00;
+constexpr size_t MODE_WEEKEND_OPTIONS = 0x190;
+constexpr size_t WEEKEND_OPTION_QWORDS = 5;
+inline constexpr size_t WEEKEND_SWAP_OFFSETS[WEEKEND_OPTION_QWORDS] = {MODE_OPTIONS_TAG, MODE_WEEKEND_OPTIONS, MODE_WEEKEND_OPTIONS + 8,
+                                                                       MODE_WEEKEND_OPTIONS + 16, MODE_WEEKEND_OPTIONS + 24};
+
+class WeekendSwaps {
+public:
+    // Exchanges host's and helper's weekend options; a different held pair is put back first. False when host or
+    // helper is missing or the two are the same object.
+    bool swap(uint8_t *host, uint8_t *helper)
+    {
+        if (!host || !helper || host == helper)
+            return false;
+        if (held_ && held_->host == host && held_->helper == helper)
+            return true;
+        put_back();
+        exchange(host, helper);
+        Held h{host, helper, {}, {}};
+        for (size_t i = 0; i < WEEKEND_OPTION_QWORDS; ++i) {
+            h.host_now[i] = slots(host)[i];
+            h.helper_now[i] = slots(helper)[i];
+        }
+        held_ = h;
+        return true;
+    }
+
+    // Exchanges back when both modes still hold what the swap left in them; otherwise drops the pair without writing.
+    size_t put_back()
+    {
+        if (!held_)
+            return 0;
+        Held h = *held_;
+        held_.reset();
+        for (size_t i = 0; i < WEEKEND_OPTION_QWORDS; ++i)
+            if (slots(h.host)[i] != h.host_now[i] || slots(h.helper)[i] != h.helper_now[i])
+                return 0;
+        exchange(h.host, h.helper);
+        return 1;
+    }
+
+    // Drops the pair without reading or writing the modes, which the game may have freed.
+    size_t forget()
+    {
+        size_t n = held_ ? 1 : 0;
+        held_.reset();
+        return n;
+    }
+
+    size_t active() const { return held_ ? 1 : 0; }
+    const uint8_t *helper() const { return held_ ? held_->helper : nullptr; }
+
+private:
+    struct Held {
+        uint8_t *host, *helper;
+        uint64_t host_now[WEEKEND_OPTION_QWORDS], helper_now[WEEKEND_OPTION_QWORDS];
+    };
+    struct Slots {
+        uint8_t *mode;
+        uint64_t &operator[](size_t i) const { return *reinterpret_cast<uint64_t *>(mode + WEEKEND_SWAP_OFFSETS[i]); }
+    };
+    static Slots slots(uint8_t *mode) { return {mode}; }
+    static void exchange(uint8_t *a, uint8_t *b)
+    {
+        for (size_t i = 0; i < WEEKEND_OPTION_QWORDS; ++i)
+            std::swap(slots(a)[i], slots(b)[i]);
+    }
+    std::optional<Held> held_;
+};
+
+// Points per box (content.package rules.points). A setup mode keeps its weekend structures in a vector at +0x190
+// (begin +0x198, end +0x1a0, 0x88 each, the sprint flag at +0x80); a structure keeps its sessions at +0x00 (begin
+// +0x08, end +0x10, 16 bytes each: +0x00 the parsed standings preset or 0, +0x08 the session id, 15-17 = race,
+// race_2, race_3). The game resolves a session's standings label to a pointer into the game setup registry's preset
+// vector (g_Game_Scenarios +0xe0: begin +0xe8, end +0xf0, 0x20 each) when it parses the mode, and the standings
+// recompute reads the pointer live. A preset holds its points levels at +0x08 / +0x10 (0x18 each: +0x00 the
+// fastest lap rule byte, +0x04 the bonus, +0x08 the points column, whose i32 values run from +0x08 to +0x10);
+// level 0 is the full race, then the reduced_points_data rows. Presets carry no label, so the era picker finds the
+// one the boot apply added for the box by its points (find_points_preset) and points the race sessions of every
+// swofty_f1 mode's non-sprint structures at it (PointsSwaps).
+constexpr size_t MODE_WEEKENDS_BEGIN = 0x198, MODE_WEEKENDS_END = 0x1a0, WEEKEND_SIZE = 0x88, WEEKEND_SPRINT = 0x80;
+constexpr size_t WEEKEND_SESSIONS_BEGIN = 0x08, WEEKEND_SESSIONS_END = 0x10, SESSION_SIZE = 0x10, SESSION_ID = 0x08;
+constexpr size_t SCENARIOS_PRESETS_BEGIN = 0xe8, SCENARIOS_PRESETS_END = 0xf0, PRESET_SIZE = 0x20;
+constexpr size_t PRESET_LEVELS_BEGIN = 0x08, PRESET_LEVELS_END = 0x10, LEVEL_SIZE = 0x18;
+constexpr size_t LEVEL_RULE = 0x00, LEVEL_BONUS = 0x04, LEVEL_POINTS = 0x08, COLUMN_BEGIN = 0x08, COLUMN_END = 0x10;
+constexpr uint32_t SESSION_RACE = 15, SESSION_RACE_3 = 17;
+constexpr size_t WEEKENDS_MAX = 16, SESSIONS_MAX = 64, PRESETS_MAX = 4096, LEVELS_MAX = 8, PLACES_MAX = 64;
+
+using Readable = std::function<bool(const void *, size_t)>;
+
+struct PointsWant {
+    std::vector<int32_t> full;
+    std::vector<std::vector<int32_t>> reduced;
+    int32_t bonus = 0;
+    uint8_t rule = 0;
+};
+
+template <class T> inline bool peek(const Readable &ok, const void *base, size_t off, T &out)
+{
+    if (!base)
+        return false;
+    auto *p = static_cast<const uint8_t *>(base) + off;
+    if (!ok(p, sizeof(T)))
+        return false;
+    std::memcpy(&out, p, sizeof(T));
+    return true;
+}
+
+inline bool level_is(const Readable &ok, const uint8_t *level, const std::vector<int32_t> &points, int32_t bonus,
+                     uint8_t rule)
+{
+    uint8_t r = 0;
+    int32_t b = 0;
+    const uint8_t *column = nullptr, *begin = nullptr, *end = nullptr;
+    if (!peek(ok, level, LEVEL_RULE, r) || !peek(ok, level, LEVEL_BONUS, b) || !peek(ok, level, LEVEL_POINTS, column) ||
+        !peek(ok, column, COLUMN_BEGIN, begin) || !peek(ok, column, COLUMN_END, end))
+        return false;
+    if (r != rule || (rule && b != bonus) || end < begin || size_t(end - begin) != points.size() * 4 ||
+        points.size() > PLACES_MAX || !ok(begin, size_t(end - begin)))
+        return false;
+    return !std::memcmp(begin, points.data(), points.size() * 4);
+}
+
+// The parsed preset whose full and reduced points, fastest lap rule and bonus are the box's, or nullptr.
+inline const uint8_t *find_points_preset(const Readable &ok, const uint8_t *begin, const uint8_t *end,
+                                         const PointsWant &want)
+{
+    if (!begin || end <= begin || size_t(end - begin) % PRESET_SIZE || size_t(end - begin) / PRESET_SIZE > PRESETS_MAX)
+        return nullptr;
+    for (const uint8_t *p = begin; p < end; p += PRESET_SIZE) {
+        const uint8_t *lb = nullptr, *le = nullptr;
+        if (!peek(ok, p, PRESET_LEVELS_BEGIN, lb) || !peek(ok, p, PRESET_LEVELS_END, le) || le < lb ||
+            size_t(le - lb) % LEVEL_SIZE)
+            continue;
+        size_t levels = size_t(le - lb) / LEVEL_SIZE;
+        if (!levels || levels > LEVELS_MAX || !level_is(ok, lb, want.full, want.bonus, want.rule))
+            continue;
+        bool same = true;
+        for (size_t i = 1; i < levels && i <= want.reduced.size() && same; i++)
+            same = level_is(ok, lb + i * LEVEL_SIZE, want.reduced[i - 1], want.bonus, want.rule);
+        if (same)
+            return p;
+    }
+    return nullptr;
+}
+
+// The race sessions (race, race_2, race_3) of a setup mode's non-sprint weekend structures that hold a preset.
+inline std::vector<uint64_t *> race_sessions(const Readable &ok, uint8_t *mode)
+{
+    std::vector<uint64_t *> out;
+    uint8_t *wb = nullptr, *we = nullptr;
+    if (!peek(ok, mode, MODE_WEEKENDS_BEGIN, wb) || !peek(ok, mode, MODE_WEEKENDS_END, we) || !wb || we < wb ||
+        size_t(we - wb) % WEEKEND_SIZE || size_t(we - wb) / WEEKEND_SIZE > WEEKENDS_MAX)
+        return out;
+    for (uint8_t *w = wb; w < we; w += WEEKEND_SIZE) {
+        uint8_t sprint = 1;
+        uint8_t *sb = nullptr, *se = nullptr;
+        if (!peek(ok, w, WEEKEND_SPRINT, sprint) || sprint || !peek(ok, w, WEEKEND_SESSIONS_BEGIN, sb) ||
+            !peek(ok, w, WEEKEND_SESSIONS_END, se) || !sb || se < sb || size_t(se - sb) % SESSION_SIZE ||
+            size_t(se - sb) / SESSION_SIZE > SESSIONS_MAX)
+            continue;
+        for (uint8_t *s = sb; s < se; s += SESSION_SIZE) {
+            uint32_t id = 0;
+            uint64_t preset = 0;
+            if (peek(ok, s, SESSION_ID, id) && id >= SESSION_RACE && id <= SESSION_RACE_3 && peek(ok, s, 0, preset) &&
+                preset)
+                out.push_back(reinterpret_cast<uint64_t *>(s));
+        }
+    }
+    return out;
+}
+
+// The race sessions the era picker pointed at a box's preset, with the pointer each held before, so a box without a
+// points rule, a stock box or a career load puts the game's presets back (only where the pointer is still the one
+// written).
+class PointsSwaps {
+public:
+    void swap(uint64_t *session, uint64_t preset)
+    {
+        if (!session)
+            return;
+        Swap *s = find(session);
+        if (!s) {
+            swaps_.push_back({session, *session, preset});
+            s = &swaps_.back();
+        }
+        s->written = preset;
+        *session = preset;
+    }
+
+    size_t put_back()
+    {
+        size_t n = 0;
+        for (auto &s : swaps_) {
+            if (*s.session != s.written)
+                continue;
+            *s.session = s.original;
+            n++;
+        }
+        swaps_.clear();
+        return n;
+    }
+
+    // Drops the swaps without reading or writing the sessions, which the game may have freed.
+    size_t forget()
+    {
+        size_t n = swaps_.size();
+        swaps_.clear();
+        return n;
+    }
+
+    size_t active() const { return swaps_.size(); }
+
+private:
+    struct Swap {
+        uint64_t *session;
+        uint64_t original, written;
+    };
+    Swap *find(const uint64_t *session)
+    {
+        for (auto &s : swaps_)
+            if (s.session == session)
+                return &s;
+        return nullptr;
+    }
+    std::vector<Swap> swaps_;
+};
+
+// The mandatory tyre change per box (content.package rules.mandatory_tyre_change): GameSetupMode +0x8b, +0x98 and
+// +0xa5 hold the race, race_2 and race_3 requirement flags, 13 each, indexed by the race length; a race session's
+// TyreRegulations rule is on when its length's flag is set (read at race session start). The era picker writes all
+// 39 flags of every swofty_f1 mode and puts the game's back (only where the bytes are still the ones written).
+constexpr size_t MODE_TYRE_REQUIREMENTS = 0x8b, TYRE_REQUIREMENT_BYTES = 39;
+
+class TyreChangeSwaps {
+public:
+    void swap(uint8_t *mode, bool required)
+    {
+        if (!mode)
+            return;
+        uint8_t *field = mode + MODE_TYRE_REQUIREMENTS;
+        Swap *s = find(mode);
+        if (!s) {
+            swaps_.push_back({mode, {}, {}});
+            s = &swaps_.back();
+            std::memcpy(s->original, field, TYRE_REQUIREMENT_BYTES);
+        }
+        std::memset(s->written, required ? 1 : 0, TYRE_REQUIREMENT_BYTES);
+        std::memcpy(field, s->written, TYRE_REQUIREMENT_BYTES);
+    }
+
+    size_t put_back()
+    {
+        size_t n = 0;
+        for (auto &s : swaps_) {
+            uint8_t *field = s.mode + MODE_TYRE_REQUIREMENTS;
+            if (std::memcmp(field, s.written, TYRE_REQUIREMENT_BYTES))
+                continue;
+            std::memcpy(field, s.original, TYRE_REQUIREMENT_BYTES);
+            n++;
+        }
+        swaps_.clear();
+        return n;
+    }
+
+    // Drops the swaps without reading or writing the modes, which the game may have freed.
+    size_t forget()
+    {
+        size_t n = swaps_.size();
+        swaps_.clear();
+        return n;
+    }
+
+    size_t active() const { return swaps_.size(); }
+
+private:
+    struct Swap {
+        uint8_t *mode;
+        uint8_t original[TYRE_REQUIREMENT_BYTES], written[TYRE_REQUIREMENT_BYTES];
+    };
+    Swap *find(const uint8_t *mode)
+    {
+        for (auto &s : swaps_)
+            if (s.mode == mode)
+                return &s;
+        return nullptr;
+    }
+    std::vector<Swap> swaps_;
+};
+
 inline const char *holder_text(const void *holder)
 {
     return holder ? *reinterpret_cast<const char *const *>(static_cast<const uint8_t *>(holder) + HOLDER_TEXT) : nullptr;
+}
+
+// Every parsed game setup mode: Sess_Apply_ContentAvailability calls the thunk 0x142a223f0 (-> 0x14d83fa30) with
+// g_Game_Scenarios, which passes the registry's +0x40 to Sess_Load_GameSetupModes (0x142a148f0). That loader parses each
+// game_setup.game_setup_modes row with available=true and stores it by its stat id (the parsed byte +0x80) in a vector
+// {allocator +0x40, begin +0x48, end +0x50, capacity +0x58} of 16-byte entries {allocator, GameSetupMode *}; ids
+// without a row hold a null mode. A game mode's own setup mode list (the vfunc +0x1d0 list the era picker walks) holds
+// only the modes its game_setup_modes field names, so a weekend helper mode that no game mode lists (it must not: a
+// listed mode is offered by the picker) is only found here. Seen in game 2026-11-15: f50_wk (stat id 21) was not in
+// the Grand Prix mode's list.
+constexpr size_t STORE_SETUP_MODES_BEGIN = 0x48;
+constexpr size_t STORE_SETUP_MODES_END = 0x50;
+constexpr size_t STORE_SETUP_MODE_ENTRY = 0x10;
+constexpr size_t STORE_SETUP_MODE_PTR = 8;
+constexpr size_t STORE_SETUP_MODES_MAX = 256; // the stat id is a byte
+
+// Finds the stored setup mode labelled want. readable(p, n) guards every read (the game passes mem::readable). Counts
+// the stored modes in *seen and collects their labels (at most 63 characters each, "?" when unreadable) in *labels
+// when given, for the log line of a helper that is not there.
+template <class Readable>
+uint8_t *find_stored_mode(const uint8_t *registry, const std::string &want, Readable readable, size_t *seen = nullptr,
+                          std::vector<std::string> *labels = nullptr)
+{
+    if (seen)
+        *seen = 0;
+    if (labels)
+        labels->clear();
+    if (!registry || want.empty() || !readable(registry + STORE_SETUP_MODES_BEGIN, 16))
+        return nullptr;
+    auto *begin = *reinterpret_cast<const uint8_t *const *>(registry + STORE_SETUP_MODES_BEGIN);
+    auto *end = *reinterpret_cast<const uint8_t *const *>(registry + STORE_SETUP_MODES_END);
+    if (!begin || end < begin || size_t(end - begin) % STORE_SETUP_MODE_ENTRY ||
+        size_t(end - begin) / STORE_SETUP_MODE_ENTRY > STORE_SETUP_MODES_MAX || !readable(begin, size_t(end - begin)))
+        return nullptr;
+    for (auto *e = begin; e != end; e += STORE_SETUP_MODE_ENTRY) {
+        auto *mode = *reinterpret_cast<uint8_t *const *>(e + STORE_SETUP_MODE_PTR);
+        if (!mode || !readable(mode + MODE_NAME, 8))
+            continue;
+        if (seen)
+            ++*seen;
+        auto *holder = *reinterpret_cast<const uint8_t *const *>(mode + MODE_NAME);
+        const char *text = holder && readable(holder + HOLDER_TEXT, 8) ? holder_text(holder) : nullptr;
+        if (labels) {
+            std::string l;
+            for (size_t i = 0; text && i < 63 && readable(text + i, 1) && text[i]; i++)
+                l += text[i];
+            labels->push_back(l.empty() ? std::string("?") : l);
+        }
+        if (!text || !readable(text, want.size() + 1))
+            continue;
+        if (!strncmp(text, want.c_str(), want.size() + 1))
+            return mode;
+    }
+    return nullptr;
 }
 
 // Sess_Apply_ContentAvailability calls Sess_Load_GameSetupModes (through the thunk 0x142a223f0), which frees every

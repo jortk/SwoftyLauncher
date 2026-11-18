@@ -11,6 +11,15 @@ namespace swofty_core::apply::content {
 
 inline constexpr const char *GARAGE_FOLDER = "2025_asset_groups/swofty_garage/";
 
+inline bool garage_art_enabled(const char *env)
+{
+    return env && env[0] == '1' && !env[1];
+}
+
+inline constexpr const char *GARAGE_FENCE_LINE =
+    "team.garage: left off; a stock streamed copy of a texture the archive holds crashed the texture stream in 1.7.8 to 1.7.10 "
+    "(Ne_Crt_Memcpy in the ERP stream copy). SWOFTY_GARAGE_ART=1 turns it on";
+
 inline std::string garage_game_path(const std::string &id)
 {
     std::string s;

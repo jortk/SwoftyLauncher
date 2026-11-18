@@ -1,0 +1,332 @@
+{
+  "id": "ambient_light",
+  "name": "Ambient Light",
+  "description": "Bloom from bright areas, an optional lens flare, lens dirt over the glow and eye adaptation that eases the exposure towards the scene's average brightness over a second or two.",
+  "params": [
+    {
+      "id": "al_int",
+      "type": "float",
+      "default": 0.5,
+      "min": 0,
+      "max": 4,
+      "step": 0.01,
+      "label": "Bloom intensity",
+      "doc": "How bright the bloom around bright areas is."
+    },
+    {
+      "id": "al_threshold",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Bloom threshold",
+      "doc": "How bright a pixel has to be to bloom; 0 blooms only the brighter half of the picture, 1 only the very brightest areas."
+    },
+    {
+      "id": "al_adaptation",
+      "type": "bool",
+      "default": true,
+      "label": "Eye adaptation",
+      "doc": "Eases the exposure towards the scene's average brightness, the way an eye adapts."
+    },
+    {
+      "id": "al_adapt",
+      "type": "float",
+      "default": 4,
+      "min": 0,
+      "max": 8,
+      "step": 0.01,
+      "label": "Adaptation strength",
+      "doc": "How far the exposure follows the scene's brightness, within about half a stop; 0 is none."
+    },
+    {
+      "id": "al_adapt_base_mult",
+      "type": "float",
+      "default": 0,
+      "min": -1,
+      "max": 2,
+      "step": 0.01,
+      "label": "Adaptation base",
+      "doc": "Extra exposure on top of the adaptation; 0 adds nothing."
+    },
+    {
+      "id": "al_adapt_base_black_lvl",
+      "type": "int",
+      "default": 2,
+      "min": 0,
+      "max": 2,
+      "label": "Adaptation black level",
+      "doc": "How much of the darkest picture is kept out of the adaptation: 0 applies it everywhere, 2 keeps black areas from being lifted into noise."
+    },
+    {
+      "id": "al_adaptive",
+      "type": "bool",
+      "default": false,
+      "label": "Adaptive bloom",
+      "doc": "Makes the bloom stronger when the exposure is raised in dark scenes and weaker when it is lowered."
+    },
+    {
+      "id": "al_dirt",
+      "type": "bool",
+      "default": true,
+      "label": "Lens dirt",
+      "doc": "Smudges over the bloom and lens flare, as on a dirty lens."
+    },
+    {
+      "id": "al_dirt_int",
+      "type": "float",
+      "default": 0.5,
+      "min": 0,
+      "max": 4,
+      "step": 0.01,
+      "label": "Dirt intensity",
+      "doc": "How much extra bloom the dirt catches."
+    },
+    {
+      "id": "al_dirt_ov_int",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 4,
+      "step": 0.01,
+      "label": "Dirt strength",
+      "doc": "How strongly the dirt pattern shows over the bloom and flare."
+    },
+    {
+      "id": "al_dirt_tex",
+      "type": "enum",
+      "values": [
+        "smudges",
+        "specks"
+      ],
+      "default": "smudges",
+      "label": "Dirt pattern",
+      "doc": "Smudges are soft clouds, specks are small spots."
+    },
+    {
+      "id": "al_lens",
+      "type": "bool",
+      "default": false,
+      "label": "Lens flare",
+      "doc": "Adds a lens flare from the bright areas."
+    },
+    {
+      "id": "al_lens_int",
+      "type": "float",
+      "default": 4,
+      "min": 0,
+      "max": 20,
+      "step": 0.01,
+      "label": "Lens flare intensity",
+      "doc": "How strong the lens flare is."
+    },
+    {
+      "id": "al_lens_thresh",
+      "type": "float",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Lens flare threshold",
+      "doc": "How bright a pixel has to be to cause a flare; 0 flares from fairly bright areas, 1 only from the brightest."
+    },
+    {
+      "id": "al_dither",
+      "type": "bool",
+      "default": true,
+      "label": "Dither",
+      "doc": "Adds fine noise that hides banding in the bloom."
+    },
+    {
+      "id": "al_vibrance",
+      "type": "bool",
+      "default": false,
+      "label": "Vibrance",
+      "doc": "Boosts weak colours in the glow."
+    }
+  ],
+  "textures": [
+    {
+      "name": "h",
+      "scale": 0.5,
+      "format": "rgba16f"
+    },
+    {
+      "name": "q",
+      "scale": 0.25,
+      "format": "rgba16f"
+    },
+    {
+      "name": "e",
+      "scale": 0.125,
+      "format": "rgba16f"
+    },
+    {
+      "name": "s",
+      "scale": 0.0625,
+      "format": "rgba16f"
+    },
+    {
+      "name": "ue",
+      "scale": 0.125,
+      "format": "rgba16f"
+    },
+    {
+      "name": "uq",
+      "scale": 0.25,
+      "format": "rgba16f"
+    },
+    {
+      "name": "uh",
+      "scale": 0.5,
+      "format": "rgba16f"
+    },
+    {
+      "name": "flare",
+      "scale": 0.25,
+      "format": "rgba16f"
+    },
+    {
+      "name": "lum",
+      "scale": 0.0625,
+      "format": "rgba16f"
+    },
+    {
+      "name": "lum2",
+      "scale": 0.0078125,
+      "format": "rgba16f"
+    },
+    {
+      "name": "adapt_next",
+      "width": 1,
+      "height": 1,
+      "format": "rgba32f"
+    },
+    {
+      "name": "adapt",
+      "width": 1,
+      "height": 1,
+      "format": "rgba32f",
+      "persistent": true
+    }
+  ],
+  "passes": [
+    {
+      "name": "meter",
+      "shader": "ambient_light.hlsl",
+      "entry": "meter",
+      "output": "lum"
+    },
+    {
+      "name": "meter-2",
+      "shader": "ambient_light.hlsl",
+      "entry": "meter2",
+      "inputs": [
+        "lum"
+      ],
+      "output": "lum2"
+    },
+    {
+      "name": "adapt-calc",
+      "shader": "ambient_light.hlsl",
+      "entry": "adapt_calc",
+      "inputs": [
+        "lum2",
+        "adapt"
+      ],
+      "output": "adapt_next"
+    },
+    {
+      "name": "adapt-store",
+      "shader": "ambient_light.hlsl",
+      "entry": "adapt_store",
+      "inputs": [
+        "adapt_next"
+      ],
+      "output": "adapt"
+    },
+    {
+      "name": "bright",
+      "shader": "ambient_light.hlsl",
+      "entry": "bright",
+      "output": "h"
+    },
+    {
+      "name": "down-1",
+      "shader": "ambient_light.hlsl",
+      "entry": "down",
+      "inputs": [
+        "h"
+      ],
+      "output": "q"
+    },
+    {
+      "name": "down-2",
+      "shader": "ambient_light.hlsl",
+      "entry": "down",
+      "inputs": [
+        "q"
+      ],
+      "output": "e"
+    },
+    {
+      "name": "down-3",
+      "shader": "ambient_light.hlsl",
+      "entry": "down",
+      "inputs": [
+        "e"
+      ],
+      "output": "s"
+    },
+    {
+      "name": "up-1",
+      "shader": "ambient_light.hlsl",
+      "entry": "up",
+      "inputs": [
+        "s",
+        "e"
+      ],
+      "output": "ue"
+    },
+    {
+      "name": "up-2",
+      "shader": "ambient_light.hlsl",
+      "entry": "up",
+      "inputs": [
+        "ue",
+        "q"
+      ],
+      "output": "uq"
+    },
+    {
+      "name": "up-3",
+      "shader": "ambient_light.hlsl",
+      "entry": "up",
+      "inputs": [
+        "uq",
+        "h"
+      ],
+      "output": "uh"
+    },
+    {
+      "name": "flare",
+      "shader": "ambient_light.hlsl",
+      "entry": "flare",
+      "inputs": [
+        "q"
+      ],
+      "output": "flare"
+    },
+    {
+      "name": "apply",
+      "shader": "ambient_light.hlsl",
+      "entry": "apply",
+      "inputs": [
+        "uh",
+        "flare",
+        "adapt"
+      ]
+    }
+  ]
+}

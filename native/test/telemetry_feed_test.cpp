@@ -24,13 +24,13 @@ static void check(bool ok, const char *what)
 static void test_layout()
 {
     check(sizeof(SwoftyTelemetryFeed) == 6920, "feed is 6920 bytes");
-    check(SWOFTY_TELEMETRY_VERSION == 1, "telemetry version is 1");
+    check(SWOFTY_TELEMETRY_VERSION == 2, "telemetry version is 2");
     SwoftyTelemetryFeed f;
     feed_init(&f);
-    check(f.version == 1 && f.size == 6920, "feed_init sets version and size");
-    check(f.session.version == 1, "feed_init tags the session");
-    check(f.cars[0].version == 1 && f.cars[23].version == 1, "feed_init tags every car");
-    check(f.participants[0].version == 1 && f.participants[23].version == 1, "feed_init tags every participant");
+    check(f.version == 2 && f.size == 6920, "feed_init sets version and size");
+    check(f.session.version == 2, "feed_init tags the session");
+    check(f.cars[0].version == 2 && f.cars[23].version == 2, "feed_init tags every car");
+    check(f.participants[0].version == 2 && f.participants[23].version == 2, "feed_init tags every participant");
     check((f.seq & 1) == 0, "feed starts on an even seq");
 }
 
@@ -48,7 +48,7 @@ static void test_copy()
     check(dst.session.total_laps == 58, "feed_copy carries the session");
     check(dst.cars[7].rpm == 12000.0f, "feed_copy carries a car field");
     check(dst.participants[3].position == 4, "feed_copy carries a participant field");
-    check(dst.version == 1 && dst.size == 6920, "feed_copy keeps the header");
+    check(dst.version == 2 && dst.size == 6920, "feed_copy keeps the header");
     check((dst.seq & 1) == 0, "feed_copy leaves an even seq");
     SwoftyTelemetryFeed out;
     check(feed_read(&dst, &out) && out.frame == 42 && out.cars[7].rpm == 12000.0f, "feed_read sees the copy");
@@ -59,10 +59,16 @@ static void test_seqlock()
     static SwoftyTelemetryFeed shared;
     feed_init(&shared);
     std::atomic<bool> stop{false};
+    std::atomic<uint64_t> completed{0};
     const uint64_t rounds = 2000000;
 
+    // Past `rounds` the writer keeps writing, yielding between frames, until the reader has completed a read
+    // while it writes; a reader thread scheduled only after the writer's burst would otherwise read nothing.
     std::thread writer([&] {
-        for (uint64_t n = 1; n <= rounds; n++) {
+        for (uint64_t n = 1; n <= rounds || (completed.load(std::memory_order_relaxed) == 0 && n <= 4 * rounds);
+             n++) {
+            if (n > rounds)
+                std::this_thread::yield();
             feed_begin(&shared);
             shared.frame = n;
             shared.session.total_laps = uint32_t(n);
@@ -82,6 +88,7 @@ static void test_seqlock()
             continue;
         }
         reads++;
+        completed.store(reads, std::memory_order_relaxed);
         uint32_t tag = uint32_t(out.frame);
         if (out.session.total_laps != tag || out.cars[0].lap != tag || out.cars[23].lap != tag ||
             out.participants[23].lap != tag)

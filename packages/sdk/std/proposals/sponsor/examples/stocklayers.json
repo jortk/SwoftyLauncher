@@ -1,0 +1,36 @@
+{
+  "sponsor": {
+    "game/avolo": {
+      "list_tile": "tiles/avolo.png"
+    },
+    "game/monomic": {
+      "name": {
+        "literal": "Monomic Energy"
+      },
+      "my_team": {
+        "fixed": [
+          {
+            "area": "top_nose",
+            "design": "n",
+            "locked": true,
+            "placement": {
+              "2026": {
+                "t": [
+                  0,
+                  0,
+                  2.6583
+                ],
+                "rot": 0,
+                "s": [
+                  0.153,
+                  0.8,
+                  0.153
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

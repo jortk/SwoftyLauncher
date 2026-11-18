@@ -7,8 +7,14 @@
 //! RUNASADMIN layer on the exe's path under `AppCompatFlags\Layers`, per user
 //! (HKCU) or for all users (HKLM). This only reads it; the registry is never
 //! changed.
+//!
+//! An EA app copy's game is started by the EA app, which runs without
+//! administrator rights even when Swofty Launcher has them, so there the
+//! setting can only be unticked; see [`RunAsAdmin`].
 
 use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
 
 use crate::GAME_EXE;
 
@@ -202,7 +208,39 @@ pub(crate) fn windows_tool(program: &str, args: &[&str]) -> Option<String> {
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()?;
-    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+    Some(tool_text(&out.stdout))
+}
+
+/// A Windows tool's piped output as text. Console tools such as reg.exe and
+/// whoami write it in the OEM code page (850, 857, ...), so a folder named
+/// `Yeni klasör` arrives as bytes that are not UTF-8; output that is UTF-8
+/// stays as it is.
+#[cfg(windows)]
+fn tool_text(bytes: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_owned();
+    }
+    const CP_OEMCP: u32 = 1;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn MultiByteToWideChar(code_page: u32, flags: u32, s: *const u8, n: i32, w: *mut u16, wn: i32)
+        -> i32;
+    }
+    let Ok(n) = i32::try_from(bytes.len()) else {
+        return String::from_utf8_lossy(bytes).into_owned();
+    };
+    // SAFETY: bytes is n bytes long, and a null output with size 0 only asks for the length.
+    let len = unsafe { MultiByteToWideChar(CP_OEMCP, 0, bytes.as_ptr(), n, std::ptr::null_mut(), 0) };
+    if len <= 0 {
+        return String::from_utf8_lossy(bytes).into_owned();
+    }
+    let mut wide = vec![0u16; len as usize];
+    // SAFETY: wide holds len u16s, the size the first call returned for the same input.
+    let got = unsafe { MultiByteToWideChar(CP_OEMCP, 0, bytes.as_ptr(), n, wide.as_mut_ptr(), len) };
+    if got <= 0 {
+        return String::from_utf8_lossy(bytes).into_owned();
+    }
+    String::from_utf16_lossy(&wide[..got as usize])
 }
 
 #[cfg(not(windows))]
@@ -255,11 +293,11 @@ pub(crate) fn windows_tool_within(
             Err(e) => return Err(format!("{program}: {e}")),
         }
     };
-    let out = String::from_utf8_lossy(&out.join().unwrap_or_default()).into_owned();
+    let out = tool_text(&out.join().unwrap_or_default());
     if status.success() {
         return Ok(out);
     }
-    let err = String::from_utf8_lossy(&err.join().unwrap_or_default()).into_owned();
+    let err = tool_text(&err.join().unwrap_or_default());
     let first = err
         .lines()
         .chain(out.lines())
@@ -401,6 +439,225 @@ pub fn explain(found: &[AdminLayer], game: &Path) -> String {
             ""
         },
     )
+}
+
+/// The Windows error for a start of a program that has to run as
+/// administrator from a process that doesn't (ERROR_ELEVATION_REQUIRED).
+pub const ELEVATION_REQUIRED: i32 = 740;
+
+pub fn needs_elevation(e: &std::io::Error) -> bool {
+    e.raw_os_error() == Some(ELEVATION_REQUIRED)
+}
+
+/// The EA app's own programs, wherever it is installed.
+pub const EA_APP_EXES: &[&str] = &[crate::ea_app::LAUNCHER_EXE, crate::ea_app::PROCESS];
+
+/// The offline play session launcher's line, in the game folder's loader.log,
+/// when Windows would start F1 25 for it only as administrator.
+pub const STUB_ELEVATION: &str = "CreateProcessW failed, error 740";
+
+/// Whether a loader.log holds the session launcher's [`STUB_ELEVATION`] line.
+pub fn stub_needs_elevation(log: &str) -> bool {
+    log.lines().any(|line| {
+        line.contains("[stub]")
+            && line
+                .split_once(STUB_ELEVATION)
+                .is_some_and(|(_, rest)| !rest.starts_with(|c: char| c.is_ascii_digit()))
+    })
+}
+
+/// Programs Windows won't start for an EA app copy's session because each is
+/// set to run as administrator (error 740). The EA app starts F1 25 and the
+/// session launcher without administrator rights, whether or not Swofty
+/// Launcher has them, so the fix is to untick the setting.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunAsAdmin {
+    /// Each program, as the path to right-click.
+    pub exes: Vec<PathBuf>,
+    /// F1 25 or the session launcher is one of them.
+    pub game: bool,
+}
+
+impl RunAsAdmin {
+    pub const TITLE: &'static str = "A program is set to run as administrator";
+
+    /// The programs in order, each once however its path is spelled.
+    pub fn new(exes: impl IntoIterator<Item = PathBuf>, game: bool) -> Self {
+        let key = |p: &Path| p.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+        let mut out: Vec<PathBuf> = Vec::new();
+        for exe in exes {
+            if !out.iter().any(|o| key(o) == key(&exe)) {
+                out.push(exe);
+            }
+        }
+        Self { exes: out, game }
+    }
+
+    pub fn names(&self) -> Vec<String> {
+        self.exes
+            .iter()
+            .map(|p| {
+                let path = p.to_string_lossy();
+                path.rsplit(['\\', '/']).next().unwrap_or(&path).to_owned()
+            })
+            .collect()
+    }
+
+    pub fn paths(&self) -> Vec<String> {
+        self.exes.iter().map(|p| p.display().to_string()).collect()
+    }
+
+    /// One line for the launcher's status bar.
+    pub fn headline(&self) -> String {
+        match self.names().as_slice() {
+            [name] => format!("Windows won't start {name}: it is set to run as administrator"),
+            names => format!(
+                "Windows won't start {}: they are set to run as administrator",
+                names.join(", ")
+            ),
+        }
+    }
+
+    pub fn text(&self) -> String {
+        let (names, paths) = (self.names(), self.paths());
+        let (what, fix) = match (names.as_slice(), paths.as_slice()) {
+            ([name], [path]) => (
+                format!(
+                    "{name} is set to run as administrator, so Windows won't start it for an EA app session (error 740)."
+                ),
+                format!("Right-click {path}, open {FIX}"),
+            ),
+            _ => (
+                format!(
+                    "These files are set to run as administrator, so Windows won't start them for an EA app session \
+                     (error 740): {}.",
+                    paths.join(", ")
+                ),
+                format!("For each one, right-click it, open {FIX}"),
+            ),
+        };
+        let note = if self.game {
+            format!(" {GAME_NOTE}")
+        } else {
+            String::new()
+        };
+        format!("{what}{note} {fix}")
+    }
+}
+
+const FIX: &str = "Properties > Compatibility and untick \"Run this program as an administrator\", also under \
+                   \"Change settings for all users\". Then press Play again.";
+const GAME_NOTE: &str = "The EA app starts F1 25 without administrator rights, so running Swofty Launcher as administrator doesn't help.";
+
+/// Whether Swofty Launcher and the EA app run as administrator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Elevation {
+    pub launcher: bool,
+    pub ea_app: bool,
+}
+
+impl Elevation {
+    pub fn now() -> Self {
+        let launcher = elevated();
+        let ea_app = match crate::ea_diag::ea_app_elevation() {
+            Some(Some(elevated)) => elevated,
+            // A normal process can't read an elevated one.
+            Some(None) => !launcher,
+            // Swofty starts it with the signed-in user's own rights.
+            None => false,
+        };
+        Self { launcher, ea_app }
+    }
+}
+
+fn admin_on(listings: &[(String, bool)], exe: &Path) -> Vec<AdminLayer> {
+    listings
+        .iter()
+        .flat_map(|(listing, all_users)| matching_with(listing, *all_users, exe, has_run_as_admin))
+        .collect()
+}
+
+/// The run-as-administrator settings on any program named one of `names`.
+fn admin_named(listings: &[(String, bool)], names: &[&str]) -> Vec<PathBuf> {
+    listings
+        .iter()
+        .flat_map(|(listing, _)| parse_reg_query(listing))
+        .filter(|(stored, layers)| {
+            let file = stored.rsplit(['\\', '/']).next().unwrap_or(stored);
+            has_run_as_admin(layers) && names.iter().any(|n| n.eq_ignore_ascii_case(file))
+        })
+        .map(|(stored, _)| PathBuf::from(stored))
+        .collect()
+}
+
+/// What stops an EA app copy's session in `game` before it starts: the
+/// program that hands the EA app the launch link, set to run as administrator
+/// while Swofty Launcher isn't, or, for a modded session, F1 25 or the
+/// session launcher set to while the EA app isn't.
+pub fn ea_blocker(game: &Path, handoff: Option<&Path>, modded: bool) -> Option<RunAsAdmin> {
+    ea_blocker_in(&listings(), game, handoff, modded, Elevation::now)
+}
+
+/// [`ea_blocker`] from the listings given; `elevation` is asked only when a
+/// setting is found.
+pub fn ea_blocker_in(
+    listings: &[(String, bool)],
+    game: &Path,
+    handoff: Option<&Path>,
+    modded: bool,
+    elevation: impl FnOnce() -> Elevation,
+) -> Option<RunAsAdmin> {
+    let starter = handoff.map(|h| admin_on(listings, h)).unwrap_or_default();
+    let session: Vec<AdminLayer> = match modded {
+        true => SESSION_EXES
+            .iter()
+            .flat_map(|exe| admin_on(listings, &game.join(exe)))
+            .collect(),
+        false => Vec::new(),
+    };
+    if starter.is_empty() && session.is_empty() {
+        return None;
+    }
+    let now = elevation();
+    let mut exes = Vec::new();
+    if !starter.is_empty() && !now.launcher {
+        exes.extend(starter.into_iter().map(|l| PathBuf::from(l.exe)));
+        exes.extend(admin_named(listings, EA_APP_EXES));
+    }
+    let game_blocked = !session.is_empty() && !now.ea_app;
+    if game_blocked {
+        exes.extend(session.into_iter().map(|l| PathBuf::from(l.exe)));
+    }
+    (!exes.is_empty()).then(|| RunAsAdmin::new(exes, game_blocked))
+}
+
+/// What a start of `program` that Windows refused with error 740 names: the
+/// program, and the EA app's own programs that are set to run as administrator.
+pub fn refused_start(program: &Path) -> RunAsAdmin {
+    refused_start_in(&listings(), program)
+}
+
+pub fn refused_start_in(listings: &[(String, bool)], program: &Path) -> RunAsAdmin {
+    let named = admin_named(listings, EA_APP_EXES);
+    RunAsAdmin::new(std::iter::once(program.to_path_buf()).chain(named), false)
+}
+
+/// What the session launcher's [`STUB_ELEVATION`] names: the settings on the
+/// exes a modded session in `game` starts, or F1 25 when none can be read.
+pub fn game_refused(game: &Path) -> RunAsAdmin {
+    game_refused_in(&listings(), game)
+}
+
+pub fn game_refused_in(listings: &[(String, bool)], game: &Path) -> RunAsAdmin {
+    let found: Vec<PathBuf> = SESSION_EXES
+        .iter()
+        .flat_map(|exe| admin_on(listings, &game.join(exe)))
+        .map(|l| PathBuf::from(l.exe))
+        .collect();
+    match found.is_empty() {
+        true => RunAsAdmin::new([game.join(GAME_EXE)], true),
+        false => RunAsAdmin::new(found, true),
+    }
 }
 
 #[cfg(windows)]
@@ -862,5 +1119,183 @@ mod tests {
     #[test]
     fn never_blocks_off_windows() {
         assert!(elevation_blocker(Path::new("/games/F1 25")).is_none());
+        if !cfg!(windows) {
+            assert_eq!(ea_blocker(Path::new("/games/F1 25"), None, true), None);
+        }
+    }
+
+    #[test]
+    fn error_740_is_the_one_that_needs_elevation() {
+        assert!(needs_elevation(&std::io::Error::from_raw_os_error(740)));
+        for code in [0, 2, 5, 193, 225, 1223, 4551, 7400] {
+            assert!(
+                !needs_elevation(&std::io::Error::from_raw_os_error(code)),
+                "{code}"
+            );
+        }
+        assert!(!needs_elevation(&std::io::Error::other("740")));
+    }
+
+    #[test]
+    fn reads_the_session_launchers_elevation_line() {
+        let refused = "10:06:01.120 [stub] [offline] session launcher invoked, args: <none>\n\
+                       10:06:01.380 [stub] [offline] CreateProcessW failed, error 740 (ERROR_ELEVATION_REQUIRED): \
+                       Windows will only start F1_25.exe as administrator and the session launcher is not elevated\n";
+        assert!(stub_needs_elevation(refused));
+        assert!(stub_needs_elevation(
+            "[stub] [offline] CreateProcessW failed, error 740\r\n"
+        ));
+        assert!(!stub_needs_elevation(
+            "[stub] [offline] CreateProcessW failed, error 7400\n"
+        ));
+        assert!(!stub_needs_elevation(
+            "[stub] [offline] CreateProcessW failed, error 2\n"
+        ));
+        assert!(!stub_needs_elevation("[core] CreateProcessW failed, error 740\n"));
+        assert!(!stub_needs_elevation(""));
+    }
+
+    const EA_GAME: &str = r"D:\Games\F1 25";
+    const EA_LAUNCHER: &str = r"C:\Program Files\Electronic Arts\EA Desktop\EA Desktop\EALauncher.exe";
+
+    fn ea_listings() -> Vec<(String, bool)> {
+        let user = concat!(
+            "\r\n",
+            "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers\r\n",
+            "    D:\\Games\\F1 25\\F1_25.exe    REG_SZ    ~ RUNASADMIN\r\n",
+            "    C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EALauncher.exe    REG_SZ    ~ RUNASADMIN\r\n",
+            "    C:\\Games\\Other\\other.exe    REG_SZ    ~ RUNASADMIN\r\n",
+        );
+        let machine = concat!(
+            "\r\n",
+            "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers\r\n",
+            "    C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe    REG_SZ    ~ RUNASADMIN\r\n",
+            "    C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\ealauncher.exe    REG_SZ    ~ RUNASADMIN\r\n",
+        );
+        vec![(user.into(), false), (machine.into(), true)]
+    }
+
+    fn at(launcher: bool, ea_app: bool) -> impl FnOnce() -> Elevation {
+        move || Elevation { launcher, ea_app }
+    }
+
+    #[test]
+    fn an_ea_copys_game_set_to_run_as_admin_blocks_however_the_launcher_runs() {
+        let listings = ea_listings();
+        let game = Path::new(EA_GAME);
+        for launcher in [false, true] {
+            let found = ea_blocker_in(&listings, game, None, true, at(launcher, false)).unwrap();
+            assert_eq!(
+                found.exes,
+                [PathBuf::from(r"D:\Games\F1 25\F1_25.exe")],
+                "{launcher}"
+            );
+            assert!(found.game);
+        }
+        assert_eq!(ea_blocker_in(&listings, game, None, true, at(false, true)), None);
+        assert_eq!(
+            ea_blocker_in(&listings, game, None, false, || panic!("nothing to ask about")),
+            None
+        );
+        let text = ea_blocker_in(&listings, game, None, true, at(true, false))
+            .unwrap()
+            .text();
+        assert!(
+            text.starts_with(
+                "F1_25.exe is set to run as administrator, so Windows won't start it for an EA app session \
+                 (error 740). The EA app starts F1 25 without administrator rights, so running Swofty Launcher \
+                 as administrator doesn't help. Right-click D:\\Games\\F1 25\\F1_25.exe, open Properties > \
+                 Compatibility and untick \"Run this program as an administrator\", also under \"Change settings \
+                 for all users\". Then press Play again."
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_handoff_program_set_to_run_as_admin_blocks_an_unelevated_launcher() {
+        let listings = ea_listings();
+        let game = Path::new(EA_GAME);
+        let launcher = Path::new(EA_LAUNCHER);
+        let found = ea_blocker_in(&listings, game, Some(launcher), false, at(false, false)).unwrap();
+        assert_eq!(
+            found.paths(),
+            [
+                EA_LAUNCHER,
+                r"C:\Program Files\Electronic Arts\EA Desktop\EA Desktop\EADesktop.exe",
+            ]
+        );
+        assert!(!found.game);
+        let text = found.text();
+        assert!(
+            text.starts_with("These files are set to run as administrator, so Windows won't start them for an EA app session (error 740): C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EALauncher.exe, C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe. For each one, right-click it, open Properties > Compatibility"),
+            "{text}"
+        );
+        assert!(!text.contains("Swofty Launcher as administrator"), "{text}");
+        assert_eq!(
+            ea_blocker_in(&listings, game, Some(launcher), false, at(true, false)),
+            None
+        );
+        let both = ea_blocker_in(&listings, game, Some(launcher), true, at(false, false)).unwrap();
+        assert_eq!(both.names(), ["EALauncher.exe", "EADesktop.exe", "F1_25.exe"]);
+        assert!(both.game);
+        let unset = Path::new(r"C:\EA\EALauncher.exe");
+        let clean = vec![(
+            "    C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe    REG_SZ    ~ RUNASADMIN\r\n"
+                .to_owned(),
+            false,
+        )];
+        assert_eq!(
+            ea_blocker_in(&clean, game, Some(unset), false, || panic!(
+                "nothing to ask about"
+            )),
+            None
+        );
+    }
+
+    #[test]
+    fn a_refused_start_names_the_program_and_the_ea_apps_settings() {
+        let listings = ea_listings();
+        let r = refused_start_in(&listings, Path::new(EA_LAUNCHER));
+        assert_eq!(r.names(), ["EALauncher.exe", "EADesktop.exe"]);
+        assert!(!r.game);
+        let alone = refused_start_in(&[], Path::new(EA_LAUNCHER));
+        assert_eq!(alone.paths(), [EA_LAUNCHER]);
+        assert_eq!(
+            alone.headline(),
+            "Windows won't start EALauncher.exe: it is set to run as administrator"
+        );
+        assert!(
+            alone
+                .text()
+                .contains(&format!("Right-click {EA_LAUNCHER}, open Properties"))
+        );
+        let game = game_refused_in(&listings, Path::new(EA_GAME));
+        assert_eq!(game.paths(), [r"D:\Games\F1 25\F1_25.exe"]);
+        assert!(game.game);
+        let unread = game_refused_in(&[], Path::new(EA_GAME));
+        assert_eq!(unread.names(), [GAME_EXE]);
+        assert!(unread.game);
+        assert_eq!(
+            r.headline(),
+            "Windows won't start EALauncher.exe, EADesktop.exe: they are set to run as administrator"
+        );
+    }
+
+    #[test]
+    fn a_run_as_admin_failure_round_trips() {
+        let r = RunAsAdmin::new(
+            [
+                PathBuf::from(r"D:\Games\F1 25\F1_25.exe"),
+                PathBuf::from("d:/games/f1 25/f1_25.exe"),
+            ],
+            true,
+        );
+        assert_eq!(r.exes.len(), 1);
+        let json = serde_json::to_string(&crate::launch::Cause::RunAsAdmin(r.clone())).unwrap();
+        assert_eq!(
+            serde_json::from_str::<crate::launch::Cause>(&json).unwrap(),
+            crate::launch::Cause::RunAsAdmin(r)
+        );
     }
 }

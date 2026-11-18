@@ -60,7 +60,6 @@ jobs:
         with:
           path: |
             native/build/zig-cache
-            addons/re-optimization/native/build/zig-cache
           key: zig-${{ runner.os }}-0.16.0-${{ steps.zig-period.outputs.month }}-${{ hashFiles('native/**', 'addons/*/native/**', 'packages/sdk/include/**') }}
           restore-keys: zig-${{ runner.os }}-0.16.0-${{ steps.zig-period.outputs.month }}-
 
@@ -72,7 +71,6 @@ jobs:
           name: native
           path: |
             native/dist/
-            native/bundled/
 
   # The binaries come from main's CI run for the tagged commit (release-binaries.yml, called by ci.yml), which
   # the maintainer waits for before tagging: this job waits for that run while it is still going and takes its
@@ -138,7 +136,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: native
-          path: native
+          path: native/dist
 
       - name: Fetch dxc
         env:
@@ -149,7 +147,7 @@ jobs:
         run: |
           out="swofty-launcher-$TAG-linux-x86_64"
           mkdir -p "$out/bin" "$out/loader" "$out/share/applications" "$out/share/icons/hicolor/256x256/apps" "$out/share/icons/hicolor/512x512/apps" "$out/share/icons/hicolor/scalable/apps"
-          cp target/release/swofty target/release/swofty-launcher dist/swofty-ui/swofty-ui "$out/bin/"
+          cp target/release/swofty target/release/swofty-launcher target/release/swofty-ads dist/swofty-ui/swofty-ui "$out/bin/"
           cp -r native/dist/. "$out/loader/"
           if [ -d dxc ]; then cp -r dxc "$out/dxc"; fi
           cp apps/launcher/assets/net.swofty.ModLauncher.desktop tools/swofty-ui/res/net.swofty.SwoftyUI.desktop "$out/share/applications/"
@@ -185,7 +183,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: native
-          path: native
+          path: native/dist
 
       - name: Fetch dxc
         shell: bash
@@ -276,6 +274,13 @@ jobs:
     if: ${{ !cancelled() && !inputs.dry-run && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.gate.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+          sparse-checkout: |
+            installer
+            tools/release
+
       - uses: actions/download-artifact@v8
         with:
           name: linux
@@ -296,3 +301,23 @@ jobs:
           files: |
             artefacts/swofty-launcher-*
             artefacts/SHA256SUMS
+
+      # The launcher and the installer download from cdn.swofty.net and fall back to GitHub, so a GitHub outage
+      # doesn't stop updates. tools/release/cdn-publish.sh uploads the archives and SHA256SUMS to launcher/<tag>/,
+      # downloads each back to check its SHA-256, copies the installers to launcher/latest/ and only then writes
+      # launcher/latest.json, so a half-uploaded release is never offered. Without the secrets the release stays
+      # on GitHub alone.
+      - name: Publish to the CDN
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ]; then
+            echo "::warning::R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT and R2_BUCKET are not all set, so $TAG is on GitHub only and launchers cannot download it from cdn.swofty.net"
+            exit 0
+          fi
+          PUBLISHED_AT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt) \
+            tools/release/cdn-publish.sh "$TAG" artefacts installer

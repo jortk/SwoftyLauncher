@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <mutex>
@@ -10,9 +11,11 @@ namespace runtime::ev {
 
 inline const char *const EVENT_NAMES[] = {
     SWOFTY_EVENT_SESSION_START, SWOFTY_EVENT_SESSION_END,     SWOFTY_EVENT_RACE_START,        SWOFTY_EVENT_LAP,
+    SWOFTY_EVENT_SESSION_UNLOAD, SWOFTY_EVENT_GARAGE_PARKED_CAR,
     SWOFTY_EVENT_FLAG,          SWOFTY_EVENT_STATE,           SWOFTY_EVENT_SCREEN,            SWOFTY_EVENT_PAUSE,
     SWOFTY_EVENT_RESUME,        SWOFTY_EVENT_RESULTS,         SWOFTY_EVENT_FLOW_STATE,        SWOFTY_EVENT_CAREER_LOADED,
-    SWOFTY_EVENT_CAREER_UNLOADED, SWOFTY_EVENT_CAREER_HUB,    SWOFTY_EVENT_CAREER_STARTING,   SWOFTY_EVENT_CAREER_CONTENT_PRESSED};
+    SWOFTY_EVENT_CAREER_UNLOADED, SWOFTY_EVENT_CAREER_HUB,    SWOFTY_EVENT_CAREER_STARTING,   SWOFTY_EVENT_CAREER_CONTENT_PRESSED,
+    SWOFTY_EVENT_TELEMETRY_OVERTAKE, SWOFTY_EVENT_TELEMETRY_COLLISION, SWOFTY_EVENT_TELEMETRY_RETIREMENT};
 
 inline const char *canonical(const char *name)
 {
@@ -57,6 +60,8 @@ struct NoProfile {
 // Each callback runs inside a Profile scope built from the probe id set with set_probe.
 template <class Profile = NoProfile> class Dispatcher {
 public:
+    bool garage_listened() const { return garage_subs_.load(std::memory_order_relaxed) != 0; }
+
     int subscribe(uint64_t owner, const char *name, SwoftyEventFn fn, void *user, uint32_t *token,
                   bool *queued = nullptr)
     {
@@ -66,6 +71,8 @@ public:
         std::lock_guard<std::mutex> g(lock_);
         uint32_t t = ++next_;
         subs_.push_back({t, owner, canon, fn, nullptr, user, 0});
+        if (!std::strcmp(canon, SWOFTY_EVENT_GARAGE_PARKED_CAR))
+            ++garage_subs_;
         if (token)
             *token = t;
         if (queued)
@@ -123,7 +130,7 @@ public:
         std::lock_guard<std::mutex> g(lock_);
         for (size_t i = 0; i < subs_.size(); i++)
             if (subs_[i].token == token) {
-                subs_.erase(subs_.begin() + i);
+                remove_at(i);
                 return SWOFTY_ASSET_OK;
             }
         return SWOFTY_ASSET_INVALID;
@@ -135,7 +142,7 @@ public:
         size_t before = subs_.size();
         for (size_t i = subs_.size(); i-- > 0;)
             if (subs_[i].owner == owner)
-                subs_.erase(subs_.begin() + i);
+                remove_at(i);
         return before - subs_.size();
     }
 
@@ -216,6 +223,13 @@ public:
     }
 
 private:
+    void remove_at(size_t i)
+    {
+        if (subs_[i].name && !std::strcmp(subs_[i].name, SWOFTY_EVENT_GARAGE_PARKED_CAR))
+            --garage_subs_;
+        subs_.erase(subs_.begin() + i);
+    }
+    std::atomic<unsigned> garage_subs_{};
     std::mutex lock_;
     std::vector<Sub> subs_;
     Phase phase_ = Phase::pending;

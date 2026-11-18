@@ -81,7 +81,8 @@ void declare(Store &st)
     };
     static const Reg regs[] = {{CONTENT, "boot", "data_group"}, {HUB_TAB, "read", "data_group"},
                                {WIZARD, "content", "data_group"}, {CHARACTER, "content", "data_group"},
-                               {STRING, "read", nullptr},        {OPTION, "read", "value"}};
+                               {STRING, "read", nullptr},        {OPTION, "read", "value"},
+                               {HUD_ELEMENT, "boot", nullptr}};
     for (auto &r : regs)
         if (!st.declared(r.name))
             st.declare(r.name, schema_of(r.name, r.applies, r.required), true);

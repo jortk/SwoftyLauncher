@@ -27,6 +27,9 @@
             fontconfig
             freetype
             alsa-lib
+            gtk3
+            webkitgtk_4_1
+            libsoup_3
           ];
         in
         {
@@ -49,6 +52,8 @@
             buildInputs = runtimeLibs ++ [ pkgs.zstd pkgs.openssl ];
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
             LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+            # HTTPS in the swofty-ads helper's WebKitGTK.
+            GIO_EXTRA_MODULES = "${pkgs.glib-networking}/lib/gio/modules";
           };
         }
       );

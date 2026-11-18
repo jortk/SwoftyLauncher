@@ -2,10 +2,10 @@
   "schema_version": 1,
   "id": "swofty.core",
   "name": "SwoftyMod",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "author": "Swofty",
   "description": "Adds core functionality for addon loading and customisation in Swofty Launcher",
-  "license": "AGPL-3.0-or-later",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "kind": ["ui", "native"],
   "compat": { "game": "f1_25", "game_builds": [">=25251167"], "seasons": [] },
   "options": [
@@ -16,6 +16,24 @@
       "description": "Show the \"Launched with Swofty Launcher\" panel on the home screen.",
       "default": true,
       "binds": "native",
+      "multiplayer": "cosmetic"
+    },
+    {
+      "id": "split_season_picker",
+      "type": "toggle",
+      "label": "Split the season picker",
+      "description": "Split the Grand Prix, Time Trial and split-screen season picker into Built In and Addons rows. Off keeps the game's single row, without addon seasons. Applies the next time you press Play.",
+      "default": true,
+      "binds": "native",
+      "multiplayer": "cosmetic"
+    },
+    {
+      "id": "startup_intro",
+      "type": "toggle",
+      "label": "Swofty startup intro",
+      "description": "Play the 6 second Swofty logo intro in place of the EA SPORTS startup video. Another addon that replaces the startup video takes its place. Applies the next time you press Play.",
+      "default": true,
+      "binds": "db",
       "multiplayer": "cosmetic"
     }
   ],

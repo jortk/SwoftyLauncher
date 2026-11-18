@@ -1,0 +1,14 @@
+{
+  "sponsor": {
+    "abs": {
+      "$comment": "a Path never starts with a slash",
+      "name": "lng_sponsor_abs",
+      "logo": "/logo.png",
+      "designs": [
+        {
+          "key": "p"
+        }
+      ]
+    }
+  }
+}

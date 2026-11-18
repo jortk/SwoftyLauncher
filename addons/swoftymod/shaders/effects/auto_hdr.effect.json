@@ -1,0 +1,183 @@
+{
+  "id": "auto_hdr",
+  "name": "Auto HDR",
+  "description": "Expands the picture towards HDR. In HDR the highlights are stretched towards the display's peak. In SDR the same expansion runs and the result is tonemapped back, so white stays white while shadows deepen, highlights roll off with a shoulder and get richer colour.",
+  "params": [
+    {
+      "id": "auto_hdr_max_nits",
+      "type": "float",
+      "default": 600,
+      "min": 80,
+      "max": 2000,
+      "step": 1,
+      "label": "Peak brightness (nits)",
+      "doc": "The brightest the expanded picture gets before the highlight shoulder holds it."
+    },
+    {
+      "id": "auto_hdr_method",
+      "type": "enum",
+      "values": [
+        "highlights",
+        "full"
+      ],
+      "default": "highlights",
+      "label": "Expansion method",
+      "doc": "Highlights expands only the bright parts of the picture; full expands the whole tone range."
+    },
+    {
+      "id": "auto_hdr_shoulder_pow",
+      "type": "float",
+      "default": 4,
+      "min": 1,
+      "max": 12,
+      "step": 0.1,
+      "label": "Shoulder sharpness",
+      "doc": "How abruptly the highlight shoulder bends; higher is a harder knee."
+    },
+    {
+      "id": "auto_hdr_shoulder_start_alpha",
+      "type": "float",
+      "default": 0.6,
+      "min": 0.05,
+      "max": 1,
+      "step": 0.01,
+      "label": "Shoulder start",
+      "doc": "Where the highlight shoulder begins, as a fraction of the peak brightness; in SDR as a fraction of white."
+    },
+    {
+      "id": "black_floor_luminance",
+      "type": "float",
+      "default": 0.0001,
+      "min": 0,
+      "max": 0.01,
+      "step": 1e-06,
+      "label": "Black floor",
+      "doc": "Luminance below this is treated as black and left alone."
+    },
+    {
+      "id": "extra_hdr_saturation",
+      "type": "float",
+      "default": 1,
+      "min": 0,
+      "max": 3,
+      "step": 0.01,
+      "label": "HDR saturation",
+      "doc": "Extra colour strength on HDR displays; 1 leaves it as it is."
+    },
+    {
+      "id": "hdr_highlights_shoulder_start_alpha",
+      "type": "float",
+      "default": 1,
+      "min": 0.05,
+      "max": 1,
+      "step": 0.01,
+      "label": "HDR shoulder start",
+      "doc": "Where the display's peak brightness shoulder begins, as a fraction of that peak; 1 only prevents going over."
+    },
+    {
+      "id": "hdr_peak_white",
+      "type": "float",
+      "default": 1000,
+      "min": 100,
+      "max": 10000,
+      "step": 1,
+      "label": "HDR display peak (nits)",
+      "doc": "The display's peak brightness on HDR displays."
+    },
+    {
+      "id": "hdr_source_peak_white",
+      "type": "float",
+      "default": 142,
+      "min": 80,
+      "max": 1000,
+      "step": 1,
+      "label": "HDR source peak (nits)",
+      "doc": "The brightest the game's own HDR picture gets; this level is the top of the range that is expanded."
+    },
+    {
+      "id": "hdr_tonemap",
+      "type": "bool",
+      "default": true,
+      "label": "HDR tonemap",
+      "doc": "Rolls the expanded picture off smoothly at the display's peak brightness on HDR displays."
+    },
+    {
+      "id": "highlight_saturation",
+      "type": "float",
+      "default": 1.2,
+      "min": 0,
+      "max": 3,
+      "step": 0.01,
+      "label": "Highlight saturation",
+      "doc": "Colour strength in the highlights after expansion; 1 leaves it as it is."
+    },
+    {
+      "id": "inverse_tonemap_color_conservation",
+      "type": "float",
+      "default": 0.6,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "label": "Colour conservation",
+      "doc": "0 expands each colour channel on its own, 1 expands the luminance and keeps the colour ratios."
+    },
+    {
+      "id": "inverse_tonemap_method",
+      "type": "enum",
+      "values": [
+        "reinhard",
+        "power"
+      ],
+      "default": "reinhard",
+      "label": "Inverse tonemap",
+      "doc": "The curve that expands the picture: an inverse Reinhard tonemapper, or a power curve."
+    },
+    {
+      "id": "output_white_level_nits",
+      "type": "float",
+      "default": 106,
+      "min": 40,
+      "max": 400,
+      "step": 1,
+      "label": "Paper white (nits)",
+      "doc": "The brightness SDR white is shown at."
+    },
+    {
+      "id": "shadow_tuning",
+      "type": "float",
+      "default": 1.3,
+      "min": 0.3,
+      "max": 3,
+      "step": 0.01,
+      "label": "Shadow tuning",
+      "doc": "1 leaves the shadows alone; above 1 deepens everything darker than mid grey, down to half its brightness at most, and mid grey stays where it is; below 1 lifts them."
+    },
+    {
+      "id": "source_hdr_white_level_nits",
+      "type": "float",
+      "default": 80,
+      "min": 40,
+      "max": 400,
+      "step": 1,
+      "label": "HDR source white (nits)",
+      "doc": "The brightness the game's own HDR picture shows white at."
+    },
+    {
+      "id": "tonemapper_white_level",
+      "type": "float",
+      "default": 2.67,
+      "min": 1,
+      "max": 8,
+      "step": 0.01,
+      "label": "Expansion white",
+      "doc": "How many times brighter than white the expansion takes the brightest part of the picture."
+    }
+  ],
+  "passes": [
+    {
+      "name": "auto_hdr",
+      "shader": "auto_hdr.hlsl",
+      "entry": "effect"
+    }
+  ]
+}

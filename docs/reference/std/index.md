@@ -121,13 +121,14 @@ Each entry names the header, the `SwoftyApi` member and its API version, the fea
 
 - **Hooking the game**
   - **[Mixin API](./mixin)** (`swofty/mixin.hpp`): bindings, `SWOFTY_WRAP` and the other mixin macros, chains, init and per-object fields. `register_mixins` and `resolve`, API 2; `hook`; the game thread that reaches the hooked instruction.
-  - **[Memory](./memory)** (`swofty/mem.hpp`): guarded reads of game memory: `read`, `in_image`, `object_like`, `c_string`. Header only, no table, any API version; any thread.
+  - **[Memory](./memory)** (`swofty/mem.hpp`): guarded reads of game memory: `read`, `in_image`, `object_like`, `c_string`. Header only; the core export `SwoftyCoreMem` when the core has it, any API version; any thread.
 - **Your addon's own state**
   - **[Settings](./settings)** (`swofty/mixin.hpp`): read your manifest `options` and react when the player changes one. `setting` and `watch_setting`, API 3; `options`; the flow thread.
   - **[Logging](./logging)** (`swofty/mixin.hpp`): `swofty::log` writes to `swofty/loader.log`. `log`, API 1; `log`; any thread.
   - **[Storage](./storage)** (`swofty/storage.hpp`): read and write files under `swofty/addons/<id>/`. `storage`, API 5; feature `storage` (stable); the caller's thread.
 - **The game's state**
   - **[Events](./events)** (`swofty/events.hpp`): lifecycle, flow and career events, and a per-frame tick. `events`, API 5; feature `events` (stable); the flow thread.
+  - **[Live state](./live)** (`swofty/live.hpp`): every car, the classification, gaps, pit state and turn numbers read from the game's memory. The core export `SwoftyCoreLive`; feature `telemetry` (experimental); any thread.
   - **[Telemetry](./telemetry)** (`swofty/telemetry.hpp`): live car, session and participant reads. `telemetry`, API 5; feature `telemetry` (experimental); the flow thread.
   - **[Database read](./db)** (`swofty/db.hpp`): read values and walk tables of the game database. `db`, API 5; feature `db` (stable); the caller's thread.
   - **[Career](./career)** (`swofty/career.hpp`): flow states, the running career, its components, the game bus and career-mode blocks. `career`, API 6 (`block` and `unblock` 7); feature `career` (stable); the flow thread.
@@ -159,6 +160,7 @@ packages/sdk/include/
   swofty/events.hpp         lifecycle events and the frame tick
   swofty/overlay.hpp        the 2D overlay
   swofty/telemetry.hpp      live car and session reads
+  swofty/live.hpp           live car, session, order and turn reads from memory
   swofty/db.hpp             game-database reads
   swofty/storage.hpp        addon storage
   swofty/career.hpp         flow states, the running career, its components, the game bus and career-mode blocks
@@ -170,6 +172,7 @@ packages/sdk/include/
   swofty/career_wizard.hpp  per-career new-career wizard control
   swofty/era.hpp            boxes in the Addons row of the Grand Prix / Time Trial era picker
   swofty/hud.hpp            toasts in the race HUD's own notification
+  swofty/view.hpp           the game's pause reason mask: paused(), pause_reasons()
   swofty/hub.hpp            Team HQ tabs (not in the template's native/include/)
   swofty/mem.hpp            guarded memory reads: read, in_image, object_like, c_string
   swofty/assets.hpp         runtime asset loading
@@ -209,7 +212,7 @@ A feature is a switch in the core. A stable feature is always on. An experimenta
 ```
 
 - **Stable:** `events`, `storage`, `db`, `lang`, `career`, `popup`.
-- **Experimental:** `overlay`, `telemetry`. An addon turns `overlay` on with `"experimental_features": ["overlay"]` in its [manifest](/reference/addons/manifest).
+- **Experimental:** `overlay`, `telemetry`. An addon turns `overlay` on with `"experimental_features": ["overlay"]` and `telemetry` with `"experimental_features": ["telemetry"]` in its [manifest](/reference/addons/manifest).
 - `hook`, `options` and `log` name the mixin, settings and logging members of `SwoftyApi`. No switch turns them off.
 
 ## Threads
@@ -240,5 +243,5 @@ swofty/events.hpp, overlay.hpp, telemetry.hpp, db.hpp, storage.hpp   5
 swofty/career.hpp                                        6 (block and unblock: 7)
 swofty/popup.hpp                                         7
 swofty/lang.hpp                                          8
-swofty/mem.hpp                                           none: it needs no table
+swofty/mem.hpp                                           none: it needs no SwoftyApi table
 ```

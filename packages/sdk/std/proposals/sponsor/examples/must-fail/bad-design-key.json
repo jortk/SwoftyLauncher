@@ -1,0 +1,14 @@
+{
+  "sponsor": {
+    "badkey": {
+      "$comment": "design keys are p, n, d3..d12 or s1..s9",
+      "name": "lng_sponsor_badkey",
+      "logo": "logo.png",
+      "designs": [
+        {
+          "key": "primary"
+        }
+      ]
+    }
+  }
+}

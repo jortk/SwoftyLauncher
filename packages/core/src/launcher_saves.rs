@@ -32,9 +32,8 @@ pub const OFF_ENV: &str = "SWOFTY_LAUNCHER_SAVES";
 pub const EA_NOTE: &str =
     "launcher saves are not available on the EA copy yet; this session uses the EA copy's own saves";
 pub const EA_DIR: &str = "ea/profile";
-/// The EA copy's launcher store, import and export are written and tested, and stay off until the
-/// core's EA storage backend lands.
-pub const EA_ENABLED: bool = false;
+/// The EA copy's launcher store, import and export; the core serves the EA save device from it.
+pub const EA_ENABLED: bool = true;
 
 pub fn root(data: &Path) -> PathBuf {
     data.join(DIR)
@@ -65,6 +64,54 @@ pub fn store_for(data: &Path, profile: &str, game_save: &Location) -> Option<Loc
     }
 }
 
+/// Why a Play uses the game copy's own save instead of the profile's launcher save.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Why {
+    UnsupportedBuild(String),
+    Vanilla,
+    LauncherSavesOff,
+    EaCopy,
+    SteamOnce,
+}
+
+/// The save a Play runs on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Area {
+    Launcher,
+    Own(Why),
+}
+
+/// What decides the save area of one Play.
+#[derive(Debug, Clone, Copy)]
+pub struct Choice<'a> {
+    pub build_blocked: Option<&'a str>,
+    pub vanilla: bool,
+    pub profile_uses_launcher_saves: bool,
+    pub steam_saves_once: bool,
+    pub layout: Layout,
+}
+
+/// The one decision between the profile's launcher save and the copy's own save. `swofty run` acts on
+/// it and the launcher's play bar shows it.
+pub fn area(c: Choice<'_>) -> Area {
+    if let Some(version) = c.build_blocked {
+        return Area::Own(Why::UnsupportedBuild(version.to_owned()));
+    }
+    if c.vanilla {
+        return Area::Own(Why::Vanilla);
+    }
+    if !c.profile_uses_launcher_saves {
+        return Area::Own(Why::LauncherSavesOff);
+    }
+    if !supported(c.layout) {
+        return Area::Own(Why::EaCopy);
+    }
+    if c.steam_saves_once {
+        return Area::Own(Why::SteamOnce);
+    }
+    Area::Launcher
+}
+
 /// Whether launcher saves can be used with a copy whose save is `layout`.
 pub fn supported(layout: Layout) -> bool {
     match layout {
@@ -78,8 +125,9 @@ pub fn has_files(loc: &Location) -> bool {
 }
 
 /// The save the launcher copies in: the active copy's own, when launcher saves work with that copy.
-pub fn steam_source(data: &Path) -> Option<Location> {
-    Location::active(data).filter(|l| supported(l.layout))
+pub fn steam_source(data: &Path) -> (Option<Location>, Vec<String>) {
+    let (loc, tried) = Location::active_search(data);
+    (loc.filter(|l| supported(l.layout)), tried)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,9 +178,12 @@ fn stage_copy(from: &Path, to: &Path) -> Result<()> {
             true => Ok(()),
             false => Err(Error::Other(format!("{} did not copy cleanly", tmp.display()))),
         })
+        .and_then(|()| crate::sync_file(&tmp))
         .and_then(|()| std::fs::rename(&tmp, to).map_err(io_err(to)));
     if done.is_err() {
         std::fs::remove_file(&tmp).ok();
+    } else {
+        crate::sync_dir(to.parent());
     }
     done
 }
@@ -161,6 +212,7 @@ pub fn seed(data: &Path, profile: &str, from: &Location, reason: Reason, now: i6
     if !has_files(from) {
         return Ok(Seeded::NoSource);
     }
+    crate::save_stall::refuse(data, from)?;
     let (files, bytes) = copy_files(from, &to)?;
     let meta = Meta::new(reason)
         .profile(profile)
@@ -209,7 +261,10 @@ pub fn rename_in_marker(data: &Path, from: &str, to: &str) -> Result<()> {
     crate::write_json(&marker_path(data), &m)
 }
 
-/// Move the vaults of launcher profile `from` to the names for `to`.
+/// Move the vaults of launcher profile `from` to the names for `to`. A vault already under `to`'s name
+/// is a deleted profile's (deleting a profile keeps its vault): it moves aside to
+/// `<name>.deleted.<unix time>` first, so the renamed profile shows its own history and the deleted
+/// profile's stays in the vault under a name no profile can have.
 pub fn rename_vaults(data: &Path, from: &str, to: &str) -> Result<()> {
     for (old, new) in [
         (Location::launcher(data, from), Location::launcher(data, to)),
@@ -217,11 +272,38 @@ pub fn rename_vaults(data: &Path, from: &str, to: &str) -> Result<()> {
     ] {
         let old = Vault::root(data).join(&old.source);
         let new = Vault::root(data).join(&new.source);
-        if old.is_dir() && !new.exists() {
-            std::fs::rename(&old, &new).map_err(io_err(&old))?;
+        if !old.is_dir() || old == new {
+            continue;
+        }
+        let aside = new.symlink_metadata().is_ok().then(|| deleted_vault_name(&new));
+        if let Some(aside) = &aside {
+            crate::with_retry(&new, || std::fs::rename(&new, aside))?;
+        }
+        if let Err(e) = crate::with_retry(&old, || std::fs::rename(&old, &new)) {
+            if let Some(aside) = &aside {
+                std::fs::rename(aside, &new).ok();
+            }
+            return Err(e);
         }
     }
     Ok(())
+}
+
+/// A free name beside `vault` for the vault of a deleted profile: `<name>.deleted.<unix time>`.
+fn deleted_vault_name(vault: &Path) -> PathBuf {
+    let name = vault
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let stamp = crate::vault::now();
+    let mut aside = vault.with_file_name(format!("{name}.deleted.{stamp}"));
+    let mut n = 1;
+    while aside.symlink_metadata().is_ok() {
+        aside = vault.with_file_name(format!("{name}.deleted.{stamp}-{n}"));
+        n += 1;
+    }
+    aside
 }
 
 /// Whether the first-start import has not yet found a Steam save to read.
@@ -251,22 +333,43 @@ pub fn mark_seen(data: &Path) -> Result<()> {
 /// empty store, snapshot each in the vault, and record that it ran so it never repeats on its own. A
 /// running game defers it to the next start, and a start that finds no Steam save to read records
 /// nothing, so the next start tries again; the Steam save is only read.
-pub fn first_start_import(data: &Path, profiles: &[String], running: Running, now: i64) -> Vec<String> {
+pub fn first_start_import(
+    data: &Path,
+    profiles: &[String],
+    running: Running,
+    now: i64,
+    log_miss: bool,
+) -> Vec<String> {
     let config = crate::store::Store::new(data.to_path_buf()).config();
     if crate::copies::find_active(&config).is_some_and(|c| c.source == crate::install::Source::EaApp) {
         return vec![
             "saves: the import into the launcher saves is only for Steam copies; the active copy is from the EA app, so nothing is imported and it is not retried".into(),
         ];
     }
-    first_start_import_from(data, profiles, || steam_source(data), running, now)
+    first_start_import_from(data, profiles, || steam_source(data), running, now, log_miss)
+}
+
+/// Whether profile `profile` has to play on Steam's saves for now: the first-start import has not found
+/// a Steam save yet and the profile's launcher save is empty, so redirecting the game to it would start
+/// a new profile beside a Steam save the launcher could not find. EA app copies have no Steam save.
+pub fn steam_save_pending(data: &Path, profile: &str) -> bool {
+    if !import_pending(data) || profile == crate::profile::VANILLA {
+        return false;
+    }
+    let config = crate::store::Store::new(data.to_path_buf()).config();
+    if crate::copies::find_active(&config).is_some_and(|c| c.source == crate::install::Source::EaApp) {
+        return false;
+    }
+    !has_files(&Location::launcher(data, profile))
 }
 
 pub fn first_start_import_from(
     data: &Path,
     profiles: &[String],
-    source: impl FnOnce() -> Option<Location>,
+    source: impl FnOnce() -> (Option<Location>, Vec<String>),
     running: Running,
     now: i64,
+    log_miss: bool,
 ) -> Vec<String> {
     if marker_path(data).exists() {
         return Vec::new();
@@ -278,12 +381,18 @@ pub fn first_start_import_from(
     let mut done = Vec::new();
     let note;
     let mut found = false;
-    match source() {
+    let (from, tried) = source();
+    match from {
         None => {
             note = "no Steam save of the active copy".to_owned();
             out.push(format!(
-                "saves: no Steam save found to import into the launcher saves ({note}); profiles start with empty launcher saves, and the import is tried again at the next start"
+                "saves: no Steam save found to import into the launcher saves ({note}); these profiles play on Steam's saves until an import finds one, and the import is tried again quietly"
             ));
+            out.extend(
+                tried
+                    .iter()
+                    .map(|t| format!("saves: looked for the Steam save: {t}")),
+            );
         }
         Some(from) => {
             note = format!("imported from {}", from.dir.display());
@@ -311,7 +420,10 @@ pub fn first_start_import_from(
         }
     }
     if !found {
-        return out;
+        return match log_miss {
+            true => out,
+            false => Vec::new(),
+        };
     }
     let m = Marker {
         at: now,
@@ -348,6 +460,7 @@ pub fn import(
             from.dir.display()
         )));
     }
+    crate::save_stall::refuse(data, from)?;
     let vault = Vault::of(data, &to)?;
     if has_files(&to) {
         vault.snapshot(
@@ -411,6 +524,7 @@ pub fn export(
             "the launcher saves of profile {profile} are empty; there is nothing to export"
         )));
     }
+    crate::save_stall::refuse(data, &from)?;
     let lv = Vault::of(data, &from)?;
     let id = match lv.snapshot(
         &from,

@@ -42,6 +42,8 @@ struct Package {                                   // a GP/TT season build: an e
     Keyed<Team, &Team::key> teams;                 // the grid, matched by key: p.teams.at("ferrari")
     sessions::Rules rules;                         // the box's points, DRS, tyre classes and rules, applied at session load
     std::string setup_mode = "swofty_f1";          // shared by every box; your own only for a different shape at boot
+    std::string leaderboard = "box";               // since 1.2: the list's Time Trial leaderboard (see Leaderboards)
+    bool virtual_list = false;                     // since 1.3: the list takes no stat id and no setup mode slot (see Virtual lists)
     StatId stat_id = StatId::automatic;            // the entrant list's id
 };
 
@@ -55,6 +57,7 @@ struct EraBox {                                    // an entry in the GP/TT era 
     std::string image;                             // "#overrides.home_screen.tiles_solo_6x6[cs_f1_2017]"
     int order = 0;                                 // its place in the Addons row
     TimeTrial time_trial;                          // since 1.1: its Time Trial list
+    std::optional<EraOnly> only;                   // since 1.2: grand_prix or time_trial keeps it off the other picker
 };
 
 inline Registry<Package> packages{"content.package", { .applies = Applies::content }};   // its entrant list rows are added at boot
@@ -371,7 +374,7 @@ The box's track list shows the season's real calendar first, in round order: the
 
 A track that doesn't fit is left out of that box. The track select screen's list builder needs reverse engineering. Until it's understood, the screen shows every track in the base in the game's own order, and a guard stops a track that doesn't fit before the session loads.
 
-Each box also has its own view of each track in `tracks::per_package`, keyed `<package>/<track>`: whether it's offered, its place under More tracks, and per-track data for that box only. An empty field comes from the base track data. In 1.6.5 the core applies a box's `fuel`; its other fields are stored. `fuel.burn_per_lap` is the track's fuel-per-lap figure for the MFD fuel delta, the fuel strategy and refuelling; the car's real burn comes from its power unit (see [What `burn_per_lap` changes](/std/systems/tracks#what-burn-per-lap-changes)).
+Each box also has its own view of each track in `tracks::per_package`, keyed `<package>/<track>`: whether it's offered, its place under More tracks, and per-track data for that box only. An empty field comes from the base track data. The core applies a box's `fuel` and `pit.speed_limit`; its other fields are stored. `fuel.burn_per_lap` is the track's fuel-per-lap figure for the MFD fuel delta, the fuel strategy and refuelling; the car's real burn comes from its power unit (see [What `burn_per_lap` changes](/std/systems/tracks#what-burn-per-lap-changes)).
 
 Classic Seasons 2016 to 2024 each register the season's real calendar and name it in the package, optionally: a round at a venue no stock track provides, such as Sochi in 2017, is dropped until a track addon provides it (see [A calendar that uses it](/std/systems/tracks#a-calendar-that-uses-it-optionally)).
 
@@ -428,7 +431,7 @@ tracks::per_package.layer(where<tracks::PackageTrack>([=](const tracks::PackageT
 
 ## Rules per box
 
-Every Grand Prix and Time Trial box shares the `swofty_f1` setup mode. A **setup mode** is the game's rule set a weekend runs under, and the core narrows `swofty_f1` to the box the player pressed. Each box's points, DRS, tyre classes and rules (`content::Package::rules`) apply when a session loads in that box, and every other box keeps its own. See [Sessions](/std/systems/sessions). A box's DRS rule (`rules.drs`) applies from 1.6.4: [DRS per box](/std/systems/power-units#drs-per-box).
+Every Grand Prix and Time Trial box shares the `swofty_f1` setup mode. A **setup mode** is the game's rule set a weekend runs under, and the core narrows `swofty_f1` to the box the player pressed. Each box's points, DRS, tyre classes and rules (`content::Package::rules`) apply when a session loads in that box, and every other box keeps its own. See [Sessions](/std/systems/sessions). A box's DRS rule (`rules.drs`) applies from 1.6.4: [DRS per box](/std/systems/power-units#drs-per-box). A box's tyre warmer rule (`rules.tyre_warmers`, `content.package` 1.4) applies the same way: pressing the box writes it into `swofty_f1`'s `has_tyre_warmers`, and a box without the rule, or a stock box, puts the mode's own setting back. `content.package` 1.5 adds `rules.race_time_limit_s` (the race time limit in seconds, written into `swofty_f1`'s `race_time_limit_in_seconds`) and `rules.weekend_mode` (the name of a `game_setup_modes` row: pressing the box exchanges that row's weekend options, its practice, qualifying and race groups and the length options they offer, with `swofty_f1`'s, together with the row's `options_tag`, so the weekend menu offers only the values that tag's `options_system` restrictions leave; the next press of another box or a stock box exchanges them back). A row's `available_in` lists map a chosen menu value to a session group; they don't filter the menu. The helper row has to exist at boot, from the game data or an addon's database rows; it does not need to be listed in any game mode or championship (don't list it: a listed mode is offered by the picker). The game parses a setup mode into its store only when the row's `available` is true, and marks it true at startup only for modes an available game mode lists, so the core sets `available` to true on the row a package's `rules.weekend_mode` names at boot (one `[content]` line), and the era picker finds the helper in that store. When the helper is missing at a box press, the `[weekend]` line names the modes the store holds. A box whose helper row is missing keeps `swofty_f1`'s own weekend and the log says so (`[weekend]`). A box's fuel rules (`rules.refuelling`, `race_fuel_kg`, and from `content.package` 1.5 `refuel_stint_kg`, `quali_fuel_kg`, `race_start_fuel_from_quali` and `race_tyre_change`) are played by the core during the box's sessions: [Fuel rules per box](/std/systems/sessions#fuel-rules-per-box). A box's safety car rule (`rules.safety_car`, `content.package` 1.5: `off`, `reduced`, `standard` or `increased`) sets the game's safety car option when the box is pressed, so a 1959 box races without a safety car. Another box press, or a stock box, puts the player's value back when the option still holds the box's; a value the player picks after the press stays. The same goes for `rules.formation_lap` (a bool: `false` starts the races from the grid without a formation lap), `rules.penalties` (`off`, `corner_cutting_only`, `esports` or `on`, the game's rules and flags option) and `rules.corner_cutting` (`regular` or `strict`), all `content.package` 1.5. The core sets the stock options `safety_car_frequency`, `formation_lap`, `rules_and_penalties_mode` and `corner_cutting_mode` and logs each press under `[box-rules]`. A box's grid rule (`rules.grid`, `content.package` 1.5) sets the qualifying scoring (`best_lap`, `best_of`, `aggregate`) and the 107 % rule of its race grid: [Grid rules per box](/std/systems/sessions#grid-rules-per-box). A box's qualifying tyre rule (`rules.qualifying_tyres`, `content.package` 1.5) names the dry options its cars may use only in qualifying. Pressing the box makes the core refuse those options in race sessions, and the event's per-session preset hands their sets out in qualifying only. See [Qualifying tyres per box](/std/systems/tyres#qualifying-tyres-per-box). A box's points system (`rules.points`, a `session.points` record) applies the same way from 1.9.61: [Rules per box](/std/systems/sessions#rules-per-box). A box's mandatory tyre change rule (`rules.mandatory_tyre_change`, `content.package` 1.6) applies like the tyre warmer rule: `false` clears every race length requirement of `swofty_f1`'s tyre regulations (no two-compound rule, no penalty for it), `true` sets them all, and a box without the rule puts the mode's own requirements back. The game reads them when a race session starts.
 
 Only a box that needs a different shape at boot gets its own setup mode. F1 1990's box has its own mode for its two qualifying sessions.
 
@@ -475,10 +478,15 @@ swofty::era::add_box({
   - A press on a stock box in Time Trial leaves `swofty_f1` offering only its lists of at most 23 cars until the next press, and no list at all when none of them fits. A list whose car count can't be read stays offered.
   - When a Time Trial session loads, the core logs the list the game resolved. When that list, or the first list of its entrant setup mode, holds more than 23 cars, the core loads a list of at most 23 cars from the same entrant setup mode instead. It tries the box pressed first, then that box's Time Trial list, then the first list that fits.
   - The session's entrant setup mode draws at most 23 cars (`max_entrants` above 23, or unset, is held at 23) until the session ends. With no list that fits, this keeps the session at 23 cars of the list.
-  - A Time Trial takes more than its own list: one car for each distinct vehicle of every list on the selected list's leaderboard, in every setup mode the Time Trial offers, plus 4 entries of its own, in a table of 26. The stock F1 2025 box draws 11 cars and spawns 15 vehicles. A list copied from `f1_2025` keeps its leaderboard (`f1`), so F1 2012 Season's 12 cars made it 27; Classic Seasons' lists use leaderboard `classic`. Each Time Trial load counts those cars the way the game takes them: in the setup modes the Time Trial's override rows swap in (F1 2025's `f1` becomes `f1_custom_team`), each list only where its setup mode takes list cars, and the entrants system's own cars when the mode takes those. It leaves whole lists out, stock lists kept before addon lists, until at most 22 remain. The selected list always stays. A restart keeps the cut, and the held `max_entrants` and list swap; they come back at StateUnloadSession Exiting. With the core's 16 restore slots full, a cut is skipped and logged. Each session trace line in a Time Trial shows the budget's expected vehicles, and a separate line names any step where the fill made a different number. Before the fill (StateLoadSession Entering and Updating) a count is compared only when it changed since the step before, since the previous session's participants are still there.
+  - A Time Trial takes more than its own list: one car for each distinct vehicle of every list on the selected list's leaderboard, in every setup mode the Time Trial offers, plus 4 entries of its own, in a table of 26. The stock F1 2025 box draws 11 cars and spawns 15 vehicles. A list copied from `f1_2025` kept its leaderboard (`f1`) before 1.7.20, so F1 2012 Season's 12 cars made it 27. Every package's list has a leaderboard of its own since 1.7.20 ([Leaderboards](#leaderboards)). Each Time Trial load counts those cars the way the game takes them: in the setup modes the Time Trial's override rows swap in (F1 2025's `f1` becomes `f1_custom_team`), each list only where its setup mode takes list cars, and the entrants system's own cars when the mode takes those. It leaves whole lists out, stock lists kept before addon lists, until at most 22 remain. The selected list always stays. A restart keeps the cut, and the held `max_entrants` and list swap; they come back at StateUnloadSession Exiting. With the core's 16 restore slots full, a cut is skipped and logged. Each session trace line in a Time Trial shows the budget's expected vehicles, and a separate line names any step where the fill made a different number. Before the fill (StateLoadSession Entering and Updating) a count is compared only when it changed since the step before, since the previous session's participants are still there.
   - Each session load logs a `session trace` line at StateLoadSession Entering, Updating and Exiting, at StateSession Entering and at the session's vehicle setup: the entrants with their team ids, the list, the setup mode, the session participants and the vehicles.
   - Everything the guard changed is put back when the session unloads (StateUnloadSession Exiting) or a box is pressed.
 - A core before launcher 1.6.2 ignores `time_trial` and has no guard.
+- **One picker only.** `only` (`era.box` 1.2, launcher 1.8.25) leaves a box off the other picker: `"only": "time_trial"` shows it only on the Time Trial picker, `"only": "grand_prix"` only on the Grand Prix picker. Absent shows it on both. A Grand Prix only box is never checked against the Time Trial car limit. The native call is `Box::only` ([Era picker boxes](/reference/std/era-picker#one-picker-only)).
+
+```json
+"era.box": { "preview": { "package": "mod.example/preview", "order": 2008, "only": "time_trial" } }
+```
 - **Tyre classes.** A car's tyres come from its own compound class (the `compound class` of its car template; a car built on the F2 template gets an F2 class), while the session's tyre sets come from the setup mode's class. A Time Trial at an F1 track narrows an F2 class's dry options to the track's F1 compounds, which it lacks, so only its Wet option is left. The game then refits every such car through a missing option and faults on session enter. Since launcher 1.6.12 the core's tyre slot guard gives the set a slot with the compounds of another option of the car's own class, dry first, so the car runs on its Wet compound instead of crashing, and logs a `[tyres] slot guard` line for the first 8 repairs. A box whose cars race under F1 rules should give them an F1-layout class (`f1`), as F1 1990 does with `Sess_TyreClass_FromName`.
 
 ```text
@@ -494,6 +502,64 @@ swofty::era::add_box({
 [era]      the Time Trial session's list ex_2012 (setup mode ex_2012_mode) holds 24 cars; Time Trial holds at most 23 (the game adds 3 cars of its own to a table of 26); its entrant setup mode offers no list of at most 23 cars; the session draws at most 23 cars (max_entrants 24 -> 23 until the session ends)
 [tyres]    slot guard (set visibility): vehicle 3's fitted option 0 has no usable slot in its class's table (count 1, options 4); slot 1 added with the compounds of option 4's slot
 ```
+
+## Leaderboards
+
+A Time Trial keeps one record per track and weather for each **leaderboard descriptor**, a row of `leaderboards.leaderboard_descriptor` that an entrant list names in its `leaderboard` field. Every list that names the same descriptor shares its cars and its times, and a Time Trial draws the cars of all of them. The game ships `f1`, `f1_26`, `f2`, `f2_26` and `classic`.
+
+Each package gets a descriptor of its own. The core adds one row per package, a copy of `classic` named `swofty_<entrant_list>`, gives it the next free id above the stock ones (kept between builds), and sets the package's list to it:
+
+```json
+// registry/content.json
+{
+  "content.package": {
+    "f1_2012": { "title": { "literal": "F1 2012" }, "entrant_list": "ex_f1_2012", "season": 2012, "teams": [ ... ] },
+    "f1_2013": { "title": { "literal": "F1 2013" }, "entrant_list": "ex_f1_2013", "season": 2013, "teams": [ ... ],
+                 "leaderboard": "stock:classic" },
+    "f1_2014": { "title": { "literal": "F1 2014" }, "entrant_list": "ex_f1_2014", "season": 2014, "teams": [ ... ],
+                 "leaderboard": "group:v8" },
+    "f1_2015": { "title": { "literal": "F1 2015" }, "entrant_list": "ex_f1_2015", "season": 2015, "teams": [ ... ],
+                 "leaderboard": "group:v8" }
+  }
+}
+```
+
+The build adds two rows to `leaderboards.leaderboard_descriptor` (stock `f1` is 0, `classic` 1, `f1_26` 2, `f2` 3, `f2_26` 5), `swofty_ex_f1_2012` with `stat_id` 6 and `swofty_group_mod_example_v8` with `stat_id` 7, and the core logs each package's list:
+
+```text
+[content] content.package mod.example/f1_2012: entrant list ex_f1_2012, 20 entrants in swofty_f1, stat id 112, leaderboard swofty_ex_f1_2012 (stat id 6), scenario stat id 21
+[content] content.package mod.example/f1_2013: entrant list ex_f1_2013, 20 entrants in swofty_f1, stat id 113, leaderboard classic, scenario stat id 22
+[content] content.package mod.example/f1_2014: entrant list ex_f1_2014, 20 entrants in swofty_f1, stat id 114, leaderboard swofty_group_mod_example_v8 (stat id 7), scenario stat id 23
+[content] content.package mod.example/f1_2015: entrant list ex_f1_2015, 20 entrants in swofty_f1, stat id 115, leaderboard swofty_group_mod_example_v8, scenario stat id 24
+```
+
+`leaderboard` takes one of:
+
+- `"box"` (default): the package's own descriptor, `swofty_<entrant_list>`.
+- `"addon"`: one descriptor, `swofty_addon_<addon>`, for every package of the addon that says `"addon"`.
+- `"group:<name>"`: one descriptor, `swofty_group_<addon>_<name>`, for the addon's packages that name the group.
+- `"stock:<label>"`: the game's descriptor with that label; no row is added.
+
+Boxes that share a descriptor share one Time Trial record per track and the cars count together against the table's 22 free vehicle slots, so share only when the lists have cars in common. A box that selects a [Time Trial list](#time-trial) of another package takes that package's descriptor.
+
+- **The id.** A descriptor's id is its row's `stat_id`, a byte, so the pool is 6 to 255. The core keeps the id of each label in `ids.json`, and a label keeps its id when other addons come and go, so a record saved under `LBV<id>` stays on its box.
+- **The 22-car check.** The core counts the cars of every list on the selected list's descriptor. A list alone on its descriptor draws only its own cars, and the log names the id: `the Time Trial session's list ex_f1_2012 (leaderboard 6, added) draws 20 cars from 1 list(s) of its leaderboard`.
+- **Your own rows.** A package whose `database.entrant_list_set` sets `leaderboard` keeps that label and the core adds no row. Database operations that add a descriptor use `add-row` into the `leaderboards` table from `classic` with a `_metadata_`; the id stops at 255 like the other byte-sized tables ([Stat ids](/reference/ops/database#kept-ids)).
+- **Older cores.** A core before 1.7.20 ignores `leaderboard`, and the list keeps the leaderboard of the list it was copied from. Declare `content.package` 1.2 when the box depends on it.
+- **Saved times.** A box's personal bests are stored under its descriptor's board name. Whether the game keeps offline bests per descriptor is not yet confirmed in game.
+
+## Virtual lists
+
+The game loads every entrant list below the table's count, keeps its stat id in a byte (255 at most) and lets an entrant setup mode hold 32 lists. A big season pack runs out of both. `"virtual_list": true` (`content.package` 1.3, launcher 1.9.10) makes the package's list take neither:
+
+```json
+{ "content.package": { "f5_1959": { "entrant_list": "f5_1959", "season": 1959, "virtual_list": true } } }
+```
+
+- The core moves the list's row above the table's count after every record is lowered, and leaves the list out of its setup mode's lists. The game never loads it.
+- The box that opens the package shows when `swofty_virtual_list` is offered under `swofty_f1`. When the box is pressed, the core reads the list's row into `swofty_virtual_list` and selects that list. The next press puts the host's own entrants back.
+- The database op is [`virtual-list`](/reference/ops/database#virtual-list).
+- **Older cores.** A core before 1.9.10 ignores `virtual_list` and loads the list as usual. Declare `content.package` 1.3 when the box depends on it.
 
 ## Career seasons race in boxes
 
@@ -539,11 +605,36 @@ F1 2017                          Classic Seasons 2017
 F1 2017 (V10)                    mod.esp, on Classic Seasons 2017
 ```
 
+## Content ownership
+
+`content::owned` says whether the player owns the content behind an entitlement name. `f1_2026` is the F1 2026 season content.
+
+```cpp
+#include <swofty/systems/content.hpp>
+
+using swofty::content::Ownership;
+
+switch (swofty::content::owned("f1_2026")) {
+case Ownership::owned:     /* the player can use the 2026 cars */ break;
+case Ownership::not_owned: /* the player does not own the 2026 content */ break;
+case Ownership::unknown:   /* the game has no answer yet: ask again later */ break;
+}
+```
+
+- **The answer is the game's own.** The core reads it with `FeTile_Check_EntrantListUsable` on the `f1_2026` entrant list, the same call the game uses to fill its session information. It runs on the flow thread; `owned` reads the cached result and is safe from any thread.
+- **`unknown`** is returned until the game's front end has run for five seconds, for every name other than `f1_2026`, and on a build where the core does not resolve the game bindings.
+- **`not_owned`** is reported once the check has returned false for about a minute in a row. Until then the answer stays `unknown`.
+- **`owned` is final** for the session. `not_owned` is rechecked every ten seconds or so and becomes `owned` if the content is installed later.
+- **The core logs the answer once** as `[entitlements] f1_2026: owned` or `not owned`.
+- **`swofty/entitlements.json`** is written in the game folder when the answer is known: `{"f1_2026": true}` or `{"f1_2026": false}`.
+
 ## Readiness and limits
 
 - **Packages and boxes: ready.** The core's era picker (`era_picker.cpp`, up to 64 boxes) and the entrant pipeline are L2, mapped and verified in the game. Classic Seasons ships nine seasons on them.
 - **The entrant list must be in `swofty_f1`,** the host setup mode the core narrows to the pressed season.
+- **Every team needs a team row the game can see.** A team's entrants and standings name the `entrants.teams` row of its `team` record: a `team.identity` record's row is labelled with its key, and a `game/` team is the game's own row. A team with no `team` names the row labelled like its car, which is how Classic Seasons' teams find their rows. A team whose `team` gives no row the game sees falls back to its car's row when that one exists, and the boot log says so. The game reads that row without checking it exists, so a package with a team whose row is missing would crash the game at boot. A team with no `team` whose car is an addon's own is only reported when its row is missing, since the addon's database operations add rows like Classic Seasons' `cs<year>_` ones. The core refuses a package whose team gives a missing row, or whose `game/` car has none, and names the missing row: `content.package <id>: team <key> names entrants.teams row <label>, which the game database lacks; not applied, so the game can boot`. To add a team, give it a `team` (a `game/` team, or a `team.identity` record with a donor), or give its car a `team_from`. A car whose `entrants.vehicles` row is missing is only reported.
 - **Shared lists compose.** Every season appends its entrant list to `content_sets[2025|2026].available_entrant_lists_0` and `entrant_setup_modes[swofty_f1]`. The core merges the appends.
 - **Sound rows: boot.** When the game reads `audio.audio_car_data` after boot needs reverse engineering. A team's `engine_sound` applies at boot, to its car everywhere. To change one box only, give the box its own vehicle variant.
 - **The box's track list: partial.** The list builder behind the track select screen (`ui.track_select.build`) needs reverse engineering. A guard covers tracks that don't fit.
 - **Scale:** one season is about 700 records. Classic Seasons 2017, as an addon for 1.5, builds its season with about 700 operations: 99 add-row, 170 set and 430 put-record. They cover its car packages, `file.put`s for the `cs17_*.bdl` bundles, 430 raw audio records, and the rows for the entrant list, teams and pit times.
+- **Content ownership: experimental.** `content::owned` uses the experimental bindings `g_FeTile_Ctx` and `FeTile_Check_EntrantListUsable`, and returns `unknown` on a build where they don't resolve.

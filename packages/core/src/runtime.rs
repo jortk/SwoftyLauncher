@@ -11,7 +11,7 @@ use crate::manifest::relative_inside;
 use crate::{Error, Result, io_err};
 
 pub const ASSETS_FILE: &str = "swofty/assets.json";
-const SWOFTY: &str = "swofty";
+pub(crate) const SWOFTY: &str = "swofty";
 const RESOURCES_DIR: &str = "assets/resources";
 const LANG_DIR: &str = "assets/lang";
 const OVERLAY_DIR: &str = "overlay";
@@ -41,6 +41,10 @@ pub struct Assets {
     pub shader: Option<ShaderLook>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub postfx: Vec<PostFxPass>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub postfx_textures: Vec<PostFxTexture>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub postfx_toggles: Vec<PostFxToggle>,
 }
 
 /// A post-process pass the in-game core runs, in the order listed.
@@ -53,6 +57,56 @@ pub struct PostFxPass {
     /// The values the shader reads with `option(i)`.
     pub options: Vec<f64>,
     pub budget_ms: f64,
+    pub addon_id: String,
+    /// The option slots the core reads from the addon's settings every frame, instead of `options`.
+    pub live: Vec<PostFxLive>,
+    /// Texture names, namespaced `addon_id/name`, or `original` and `previous`.
+    pub inputs: Vec<String>,
+    /// The texture the pass writes, namespaced; empty for the picture.
+    pub output: String,
+    pub threads: [u32; 2],
+    pub raw: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub when: Option<PostFxWhen>,
+    /// The id of a live toggle option that turns the pass on and off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PostFxLive {
+    pub slot: usize,
+    pub option: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PostFxWhen {
+    pub views: Vec<String>,
+    pub skip: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PostFxTexture {
+    /// Namespaced `addon_id/name`.
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    pub format: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persistent: Option<bool>,
+    /// The `.tex` image, relative to `swofty/`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PostFxToggle {
+    pub addon_id: String,
+    pub option: String,
 }
 
 /// The look the in-game core grades the picture with.
@@ -126,8 +180,78 @@ pub fn overlay_fits(
                 return Ok(Err(format!("{} in {target}: {why}", res.name)));
             }
         }
+        let find = |name: &str| -> Result<Option<Resource>> {
+            for file in [&overlay, &stock] {
+                if let Some(r) = file.erp.resources.iter().find(|r| r.name == name) {
+                    return Ok(Some(file.load(r)?));
+                }
+            }
+            Ok(None)
+        };
+        for res in &overlay.erp.resources {
+            let view = match res.name.strip_suffix(".image") {
+                Some(v) if v.ends_with(".texarray") => v,
+                _ if res.name.ends_with(".texarray") => res.name.as_str(),
+                _ => continue,
+            };
+            let (Some(v), Some(i)) = (find(view)?, find(&format!("{view}.image"))?) else {
+                continue;
+            };
+            if let Some((said, has)) = crate::erpbuild::view_mismatch(&v, &i)? {
+                return Ok(Err(format!(
+                    "{view} in {target}: its view says {said} slices, the image has {has}"
+                )));
+            }
+        }
     }
     Ok(Ok(overlay.erp.resources.len()))
+}
+
+fn same_copy(a: &Resource, b: &Resource) -> bool {
+    a.kind == b.kind
+        && a.unk == b.unk
+        && a.fragments.len() == b.fragments.len()
+        && a.fragments.iter().zip(&b.fragments).all(|(x, y)| {
+            x.name == y.name
+                && x.flags == y.flags
+                && x.size == y.size
+                && x.compression == y.compression
+                && x.raw == y.raw
+        })
+}
+
+type WrittenRes<'r> = (&'r str, &'r Resource, &'r Erp, &'r str);
+
+// The part of its origin's overlay each archive reads, by origin and archive. An
+// archive joins the first part where every resource the origin wrote in it is the
+// same copy the part already holds under that name, and starts a part otherwise:
+// an overlay archive holds one copy of a resource for all its targets.
+fn parts_of<'r>(written: &[WrittenRes<'r>]) -> HashMap<(&'r str, &'r str), usize> {
+    let mut groups: BTreeMap<(&str, &str), Vec<&Resource>> = BTreeMap::new();
+    for &(erp, res, _, origin) in written {
+        groups.entry((origin, erp)).or_default().push(res);
+    }
+    let mut held: HashMap<&str, Vec<HashMap<&str, &Resource>>> = HashMap::new();
+    let mut parts = HashMap::new();
+    for ((origin, erp), copies) in groups {
+        let bins = held.entry(origin).or_default();
+        let at = bins
+            .iter()
+            .position(|bin| {
+                copies
+                    .iter()
+                    .all(|r| bin.get(r.name.as_str()).is_none_or(|held| same_copy(held, r)))
+            })
+            .unwrap_or(bins.len());
+        if at == bins.len() {
+            bins.push(HashMap::new());
+        }
+        for r in copies {
+            bins[at].insert(r.name.as_str(), r);
+        }
+        parts.insert((origin, erp), at);
+    }
+    parts
 }
 
 #[derive(Debug, Default)]
@@ -142,6 +266,7 @@ pub struct Runtime {
     defaults: BTreeMap<String, BTreeMap<String, String>>,
     look: Option<Vec<u8>>,
     passes: Vec<Vec<u8>>,
+    images: Vec<Vec<u8>>,
 }
 
 fn argument_len(erp: &Erp) -> usize {
@@ -337,15 +462,26 @@ impl Runtime {
     }
 
     /// Adds a compiled post-process pass after the ones added before it.
-    pub fn postfx(&mut self, dxil: Vec<u8>, name: &str, addon: &str, options: Vec<f64>, budget_ms: f64) {
-        self.assets.postfx.push(PostFxPass {
-            shader: format!("{POSTFX_DIR}/{:02}.dxil", self.passes.len()),
-            name: name.into(),
-            addon: addon.into(),
-            options,
-            budget_ms,
-        });
+    pub fn postfx(&mut self, dxil: Vec<u8>, mut pass: PostFxPass) {
+        pass.shader = format!("{POSTFX_DIR}/{:02}.dxil", self.passes.len());
+        self.assets.postfx.push(pass);
         self.passes.push(dxil);
+    }
+
+    /// Adds a texture the passes read or write; `image` is the `.tex` of an image texture.
+    pub fn postfx_texture(&mut self, mut texture: PostFxTexture, image: Option<Vec<u8>>) {
+        if let Some(tex) = image {
+            texture.file = Some(format!("{POSTFX_DIR}/tex/{:02}.tex", self.images.len()));
+            self.images.push(tex);
+        }
+        self.assets.postfx_textures.push(texture);
+    }
+
+    pub fn postfx_toggle(&mut self, addon_id: &str, option: &str) {
+        self.assets.postfx_toggles.push(PostFxToggle {
+            addon_id: addon_id.into(),
+            option: option.into(),
+        });
     }
 
     fn place(&mut self, rel: String, src: PathBuf) -> Result<()> {
@@ -417,7 +553,9 @@ impl Runtime {
     // One overlay archive for each origin and set of target archives, so that each
     // addon or mod has its own, beside the ready ones in `prebuilt`. The game reads a
     // group's overlays in the listed order and the first that has a resource wins, so
-    // they are listed from the last origin in `origins` to the first.
+    // they are listed from the last origin in `origins` to the first. An origin that
+    // leaves a resource differing between two archives gets an overlay archive for
+    // each, so every target reads the copy written for it.
     pub fn resources<'r>(
         &mut self,
         resources: impl IntoIterator<Item = (&'r str, &'r Resource, &'r Erp, &'r str)>,
@@ -431,38 +569,46 @@ impl Runtime {
         }
         let mut warnings = Vec::new();
         let rank = |origin: &str| origins.iter().position(|o| o == origin).unwrap_or(origins.len());
-        type Written<'w> = (&'w Resource, &'w Erp, BTreeSet<&'w str>);
-        let mut by_uri: BTreeMap<(usize, &str, &str), Written> = BTreeMap::new();
+        let mut written = Vec::new();
         for (erp, res, stock, origin) in resources {
             if let Some(why) = layout_change(res, stock) {
                 warnings.push(format!("runtime: {} in {erp} is left out: {why}", res.name));
                 continue;
             }
+            written.push((erp, res, stock, origin));
+        }
+        let parts = parts_of(&written);
+        type Written<'w> = (&'w Resource, &'w Erp, BTreeSet<&'w str>);
+        let mut by_uri: BTreeMap<(usize, &str, usize, &str), Written> = BTreeMap::new();
+        for (erp, res, stock, origin) in written {
             let e = by_uri
-                .entry((rank(origin), origin, &res.name))
+                .entry((rank(origin), origin, parts[&(origin, erp)], &res.name))
                 .or_insert((res, stock, BTreeSet::new()));
             e.0 = res;
             e.1 = stock;
             e.2.insert(erp);
         }
         // An origin's resources share one archive, which lists every target the
-        // origin writes; only a second archive version splits it. Resources
-        // without an origin keep one archive per set of targets.
+        // origin writes; only a second archive version or a differing copy of a
+        // resource splits it. Resources without an origin keep one archive per set
+        // of targets.
         type Set<'s> = (Vec<Resource>, &'s Erp, BTreeSet<&'s str>);
-        let mut sets: BTreeMap<(usize, &str, u32, Vec<&str>), Set> = BTreeMap::new();
-        for ((n, origin, _), (res, stock, erps)) in by_uri {
+        let mut sets: BTreeMap<(usize, &str, usize, u32, Vec<&str>), Set> = BTreeMap::new();
+        for ((n, origin, part, _), (res, stock, erps)) in by_uri {
             let split = match origin.is_empty() {
                 true => erps.iter().copied().collect(),
                 false => Vec::new(),
             };
-            let set =
-                sets.entry((n, origin, stock.version, split))
-                    .or_insert((Vec::new(), stock, BTreeSet::new()));
+            let set = sets.entry((n, origin, part, stock.version, split)).or_insert((
+                Vec::new(),
+                stock,
+                BTreeSet::new(),
+            ));
             set.0.push(res.clone());
             set.2.extend(erps);
         }
         let mut listed: Vec<(usize, ResErp)> = Vec::new();
-        for (n, ((rank, origin, _, _), (resources, stock, targets))) in sets.into_iter().enumerate() {
+        for (n, ((rank, origin, ..), (resources, stock, targets))) in sets.into_iter().enumerate() {
             let rel = format!("{RESOURCES_DIR}/{n}.erp");
             let path = out.join(SWOFTY).join(&rel);
             let dir = path.parent().expect("has parent");
@@ -558,6 +704,20 @@ impl Runtime {
             std::fs::write(&path, dxil).map_err(io_err(&path))?;
             self.place(rel, path)?;
         }
+        let files: Vec<_> = self
+            .assets
+            .postfx_textures
+            .iter()
+            .filter_map(|t| t.file.clone())
+            .zip(std::mem::take(&mut self.images))
+            .collect();
+        for (rel, tex) in files {
+            let path = out.join(SWOFTY).join(&rel);
+            let dir = path.parent().expect("has parent");
+            std::fs::create_dir_all(dir).map_err(io_err(dir))?;
+            std::fs::write(&path, tex).map_err(io_err(&path))?;
+            self.place(rel, path)?;
+        }
         let empty = Assets {
             features: self.assets.features.clone(),
             ..Assets::default()
@@ -599,6 +759,25 @@ mod tests {
             packed: data.len() as u64,
             raw: data.to_vec(),
         }
+    }
+
+    #[test]
+    fn a_build_without_database_edits_writes_no_assets_json_to_replay() {
+        let out = std::env::temp_dir().join(format!("swofty-runtime-empty-{}", std::process::id()));
+        std::fs::remove_dir_all(&out).ok();
+        let mut with = Runtime::new(Vec::new());
+        with.db(vec![DbEdit {
+            hash: "0000000000000001".into(),
+            tag: 0,
+            value: "1".into(),
+            retype: false,
+        }]);
+        let kept = with.finish(&out).unwrap().unwrap();
+        assert!(out.join(ASSETS_FILE).is_file() && kept.files.contains_key(ASSETS_FILE));
+        let none = out.join("next");
+        assert!(Runtime::new(Vec::new()).finish(&none).unwrap().is_none());
+        assert!(!none.join(ASSETS_FILE).exists());
+        std::fs::remove_dir_all(&out).ok();
     }
 
     #[test]

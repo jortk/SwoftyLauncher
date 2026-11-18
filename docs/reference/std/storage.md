@@ -120,7 +120,7 @@ st::Result r = st::read("count.txt", buf, sizeof buf, &len);
 A missing file returns `invalid`. A file your addon ships (a file in `files` on `operations.native`) reads the same way. Progressive Career reads its season data like this:
 
 ```cpp
-// addons/progressive/native/src/ratings.cpp, trimmed
+// Progressive Career's native/src/ratings.cpp, trimmed
 std::string text;
 if (swofty::storage::read("data/years.json", text) != swofty::storage::Result::ok) {
     swofty::log("[progressive] ratings: data/years.json is missing; drivers keep the game's ratings");
@@ -138,7 +138,7 @@ st::write("blob.bin", std::span<const std::byte>(bytes, n));      // raw bytes
 `write` replaces the whole file. To keep writes atomic, the core writes a temp file, then renames it. Progressive Career keeps its career list this way and saves a copy of a file it can't parse:
 
 ```cpp
-// addons/progressive/native/src/store.cpp, trimmed
+// Progressive Career's native/src/store.cpp, trimmed
 swofty::storage::Result r = swofty::storage::write("careers.json", out);
 if (r != swofty::storage::Result::ok)
     swofty::log("[progressive] store: writing %s failed (%s)", "careers.json", swofty::storage::name(r));

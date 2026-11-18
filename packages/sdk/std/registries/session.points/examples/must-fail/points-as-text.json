@@ -1,0 +1,8 @@
+{
+  "session.points": {
+    "text": {
+      "$comment": "points per place are whole numbers",
+      "points": "25,18,15"
+    }
+  }
+}

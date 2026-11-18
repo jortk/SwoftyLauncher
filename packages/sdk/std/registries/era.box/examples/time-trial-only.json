@@ -1,0 +1,9 @@
+{
+  "era.box": {
+    "preview": {
+      "package": "mod.example/preview",
+      "order": 2008,
+      "only": "time_trial"
+    }
+  }
+}

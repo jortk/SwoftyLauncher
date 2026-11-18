@@ -21,6 +21,17 @@ pub const CHARACTERS_HEADER: &str = include_str!("../include/swofty/characters.h
 pub const CAREER_WIZARD_HEADER: &str = include_str!("../include/swofty/career_wizard.hpp");
 pub const ERA_HEADER: &str = include_str!("../include/swofty/era.hpp");
 pub const HUD_HEADER: &str = include_str!("../include/swofty/hud.hpp");
+pub const POSTFX_HEADER: &str = include_str!("../include/swofty/postfx.hpp");
+pub const EASE_HEADER: &str = include_str!("../include/swofty/ease.hpp");
+pub const HUD_FORMAT_HEADER: &str = include_str!("../include/swofty/hud_format.hpp");
+pub const HUD_FRAME_HEADER: &str = include_str!("../include/swofty/hud_frame.hpp");
+pub const HUD_LEAVES_HEADER: &str = include_str!("../include/swofty/hud_leaves.hpp");
+pub const LOG_CSV_HEADER: &str = include_str!("../include/swofty/log_csv.hpp");
+pub const SETTINGS_STRUCT_HEADER: &str = include_str!("../include/swofty/settings_struct.hpp");
+pub const TIMING_HEADER: &str = include_str!("../include/swofty/timing.hpp");
+pub const FAKE_HUD_HEADER: &str = include_str!("../include/swofty/fake_hud.hpp");
+pub const LIVE_HEADER: &str = include_str!("../include/swofty/live.hpp");
+pub const FAKE_LIVE_HEADER: &str = include_str!("../include/swofty/fake_live.hpp");
 
 pub const CAREER_START_PICK: u32 = 0;
 pub const CAREER_START_NEW: u32 = 1;
@@ -50,7 +61,7 @@ pub const DB_ENUM: u8 = 3;
 pub const DB_ID: u8 = 4;
 pub const DB_BOOL: u8 = 5;
 
-pub const TELEMETRY_VERSION: u32 = 1;
+pub const TELEMETRY_VERSION: u32 = 2;
 pub const CAREER_SAVES_VERSION: u32 = 1;
 pub const TOO_SMALL: c_int = 4;
 pub const REFUSED: c_int = 5;
@@ -261,7 +272,26 @@ pub struct SwoftyCarState {
     pub lap_distance: f32,
     pub world_pos: [f32; 3],
     pub world_vel: [f32; 3],
-    pub reserved: [f32; 8],
+    pub tyre_compound: u8,
+    pub tyre_visual: u8,
+    pub tyre_age_laps: u8,
+    pub pit_status: u8,
+    pub result_status: u8,
+    pub driver_status: u8,
+    pub pit_stops: u8,
+    pub warnings: u8,
+    pub penalty_seconds: u8,
+    pub drs: u8,
+    pub grid_position: u8,
+    pub ai_controlled: u8,
+    pub drive_through_pens: u8,
+    pub stop_go_pens: u8,
+    pub corner_cut_warnings: u8,
+    pub fia_flag: i8,
+    pub gap_front_ms: u32,
+    pub gap_leader_ms: u32,
+    pub ers_store: f32,
+    pub reserved: f32,
 }
 
 #[repr(C)]
@@ -279,7 +309,13 @@ pub struct SwoftySessionState {
     pub session_time_left: f32,
     pub track_temp: f32,
     pub air_temp: f32,
-    pub reserved: [f32; 8],
+    pub safety_car_status: u32,
+    pub track_length: u32,
+    pub udp_format: u32,
+    pub packets_seen: u32,
+    pub pit_speed_limit: u32,
+    pub red_flag: u32,
+    pub reserved: [u32; 2],
 }
 
 #[repr(C)]
@@ -293,7 +329,12 @@ pub struct SwoftyParticipant {
     pub lap: u32,
     pub lap_distance: f32,
     pub best_lap_time: f32,
-    pub reserved: [f32; 4],
+    pub driver_id: u32,
+    pub race_number: u8,
+    pub ai_controlled: u8,
+    pub nationality: u8,
+    pub my_team: u8,
+    pub reserved: [f32; 2],
 }
 
 #[repr(C)]
@@ -495,6 +536,9 @@ pub struct SwoftyLang {
 }
 
 pub const EVENT_CAREER_CONTENT_PRESSED: &str = "career.content.pressed";
+pub const EVENT_TELEMETRY_OVERTAKE: &str = "telemetry.overtake";
+pub const EVENT_TELEMETRY_COLLISION: &str = "telemetry.collision";
+pub const EVENT_TELEMETRY_RETIREMENT: &str = "telemetry.retirement";
 pub const CAREER_CONTENT_MODEL_2026: u32 = 0;
 pub const CAREER_CONTENT_MODEL_2025: u32 = 1;
 pub const CAREER_CONTENT_DRIVER: u32 = 1;
@@ -599,6 +643,7 @@ pub struct SwoftyEraBox {
     pub image: *const c_char,
     pub order: i32,
     pub time_trial_entrant_list: *const c_char,
+    pub only: u32,
 }
 
 pub const HUD_VERSION: u32 = 1;
@@ -769,9 +814,10 @@ mod tests {
         assert_eq!(std::mem::offset_of!(SwoftyApi, registry), 176);
         assert_eq!(std::mem::offset_of!(SwoftyApi, services), 192);
         assert_eq!(std::mem::offset_of!(SwoftyApi, era), 168);
-        assert_eq!(std::mem::size_of::<SwoftyEraBox>(), 48);
+        assert_eq!(std::mem::size_of::<SwoftyEraBox>(), 56);
         assert_eq!(std::mem::offset_of!(SwoftyEraBox, order), 32);
         assert_eq!(std::mem::offset_of!(SwoftyEraBox, time_trial_entrant_list), 40);
+        assert_eq!(std::mem::offset_of!(SwoftyEraBox, only), 48);
         assert_eq!(std::mem::size_of::<SwoftyEra>(), 24);
         assert_eq!(std::mem::offset_of!(SwoftyApi, characters), 152);
         assert_eq!(std::mem::offset_of!(SwoftyApi, career_wizard), 160);
@@ -862,17 +908,20 @@ mod tests {
             "#define SWOFTY_API_CHARACTERS 1",
             "#define SWOFTY_API_CAREER_WIZARD 1",
             "const SwoftyEra *era;",
-            "#define SWOFTY_API_ERA 2",
+            "#define SWOFTY_API_ERA 3",
             "const SwoftyRegistry *registry;",
             "const SwoftyHooks *hooks;",
             "const SwoftyServices *services;",
             "#define SWOFTY_REGISTRY_VERSION 1",
             "SwoftyCoreRegistry(void);",
+            "#define SWOFTY_MEM_VERSION 1",
+            "SwoftyCoreMem(void);",
             "} SwoftyEraBox;",
             "#define SWOFTY_EVENT_CAREER_HUB \"career.hub\"",
             "} SwoftyCareerState;",
             "#define SWOFTY_EVENT_SESSION_START \"session.start\"",
-            "#define SWOFTY_TELEMETRY_VERSION 1",
+            "#define SWOFTY_TELEMETRY_VERSION 2",
+            "#define SWOFTY_EVENT_TELEMETRY_OVERTAKE \"telemetry.overtake\"",
             "#define SWOFTY_OVERLAY_VERSION 3",
             "} SwoftyInput;",
             "} SwoftyTextStyle;",
@@ -923,6 +972,10 @@ mod tests {
             TELEMETRY_HEADER
         );
         assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/live.hpp"),
+            LIVE_HEADER
+        );
+        assert_eq!(
             include_str!("../../../templates/addon/native/include/swofty/db.hpp"),
             DB_HEADER
         );
@@ -966,6 +1019,46 @@ mod tests {
         assert_eq!(
             include_str!("../../../templates/addon/native/include/swofty/hud.hpp"),
             HUD_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/postfx.hpp"),
+            POSTFX_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/ease.hpp"),
+            EASE_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/hud_format.hpp"),
+            HUD_FORMAT_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/hud_frame.hpp"),
+            HUD_FRAME_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/hud_leaves.hpp"),
+            HUD_LEAVES_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/log_csv.hpp"),
+            LOG_CSV_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/settings_struct.hpp"),
+            SETTINGS_STRUCT_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/timing.hpp"),
+            TIMING_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/fake_hud.hpp"),
+            FAKE_HUD_HEADER
+        );
+        assert_eq!(
+            include_str!("../../../templates/addon/native/include/swofty/fake_live.hpp"),
+            FAKE_LIVE_HEADER
         );
     }
 

@@ -12,9 +12,10 @@ use swofty_core::crash::{Event, LogScan, Symbols, fatal_name};
 use swofty_core::install::{Game, Installer, PROXY, Source};
 use swofty_core::launch;
 use swofty_core::loader_check;
-use swofty_core::multiplayer::bridge::{ENV as NETPLAY_ENV, armed_env};
+use swofty_core::multiplayer::client::{LAUNCH_ENV as NETPLAY_ENV, parse_launch_env};
 use swofty_core::process::{
-    descends_from, game_processes, game_running_in, games_in, steamvr_running, stop_game_in, stop_process,
+    descends_from, flag, game_processes, game_running_in, games_in, steamvr_running, stop_game_in,
+    stop_process,
 };
 use swofty_core::quarantine::{self, Attach, AttachWatch, Stage};
 use swofty_core::recovery::{Scope, SessionLock};
@@ -37,7 +38,10 @@ pub struct RunArgs {
     winedebug: String,
     #[arg(long, help = "Close this copy's running F1 25 first")]
     restart: bool,
-    #[arg(long, help = "Launch through Proton directly instead of asking Steam")]
+    #[arg(
+        long,
+        help = "Launch a Steam copy through Proton directly instead of asking Steam (an EA app copy always starts through the EA app)"
+    )]
     direct: bool,
     #[arg(
         long,
@@ -138,10 +142,13 @@ pub fn run(store: &Store, profile: &str, args: RunArgs) -> Result<ExitCode> {
     {
         bail!("Steam is {state} F1 25; wait for it to finish, then press Play again");
     }
-    match crate::ea::store_start(Source::detect(&game), args.direct) {
+    match crate::ea::store_start(Source::detect(&game)) {
         crate::ea::StoreStart::EaApp => {
             crate::ea::check_recorded(&game)?;
-            if args.apply {
+            let stock = swofty_core::build_support::blocked(&game.join(GAME_EXE)).is_some();
+            let vanilla = store.profile(profile).is_ok_and(|p| p.is_vanilla());
+            crate::ea::check_elevation(store, &game, !stock && !vanilla)?;
+            if args.apply && !stock {
                 crate::ea::dll_setting(store, &g, args.no_start_store)?;
             }
             crate::ea::ensure(store, args.no_start_store)?
@@ -172,6 +179,12 @@ pub fn run(store: &Store, profile: &str, args: RunArgs) -> Result<ExitCode> {
     let loader = game.join(LOADER_LOG);
     let before = LogMark::read(&loader);
     let asked = now_secs();
+    let _home_menu = swofty_core::home_menu::publish(
+        &store.root,
+        &game,
+        env!("CARGO_PKG_VERSION"),
+        store.config().home_video,
+    );
     let mut wrapper =
         launch(store, &game, args.direct, mode, &args.game_arg).inspect_err(|e| note_blocked(store, e))?;
     let mut silence = Silence::new();
@@ -216,7 +229,14 @@ pub fn run(store: &Store, profile: &str, args: RunArgs) -> Result<ExitCode> {
     let mut follow = Follow::new(&dir, Some((loader, before)), symbols(&game, args.exe.as_deref()));
     install_ctrl_c();
     let mut quiet = false;
+    let mut opened: Option<Instant> = None;
     while !dir.join("exit_code").exists() {
+        if let Some(url) = swofty_core::home_menu::take_open_request(&game)
+            && opened.is_none_or(|at: Instant| at.elapsed() >= OPEN_AGAIN)
+        {
+            open_in_browser(&url);
+            opened = Some(Instant::now());
+        }
         if stop_requested() {
             if wrapper.child.is_none() {
                 say("info", "stopped following (the game keeps running)");
@@ -269,6 +289,26 @@ pub fn run(store: &Store, profile: &str, args: RunArgs) -> Result<ExitCode> {
 
 const LEFT: &str = "left without waiting; the next swofty run or launcher start rolls the game files back";
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(600);
+
+const OPEN_AGAIN: Duration = Duration::from_secs(3);
+
+fn open_in_browser(url: &str) {
+    let (opener, lead): (&str, &[&str]) = if cfg!(windows) {
+        ("rundll32.exe", &["url.dll,FileProtocolHandler"])
+    } else {
+        ("xdg-open", &[])
+    };
+    match Command::new(opener)
+        .args(lead)
+        .arg(url)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(_) => say("info", &format!("opened {url} in the browser")),
+        Err(e) => say("warning", &format!("could not open {url}: {e}")),
+    }
+}
 
 fn info(line: &str) {
     say("info", line);
@@ -391,11 +431,17 @@ fn wrapper(store: &Store, profile: &str, args: &RunArgs, g: &Game) -> Result<Exi
     let lock = crate::recover::lock(store, &info)?;
     crate::recover::stale(store, &lock, g, Scope::All, &info)?;
     crate::offline::gate(store, false)?;
+    swofty_core::entitlement::check_store_start(&g.dir, args.via_ea)?;
+    crate::build::check_entitled(store, g)?;
     let version = swofty_core::exe_version::read(&g.dir.join(GAME_EXE));
     if let Some(d) = swofty_core::known_problems::outdated_exe(version.as_deref()) {
         say("warning", &format!("{}: {}", d.title, d.text()));
     }
-    if let Some(reason) = swofty_core::compat::elevation_blocker(&g.dir) {
+    // An EA app copy's session was checked before the EA app started: the EA
+    // app, not this process, starts its game.
+    if !args.via_ea
+        && let Some(reason) = swofty_core::compat::elevation_blocker(&g.dir)
+    {
         bail!("{reason}");
     }
     if swofty_core::compat::write_blocker(&g.dir).is_some() {
@@ -411,32 +457,31 @@ fn wrapper(store: &Store, profile: &str, args: &RunArgs, g: &Game) -> Result<Exi
         .ok()
         .and_then(|d| serde_json::from_slice(&d).ok())
         .unwrap_or_default();
-    // A wrapper Steam starts later on its own must not inherit an earlier launch's arming.
-    if request.netplay.is_some() && !written_within(&launch_path, NETPLAY_REQUEST_LIFE) {
-        request.netplay = None;
-    }
-    if request.row_ids.is_some() && !written_within(&launch_path, NETPLAY_REQUEST_LIFE) {
-        request.row_ids = None;
-    }
+    age_out(&mut request, written_within(&launch_path, NETPLAY_REQUEST_LIFE));
     if let Some(file) = &request.row_ids {
         match swofty_core::row_ids::Overrides::read(file) {
             Ok(ids) => {
                 say(
                     "info",
                     &format!(
-                        "room launch: building with the host's stat ids for {} addon(s)",
-                        ids.rows.len()
+                        "room launch: building with the host's stat ids for {} addon(s), load order for {} addon(s) and {} option value(s)",
+                        ids.rows.len(),
+                        ids.order.len(),
+                        ids.option_values()
                     ),
                 );
                 swofty_core::row_ids::lend(Some(ids));
             }
             Err(e) => bail!(
-                "the host's stat ids for the room couldn't be read ({}): {e}",
+                "the host's ids and settings for the room couldn't be read ({}): {e}",
                 file.display()
             ),
         }
     }
     let profile = request.profile.clone().unwrap_or_else(|| profile.to_owned());
+    let build_blocked = swofty_core::build_support::blocked(&g.dir.join(GAME_EXE));
+    let stock = build_blocked.is_some();
+    let (profile, request) = gate_unsupported_build(build_blocked.clone(), profile, request);
     if let (Ok(p), Ok(installed)) = (store.profile(&profile), store.addons()) {
         let catalog = swofty_core::catalog::cached(&store.root).unwrap_or_default();
         for (base, family) in swofty_core::resolver::lonely_bases(&p, &installed, &catalog) {
@@ -459,7 +504,7 @@ fn wrapper(store: &Store, profile: &str, args: &RunArgs, g: &Game) -> Result<Exi
         set_affinity(&cpus);
     }
     let game = g.dir.clone();
-    let apply = request.apply || args.apply;
+    let apply = (request.apply || args.apply) && !stock;
     quarantine::Report::clear(&store.root).ok();
     launch::Failure::clear(&store.root).ok();
     let session = Session {
@@ -468,11 +513,18 @@ fn wrapper(store: &Store, profile: &str, args: &RunArgs, g: &Game) -> Result<Exi
         request_id: request.id.clone(),
         _lock: lock,
     };
+    crate::build::with_session_env(request.netplay.is_some());
     if apply {
         say("info", &format!("installing profile {profile}"));
         crate::build::install(store, &profile, g, true, &info)?;
     }
     let installed = apply.then(Instant::now);
+    let _home_menu = swofty_core::home_menu::publish(
+        &store.root,
+        &game,
+        env!("CARGO_PKG_VERSION"),
+        store.config().home_video,
+    );
     become_subreaper();
     let vanilla = store.profile(&profile).is_ok_and(|p| p.is_vanilla());
     if crate::ea::stages_offline(args.via_ea, vanilla) {
@@ -484,11 +536,51 @@ fn wrapper(store: &Store, profile: &str, args: &RunArgs, g: &Game) -> Result<Exi
              with EA AntiCheat",
         );
     }
-    let before = crate::saves::before_session(store, &profile, g, &request.id, !request.steam_saves_once);
+    let before = crate::saves::before_session(
+        store,
+        &profile,
+        g,
+        &request.id,
+        build_blocked.as_deref(),
+        request.steam_saves_once,
+    );
     let result = run_loop(store, args, &config, &request, &profile, g, installed);
     let out = finish(session, result);
     crate::saves::after_session(before);
     out
+}
+
+const UNSUPPORTED_LAUNCH: &str = "launching it stock";
+
+/// A game build the launcher has no table entry for launches stock: the vanilla profile, nothing applied,
+/// no launcher saves, no add-on core.
+fn gate_unsupported_build(
+    blocked: Option<String>,
+    profile: String,
+    request: LaunchRequest,
+) -> (String, LaunchRequest) {
+    match blocked {
+        Some(version) => {
+            say(
+                "warning",
+                &format!(
+                    "this game version ({version}) isn't supported by Swofty Launcher yet; add-ons are off until a \
+                     launcher update, so F1 25 runs without them ({UNSUPPORTED_LAUNCH}; set {} to override)",
+                    swofty_core::build_support::ALLOW_ENV
+                ),
+            );
+            (
+                swofty_core::profile::VANILLA.to_owned(),
+                LaunchRequest {
+                    apply: false,
+                    row_ids: None,
+                    steam_saves_once: false,
+                    ..request
+                },
+            )
+        }
+        None => (profile, request),
+    }
 }
 
 fn stage_offline(store: &Store, game: &Path) -> Result<()> {
@@ -577,9 +669,14 @@ struct Session<'a> {
 
 impl Drop for Session<'_> {
     fn drop(&mut self) {
-        match swofty_core::offline::restore_pending(&self.store.root) {
-            Ok(true) => info("offline play: the game folder is back to vanilla"),
-            Ok(false) => {}
+        match swofty_core::offline::restore_pending(&self.store.root, &self.game.dir) {
+            Ok(Some(notes)) => {
+                for note in notes {
+                    info(&format!("offline play: {note}"));
+                }
+                info("offline play: the game folder is back to vanilla");
+            }
+            Ok(None) => {}
             Err(e) => info(&format!(
                 "offline play restore failed{}, run swofty restore: {e:#}",
                 still_running(&self.game.dir)
@@ -643,7 +740,18 @@ fn run_loop(
             return Ok(ExitCode::FAILURE);
         }
         rebuild_if_needed(store, &profile, &game);
-        let code = play(store, args, config, request, g, installed, restarted)?;
+        let code = play(
+            store,
+            args,
+            config,
+            request,
+            g,
+            installed,
+            Round {
+                profile: &profile,
+                restarted,
+            },
+        )?;
         let relaunch = match store.merge_requests(&profile, true) {
             Ok(Some(m)) => {
                 for c in &m.changed {
@@ -692,12 +800,27 @@ fn rebuild_if_needed(store: &Store, profile: &str, game: &Path) {
 
 const NETPLAY_REQUEST_LIFE: Duration = Duration::from_secs(600);
 
+/// A wrapper Steam starts later on its own must not inherit an earlier launch's one-session asks: its
+/// arming, the host's row ids or Steam's saves. `fresh` is whether the request was written just now.
+fn age_out(request: &mut LaunchRequest, fresh: bool) {
+    if !fresh {
+        request.netplay = None;
+        request.row_ids = None;
+        request.steam_saves_once = false;
+    }
+}
+
 fn written_within(path: &Path, max: Duration) -> bool {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.elapsed().ok())
         .is_some_and(|age| age <= max)
+}
+
+struct Round<'a> {
+    profile: &'a str,
+    restarted: bool,
 }
 
 fn play(
@@ -707,8 +830,9 @@ fn play(
     request: &LaunchRequest,
     g: &Game,
     installed: Option<Instant>,
-    restarted: bool,
+    round: Round,
 ) -> Result<i32> {
+    let Round { profile, restarted } = round;
     let game = g.dir.as_path();
     let placed_loader = check_loader(store, game, installed).map_err(Refused)?;
     // The profile build and the offline play download before the first
@@ -835,8 +959,26 @@ fn play(
         game_env.insert(swofty_core::launcher_saves::OFF_ENV.to_owned(), "off".to_owned());
     }
     if let Some(armed) = &request.netplay {
-        for (name, value) in armed_env(armed) {
-            game_env.entry(name.to_owned()).or_insert(value);
+        for (name, value) in parse_launch_env(armed) {
+            match game_env.get_mut(&name) {
+                Some(have) if name == "SWOFTY_GAME_LOG_CHANNELS" => {
+                    let named = |c: &str| c.trim().split(':').next().unwrap_or("").to_owned();
+                    for channel in value.split(',').map(str::trim) {
+                        let name = named(channel);
+                        if name.is_empty() || name == "default" || have.split(',').any(|h| named(h) == name) {
+                            continue;
+                        }
+                        if !have.trim().is_empty() {
+                            have.push(',');
+                        }
+                        have.push_str(channel);
+                    }
+                }
+                Some(_) => {}
+                None => {
+                    game_env.insert(name, value);
+                }
+            }
         }
     }
     // The prefix's registry override is not always what Wine reads at start,
@@ -909,6 +1051,7 @@ fn play(
         say("info", &format!("starting F1 25 in VR ({})", extra.join(" ")));
     }
     let usage = swofty_core::usage::Session::start(&store.root, game);
+    let laps = crate::laps::begin(store, config, profile, g);
     let new_watch =
         || AttachWatch::new(loader.clone(), before.clone(), Instant::now()).with_fallback(fallback.clone());
     let mut watch = placed_loader.then(new_watch);
@@ -916,14 +1059,37 @@ fn play(
         .unwrap_or_default()
         .into_iter()
         .find_map(|(rel, sha)| rel.eq_ignore_ascii_case(PROXY).then_some(sha));
+    let sampled: std::cell::RefCell<Option<Vec<loader_check::Seen>>> = std::cell::RefCell::new(None);
     let missed = || {
-        let found = loader_check::collect(game, placed.as_deref(), launched, g.user_reg.as_deref());
+        let mut found = loader_check::collect(game, placed.as_deref(), launched, g.user_reg.as_deref());
+        if found.games.is_empty()
+            && let Some(early) = sampled.borrow_mut().take()
+        {
+            found.games = early;
+            say(
+                "loader",
+                &format!(
+                    "  the game had closed by now; the game lines below are from a look {} s after it started",
+                    quarantine::PROBE_AFTER.as_secs()
+                ),
+            );
+        }
+        let running = found.attached_text();
         say(
             "loader",
-            "version.dll did not attach to F1 25; what the session found:",
+            match running {
+                Some(_) => {
+                    "version.dll attached to F1 25, which the session's watch missed; what the session found:"
+                }
+                None => "version.dll did not attach to F1 25; what the session found:",
+            },
         );
         for line in found.lines(game) {
             say("loader", &format!("  {line}"));
+        }
+        if let Some(text) = running {
+            say("info", text);
+            return;
         }
         // The antivirus explanation is a Windows one; under Proton a loader
         // that does not attach is a prefix or override problem instead.
@@ -947,12 +1113,17 @@ fn play(
         if let Some(w) = watch.as_mut()
             && w.state() == Attach::Waiting
         {
+            if w.probe_due(Instant::now()) {
+                let early = loader_check::collect(game, placed.as_deref(), launched, g.user_reg.as_deref());
+                *sampled.borrow_mut() = Some(early.games);
+            }
             verdict(w.poll(Instant::now()));
         }
     };
+    let via_ea = ea.is_some();
     let (code, unread) = match ea {
         Some(started) => {
-            crate::ea::wait(game, &copies_before, started, tick);
+            crate::ea::wait(game, &dir, &copies_before, started, tick);
             (None, EA_UNREAD.to_owned())
         }
         None => {
@@ -965,8 +1136,15 @@ fn play(
     {
         verdict(w.ended(Instant::now()));
     }
-    wait_relaunched(game, &copies_before, code, launched.elapsed().unwrap_or_default());
-    keep_game_logs(game, &fallback, &dir, before.as_ref(), launched);
+    wait_relaunched(
+        game,
+        &dir,
+        &copies_before,
+        code,
+        launched.elapsed().unwrap_or_default(),
+    );
+    crate::laps::end(laps, game);
+    keep_game_logs(&store.root, game, &fallback, &dir, before.as_ref(), launched);
     let loader = std::fs::read(dir.join("loader.log"))
         .ok()
         .map(|b| launch::LoaderSeen::scan(&String::from_utf8_lossy(&b)));
@@ -996,7 +1174,11 @@ fn play(
     {
         stop_process(g.pid).ok();
     }
-    note_failed_launch(store, loader, code, launched.elapsed().unwrap_or_default());
+    let blocked =
+        via_ea && end.end != swofty_core::session::Ending::Quit && crate::ea::note_stub_blocked(store, game);
+    if !blocked {
+        note_failed_launch(store, loader, code, launched.elapsed().unwrap_or_default());
+    }
     Ok(code)
 }
 
@@ -1006,7 +1188,9 @@ fn play(
 fn note_known_problem(store: &Store, game: &Path, dir: &Path, crashed: bool) {
     let record = SessionRecord::read(dir);
     if !crashed {
-        if let Some(d) = swofty_core::known_problems::stall(&record, Some(game), store) {
+        if let Some(d) = swofty_core::known_problems::stall(&record, Some(game), store)
+            .or_else(|| swofty_core::known_problems::tyres(&record, Some(game), store))
+        {
             say("warning", &format!("known problem {}: {}", d.id, d.title));
         }
         return;
@@ -1043,7 +1227,7 @@ const RELAUNCH_CAP: Duration = Duration::from_secs(12 * 3600);
 /// game files are rolled back. A launch that failed quickly gets longer for
 /// the relaunch to appear. Another copy's game is not waited for, and only
 /// a game that is this copy's is closed.
-fn wait_relaunched(game: &Path, before: &[u32], code: Option<i32>, ran: Duration) {
+fn wait_relaunched(game: &Path, dir: &Path, before: &[u32], code: Option<i32>, ran: Duration) {
     let settle = if code.is_some_and(|c| c != 0) && ran < SHORT_RUN {
         RELAUNCH_AFTER_FAILURE
     } else {
@@ -1078,7 +1262,14 @@ fn wait_relaunched(game: &Path, before: &[u32], code: Option<i32>, ran: Duration
             );
             return;
         }
-        if !asked && ending() && !others.is_empty() {
+        let phase = session_stop(dir);
+        if phase == StopPhase::GiveUp && !others.is_empty() {
+            info(
+                "the F1 25 started outside this session is still open after Stop; rolling the game files back now",
+            );
+            return;
+        }
+        if !asked && phase != StopPhase::Running && !others.is_empty() {
             asked = true;
             info(
                 "asked to stop: closing the F1 25 started outside this session, then rolling its game files back",
@@ -1231,7 +1422,15 @@ fn note_refused(fallback: &Path) {
 
 /// The session's loader.log: the game folder's when the loader wrote it,
 /// else its fallback in the data folder, which a session starts without.
-fn keep_game_logs(game: &Path, fallback: &Path, dir: &Path, before: Option<&LogMark>, launched: SystemTime) {
+fn keep_game_logs(
+    data: &Path,
+    game: &Path,
+    fallback: &Path,
+    dir: &Path,
+    before: Option<&LogMark>,
+    launched: SystemTime,
+) {
+    swofty_core::crash_report::keep_fallback(data, &dir.join("game-logs"), launched);
     let loader = game.join(LOADER_LOG);
     if LogMark::replaced(&loader, before) {
         std::fs::copy(&loader, dir.join("loader.log")).ok();
@@ -1620,13 +1819,11 @@ fn launch(store: &Store, game: &Path, direct: bool, mode: LaunchMode, extra: &[S
                 .any(|(_, o)| steam::wrapper_installed(o))
         })
         .unwrap_or(false);
-    if crate::ea::store_start(Source::detect(game), direct) == crate::ea::StoreStart::EaApp {
+    if crate::ea::store_start(Source::detect(game)) == crate::ea::StoreStart::EaApp {
         let mut c = Command::new(std::env::current_exe()?);
-        c.arg("--data-dir")
-            .arg(&store.root)
+        c.arg(flag("data-dir", &store.root))
             .arg("run")
-            .arg("--game")
-            .arg(game)
+            .arg(flag("game", game))
             .arg("--via-ea")
             .args(wrapper_command(None, game, mode, extra));
         #[cfg(unix)]
@@ -1649,11 +1846,9 @@ fn launch(store: &Store, game: &Path, direct: bool, mode: LaunchMode, extra: &[S
     if cfg!(windows) || direct || !wrapped {
         let me = std::env::current_exe()?;
         let mut c = Command::new(&me);
-        c.arg("--data-dir")
-            .arg(&store.root)
+        c.arg(flag("data-dir", &store.root))
             .arg("run")
-            .arg("--game")
-            .arg(game);
+            .arg(flag("game", game));
         if let Some(g) = install.as_ref().filter(|_| !cfg!(windows)) {
             let tool = steam::compat_tool(&g.steam_root)
                 .context("Steam has no Proton build set for F1 25 and no default; pick one in the game's Properties > Compatibility")?;
@@ -2030,6 +2225,39 @@ pub(crate) fn ending() -> bool {
     ENDING.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+pub(crate) const STOP_GRACE: Duration = Duration::from_secs(20);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StopPhase {
+    Running,
+    Closing,
+    GiveUp,
+}
+
+pub(crate) fn stop_phase(requested: Option<f64>, now: f64, signalled: bool) -> StopPhase {
+    match requested {
+        Some(at) if now - at > STOP_GRACE.as_secs_f64() => StopPhase::GiveUp,
+        Some(_) => StopPhase::Closing,
+        None if signalled => StopPhase::Closing,
+        None => StopPhase::Running,
+    }
+}
+
+pub(crate) fn stop_requested_at(dir: &Path) -> Option<f64> {
+    let file = dir.join(STOP_FILE);
+    if !file.exists() {
+        return None;
+    }
+    let at = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|s| s.trim().parse().ok());
+    Some(at.unwrap_or_else(now_secs))
+}
+
+pub(crate) fn session_stop(dir: &Path) -> StopPhase {
+    stop_phase(stop_requested_at(dir), now_secs(), ending())
+}
+
 #[cfg(target_os = "linux")]
 fn set_affinity(cpus: &[usize]) {
     unsafe {
@@ -2064,6 +2292,32 @@ fn link(_: &Path, _: &Path) {}
 
 #[cfg(all(test, unix))]
 mod tests {
+    #[test]
+    fn an_unsupported_build_launches_stock_with_nothing_applied() {
+        let request = LaunchRequest {
+            id: "x".into(),
+            apply: true,
+            steam_saves_once: true,
+            row_ids: Some(PathBuf::from("ids.json")),
+            ..LaunchRequest::default()
+        };
+        let (profile, out) = gate_unsupported_build(Some("1.0.145.2472".into()), "grid".into(), request);
+        assert_eq!(profile, swofty_core::profile::VANILLA);
+        assert!(!out.apply && out.row_ids.is_none() && !out.steam_saves_once);
+        assert_eq!(out.id, "x");
+    }
+
+    #[test]
+    fn a_supported_build_keeps_its_profile_and_request() {
+        let request = LaunchRequest {
+            apply: true,
+            ..LaunchRequest::default()
+        };
+        let (profile, out) = gate_unsupported_build(None, "grid".into(), request.clone());
+        assert_eq!(profile, "grid");
+        assert_eq!(out, request);
+    }
+
     use super::*;
 
     #[test]
@@ -2082,10 +2336,53 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    #[test]
+    fn an_old_launch_request_plays_on_launcher_saves_again() {
+        let asked = || LaunchRequest {
+            netplay: Some("armed".into()),
+            row_ids: Some(PathBuf::from("row_ids.json")),
+            steam_saves_once: true,
+            ..LaunchRequest::default()
+        };
+        let mut fresh = asked();
+        age_out(&mut fresh, true);
+        assert_eq!(fresh, asked());
+        let mut old = asked();
+        age_out(&mut old, false);
+        assert!(!old.steam_saves_once);
+        assert_eq!(old.netplay, None);
+        assert_eq!(old.row_ids, None);
+    }
+
     fn temp_log(name: &str) -> PathBuf {
         std::env::temp_dir()
             .join(format!("swofty-run-{}-{name}", std::process::id()))
             .join(WRAPPER_LOG)
+    }
+
+    #[test]
+    fn a_stop_request_closes_the_game_then_gives_up_waiting_for_it() {
+        assert_eq!(stop_phase(None, 100.0, false), StopPhase::Running);
+        assert_eq!(stop_phase(None, 100.0, true), StopPhase::Closing);
+        assert_eq!(stop_phase(Some(90.0), 100.0, false), StopPhase::Closing);
+        assert_eq!(stop_phase(Some(80.0), 100.0, false), StopPhase::Closing);
+        assert_eq!(stop_phase(Some(79.0), 100.0, false), StopPhase::GiveUp);
+        assert_eq!(stop_phase(Some(79.0), 100.0, true), StopPhase::GiveUp);
+    }
+
+    #[test]
+    fn reads_when_the_launcher_asked_the_session_to_stop() {
+        let dir = std::env::temp_dir().join(format!("swofty-stop-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(stop_requested_at(&dir), None);
+        assert_eq!(session_stop(&dir), StopPhase::Running);
+        std::fs::write(dir.join(STOP_FILE), "12.5\n").unwrap();
+        assert_eq!(stop_requested_at(&dir), Some(12.5));
+        assert_eq!(session_stop(&dir), StopPhase::GiveUp);
+        std::fs::write(dir.join(STOP_FILE), "garbage").unwrap();
+        assert_eq!(session_stop(&dir), StopPhase::Closing);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -2279,13 +2576,13 @@ mod tests {
         touch(&perf, launched - Duration::from_secs(600));
         let before = LogMark::read(&loader);
         let fallback = dir.join(LOADER_FALLBACK);
-        keep_game_logs(&game, &fallback, &session, before.as_ref(), launched);
+        keep_game_logs(&dir, &game, &fallback, &session, before.as_ref(), launched);
         assert!(!session.join("loader.log").exists());
         assert!(!session.join("perf.log").exists());
 
         std::fs::create_dir_all(fallback.parent().unwrap()).unwrap();
         std::fs::write(&fallback, "attached in the data folder\n").unwrap();
-        keep_game_logs(&game, &fallback, &session, before.as_ref(), launched);
+        keep_game_logs(&dir, &game, &fallback, &session, before.as_ref(), launched);
         assert_eq!(
             std::fs::read_to_string(session.join("loader.log")).unwrap(),
             "attached in the data folder\n"
@@ -2294,7 +2591,7 @@ mod tests {
         std::fs::write(&loader, "fresh\n").unwrap();
         std::fs::write(&perf, "Swofty Launcher performance report\nnew\n").unwrap();
         touch(&perf, launched + Duration::from_secs(1));
-        keep_game_logs(&game, &fallback, &session, before.as_ref(), launched);
+        keep_game_logs(&dir, &game, &fallback, &session, before.as_ref(), launched);
         assert_eq!(
             std::fs::read_to_string(session.join("loader.log")).unwrap(),
             "fresh\n"
@@ -2303,6 +2600,15 @@ mod tests {
             std::fs::read_to_string(session.join("perf.log")).unwrap(),
             "Swofty Launcher performance report\nnew\n"
         );
+
+        std::fs::write(
+            fallback.with_file_name("crash-20261101-125350.txt"),
+            "Swofty crash report\n",
+        )
+        .unwrap();
+        keep_game_logs(&dir, &game, &fallback, &session, before.as_ref(), launched);
+        assert!(session.join("game-logs/crash-20261101-125350.txt").is_file());
+        assert!(!fallback.with_file_name("crash-20261101-125350.txt").exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -2611,6 +2917,54 @@ mod tests {
             "{}",
             report.text()
         );
+    }
+
+    #[test]
+    fn a_game_windows_starts_only_as_administrator_rolls_back_and_frees_the_lock_at_once() {
+        if !game_processes().is_empty() {
+            return;
+        }
+        let m = Modded::new("ea-740");
+        let installer = m.game.dir.join(swofty_core::ea_app::MARKER);
+        std::fs::create_dir_all(installer.parent().unwrap()).unwrap();
+        std::fs::write(
+            &installer,
+            "<contentIDs><contentID>16425845</contentID></contentIDs>",
+        )
+        .unwrap();
+        let log = m.game.dir.join(LOADER_LOG);
+        let mut config = m.store.config();
+        config.launch.ea_launch_command = Some(format!(
+            ": {{url}}; printf '%s\\n' '10:06:01.380 [stub] [offline] CreateProcessW failed, error 740 \
+             (ERROR_ELEVATION_REQUIRED)' >> '{}'",
+            log.display()
+        ));
+        m.store.save_config(&config).unwrap();
+        let session_dir = m.root.join("session");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let session = Session {
+            store: &m.store,
+            game: &m.game,
+            request_id: "ea-740".into(),
+            _lock: SessionLock::try_acquire(&m.store.root).unwrap().unwrap(),
+        };
+        let since = Instant::now();
+        let result =
+            crate::ea::start(&m.store, &m.game.dir, &[], &session_dir, &[]).map(|_| ExitCode::SUCCESS);
+        let err = finish(session, result).unwrap_err();
+        assert!(since.elapsed() < Duration::from_secs(15), "{:?}", since.elapsed());
+        let refused = swofty_core::compat::game_refused_in(&[], &m.game.dir);
+        assert_eq!(err.to_string(), refused.text());
+        assert_eq!(
+            launch::Failure::read(&m.store.root).map(|f| f.cause),
+            Some(launch::Cause::RunAsAdmin(refused))
+        );
+        assert!(
+            SessionLock::try_acquire(&m.store.root).unwrap().is_some(),
+            "the session lock is still held"
+        );
+        assert!(m.vanilla());
+        assert!(!m.store.root.join(steam_client::STAGE_FILE).exists());
     }
 
     #[test]

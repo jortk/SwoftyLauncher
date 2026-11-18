@@ -32,7 +32,7 @@ std::string settings_addon(const void *from, std::string &dll);
 // The core's career operations (standard library 1.6, SwoftyCareerOps): apply_lineup, set_driver_ratings and
 // swap_drivers, (table version 2) report_season, which the career snapshots answer (snapshots/runtime.cpp), and
 // (table version 4) set_seat, which runs one seat change through apply_lineup's executor, set_car_number (Career
-// Mode Editor's drivers.number.set) and set_track_fuel (track_fuel.cpp). The line-up executor is Progressive Career's season batch (addons/progressive/native/src/
+// Mode Editor's drivers.number.set) and set_track_fuel (track_fuel.cpp). The line-up executor is Progressive Career's season batch (its native/src/
 // season.cpp apply(), seats.cpp) moved into the core: one batch of entrant writes through the Driver Career
 // sequence, read back and written back on a mismatch, the seated drivers' contracts, numbers and one
 // finalise. Every binding resolves when an operation first needs it; a missing one makes the operation
@@ -754,13 +754,13 @@ bool read_lineup(const json::Value &j, Lineup &l, std::string &err)
     return err.empty();
 }
 
-int row_index(const std::vector<Row> &rows, uint32_t stat)
+int row_index(const std::vector<Row> &rows, uint32_t stat, uint32_t domain = 0)
 {
     std::vector<career_ops::rows::Row> view;
     view.reserve(rows.size());
     for (auto &r : rows)
         view.push_back({driver_of(r.rec), teamless(r.rec)});
-    return career_ops::rows::pick(view, stat);
+    return career_ops::rows::pick(view, stat, domain);
 }
 
 int holder_of(const std::vector<Row> &rows, uint32_t team, int seat)
@@ -1850,8 +1850,9 @@ std::string number_text(uint8_t n)
 int api_set_car_number(uint32_t driver, int32_t want_number, uint32_t flags)
 {
     labels();
-    std::string head = "set_car_number " + driver_name(driver) + " #" + std::to_string(want_number) +
-                       ((flags & SWOFTY_NUMBER_SWAP) ? " (swap)" : "");
+    const uint32_t stat = driver & 0x3fff, domain = (driver >> 14) & 3;
+    std::string head = "set_car_number " + (domain ? "driver(" + std::to_string(driver) + ")" : driver_name(driver)) +
+                       " #" + std::to_string(want_number) + ((flags & SWOFTY_NUMBER_SWAP) ? " (swap)" : "");
     std::string summary;
     int r = SWOFTY_ASSET_OK;
     uintptr_t e = 0;
@@ -1859,8 +1860,8 @@ int api_set_car_number(uint32_t driver, int32_t want_number, uint32_t flags)
     if (!on_flow_thread()) {
         summary = "late: called off the flow thread";
         r = SWOFTY_ASSET_LATE;
-    } else if (driver >= 0x3fff || (flags & ~uint32_t(SWOFTY_NUMBER_SWAP))) {
-        summary = "a driver stat id 0..16382 and flags 0 or SWOFTY_NUMBER_SWAP are needed";
+    } else if (!career_ops::rows::driver_id(driver) || (flags & ~uint32_t(SWOFTY_NUMBER_SWAP))) {
+        summary = "a driver save id (stat id 0..16382, the domain in bits 14-15) and flags 0 or SWOFTY_NUMBER_SWAP are needed";
         r = SWOFTY_ASSET_INVALID;
     } else if (!bind("Career_Set_EntrantData_Thunk")) {
         summary = "unavailable: binding(s) not resolved: Career_Set_EntrantData_Thunk";
@@ -1878,8 +1879,8 @@ int api_set_car_number(uint32_t driver, int32_t want_number, uint32_t flags)
             view.push_back({driver_of(row.rec), row.rec.car_number, !teamless(row.rec)});
             humans += human(row.rec);
         }
-        int idx = row_index(rows, driver);
-        uint32_t key = idx >= 0 ? driver_of(rows[idx].rec) : driver << 16;
+        int idx = row_index(rows, stat, domain);
+        uint32_t key = idx >= 0 ? driver_of(rows[idx].rec) : career_ops::rows::key_of_id(driver);
         career_ops::numbers::Plan np = career_ops::numbers::plan(view, key, want_number, flags & SWOFTY_NUMBER_SWAP);
         if (np.error != career_ops::numbers::Error::none) {
             summary = "refused: " + np.why;
@@ -1989,18 +1990,99 @@ int api_set_look(const char *driver_ref, const char *look_ref)
     return r == SWOFTY_TOO_SMALL ? SWOFTY_ASSET_OK : r;
 }
 
+int resolve_team(const std::string &ref)
+{
+    size_t slash = ref.find('/');
+    if (ref.empty() || slash == std::string::npos || !labels())
+        return -1;
+    std::string label = ref.substr(0, slash) == "game" ? ref.substr(slash + 1) : record_label_of("team.identity", ref);
+    std::lock_guard<std::mutex> l(g_lock);
+    for (auto &[stat, name] : g_labels.team_by_stat)
+        if (name == label)
+            return static_cast<int>(stat);
+    return -1;
+}
+
+int api_team_stat(const char *ref, uint32_t *out)
+{
+    if (!ref || !out)
+        return SWOFTY_ASSET_INVALID;
+    if (!labels())
+        return SWOFTY_ASSET_LATE;
+    int s = resolve_team(ref);
+    if (s < 0)
+        return SWOFTY_ASSET_INVALID;
+    *out = static_cast<uint32_t>(s);
+    return SWOFTY_ASSET_OK;
+}
+
+int api_current_round(int32_t *season_index, int32_t *round, int32_t *rounds)
+{
+    if (!season_index || !round || !rounds)
+        return SWOFTY_ASSET_INVALID;
+    if (!on_flow_thread())
+        return SWOFTY_ASSET_LATE;
+    uintptr_t e = entity();
+    uintptr_t champ_vt = bind("vt_Career_Championship"), season_vt = bind("vt_Career_Season"),
+              weekend_vt = bind("vt_Career_Weekend");
+    if (!champ_vt || !season_vt || !weekend_vt)
+        return SWOFTY_ASSET_UNAVAILABLE;
+    if (!e)
+        return SWOFTY_ASSET_LATE;
+    g::CareerEntity ent{};
+    if (!mem::read(e, ent) || ent.entrant_update_busy)
+        return SWOFTY_ASSET_LATE;
+    uintptr_t ch = rdv<uintptr_t>(e + offsetof(g::CareerEntity, current_championship));
+    g::Championship champ{};
+    if (!ch || rdv<uintptr_t>(ch) != champ_vt || !mem::read(ch, champ))
+        return SWOFTY_ASSET_LATE;
+    auto b = reinterpret_cast<uintptr_t>(champ.seasons_begin), en = reinterpret_cast<uintptr_t>(champ.seasons_end);
+    size_t n = en > b && !((en - b) % sizeof(g::ChampionshipSeasonEntry)) ? (en - b) / sizeof(g::ChampionshipSeasonEntry) : 0;
+    if (!n || n > 64 || champ.season_index >= n)
+        return SWOFTY_ASSET_LATE;
+    g::ChampionshipSeasonEntry entry{};
+    if (!mem::read(b + champ.season_index * sizeof entry, entry) || !entry.season ||
+        rdv<uintptr_t>(reinterpret_cast<uintptr_t>(entry.season)) != season_vt)
+        return SWOFTY_ASSET_LATE;
+    g::Season season{};
+    if (!mem::read(reinterpret_cast<uintptr_t>(entry.season), season))
+        return SWOFTY_ASSET_LATE;
+    auto wb = reinterpret_cast<uintptr_t>(season.weekends_begin), we = reinterpret_cast<uintptr_t>(season.weekends_end);
+    size_t weekends = wb && we > wb && !((we - wb) % sizeof(void *)) ? (we - wb) / sizeof(void *) : 0;
+    if (!weekends || weekends > 64 || season.current_weekend >= weekends)
+        return SWOFTY_ASSET_LATE;
+    for (size_t i = 0; i < weekends; ++i) {
+        uintptr_t w = rdv<uintptr_t>(wb + i * sizeof(void *));
+        if (!w || rdv<uintptr_t>(w) != weekend_vt)
+            return SWOFTY_ASSET_LATE;
+    }
+    *season_index = static_cast<int32_t>(champ.season_index);
+    *round = static_cast<int32_t>(season.current_weekend) + 1;
+    *rounds = static_cast<int32_t>(weekends);
+    return SWOFTY_ASSET_OK;
+}
+
+int api_set_dropped_scores(const char *data_group, uint32_t best)
+{
+    if (!data_group || !*data_group || best > 64)
+        return SWOFTY_ASSET_INVALID;
+    return runtime::standings_drop_set(data_group, best);
+}
+
 const SwoftyCareerOps g_table = {
     SWOFTY_CAREER_OPS_VERSION, api_available,  api_driver_stat, api_set_slots, api_apply_lineup, api_set_driver_ratings,
     api_swap_drivers,          api_report_season, api_apply_teams, api_set_seat,  api_set_car_number, api_set_track_fuel,
-    api_set_logo, api_set_look,
+    api_set_logo, api_set_look, api_current_round, api_team_stat, api_set_dropped_scores,
 };
 
 void setup()
 {
     const SwoftyEvents *ev = runtime::events_table();
     uint32_t token = 0;
-    if (ev && ev->on_frame)
+    if (ev && ev->on_frame) {
+        runtime::frame_probe_name("career_ops");
         ev->on_frame(frame, nullptr, &token);
+    }
     career_ops::track_fuel_setup();
 }
 

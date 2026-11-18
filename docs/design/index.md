@@ -36,6 +36,8 @@ You'll find the plans for mods, the Launcher API, the Asset API and the built-in
 
 The proposed 1.6 standard library, where addons register records, layers, events and hooks in code and the core applies them live in the game, is at [Standard library 1.6](/std/), with its product choices on [Decisions](/design/std-2/decisions).
 
+The proposed sponsor registry, one record per sponsor with ids and textures handled by the core, is at [Sponsor registry](/design/sponsor-registry).
+
 ## Profiles and saves
 
 Your profile holds your addons, tracks and options. The design also calls for separate saves under `$DATA/saves/<profile>/` for each profile, keeping them away from vanilla saves and Steam Cloud.

@@ -1,0 +1,17 @@
+{
+  "content.package": {
+    "f1_1955": {
+      "$comment": "rows holds cars per row, 1 to 5",
+      "entrant_list": "f1_1955",
+      "season": 1955,
+      "rules": {
+        "grid": {
+          "rows": [
+            3,
+            0
+          ]
+        }
+      }
+    }
+  }
+}

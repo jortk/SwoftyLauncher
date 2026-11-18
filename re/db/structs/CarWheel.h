@@ -10,7 +10,7 @@ struct CarWheel {
     /* 0x0188 */ float spin_rate;                             // L2 decomp:re/decomp/1446b7240.c;xref:0x1446df89a,0x1446df8ce,0x1446df901,0x1446df949 wheel angular velocity (abs taken), rad/s
     /* 0x03a8 */ float contact_vel_x;                         // L2 decomp:re/decomp/1446b7240.c;xref:0x1446df89a,0x1446df8ce,0x1446df901,0x1446df949 contact-patch velocity x; |(x,z)|/TyreRadius vs SpeedDownslopeRotRate
     /* 0x03ac */ float contact_vel_z;                         // L2 decomp:re/decomp/1446b7240.c;xref:0x1446df89a,0x1446df8ce,0x1446df901,0x1446df949 contact-patch velocity z
-    /* 0x03b0 */ float slip_angle;                            // L1 decomp:re/decomp/1446e4330.c published by Car_Suspension_PublishWheelState
+    /* 0x03b0 */ float slip_angle;                            // L1 decomp:re/decomp/1446e4330.c published by Car_Ers_IntegrateAndPublishWheels
     /* 0x03b4 */ float slip_ratio;                            // L1 decomp:re/decomp/1446e4330.c <- solver +0x760
     /* 0x03c0 */ float lateral_force;                         // L1 decomp:re/decomp/1446e4330.c
     /* 0x03c4 */ float longitudinal_force;                    // L1 decomp:re/decomp/1446e4330.c <- solver +0x7e0

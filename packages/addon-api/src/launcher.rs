@@ -147,6 +147,13 @@ pub trait GameFiles: Send + Sync {
         None
     }
 
+    /// The folder the game reads the profile's saves from: the profile's launcher store with
+    /// launcher saves on, else the active copy's own save folder (Steam's or the EA app's).
+    fn save_dir(&self, profile: &str) -> Option<PathBuf> {
+        let _ = profile;
+        None
+    }
+
     fn profile_tracks(&self, profile: &str) -> Result<Option<ProfileTracks>> {
         let _ = profile;
         Ok(None)

@@ -1,0 +1,18 @@
+{
+  "id": "color_mod",
+  "name": "Colour Mod",
+  "description": "Per-channel brightness, contrast and gamma, then chroma. Order: contrast scales each channel around mid grey in display brightness (gamma 2.2) and leaves the colour strength alone, gamma raises each channel to a softened power of gamma, brightness adds to each channel, and chroma scales the colour away from the pixel's luminance.",
+  "params": [
+    { "id": "chroma", "type": "float", "default": 1, "min": 0, "max": 2, "step": 0.001,
+      "label": "Chroma", "doc": "Colour strength, from grey at 0 to the picture's own at 1." },
+    { "id": "brightness", "type": "color3", "default": [0, 0, 0], "min": -1, "max": 1,
+      "label": "Brightness", "doc": "Added to the red, green and blue channels." },
+    { "id": "contrast", "type": "color3", "default": [1, 1, 1], "min": 0, "max": 2,
+      "label": "Contrast", "doc": "Scales the red, green and blue channels around mid grey; 1 leaves them as they are." },
+    { "id": "gamma", "type": "color3", "default": [1, 1, 1], "min": 0.1, "max": 3,
+      "label": "Gamma", "doc": "Darkens the midtones of each channel above 1 and brightens them below 1; the strength is softened to the power gamma^0.6." }
+  ],
+  "passes": [
+    { "name": "color_mod", "shader": "color_mod.hlsl", "entry": "effect" }
+  ]
+}

@@ -172,7 +172,7 @@ See [Build operations that records replace](/std/manifest#build-operations-that-
 
 ## 5. Check the migration
 
-`addons/classicseasons/test/row_for_row.sh <year>` builds the shared addon and every season to `<year>` three ways: the 0.6.x layout on launcher 1.5, the split layout on launcher 1.5, and the split layout on launcher 1.6 with the core's boot apply. The first two put the same files in the game folder, and the third gives the same database, rows matched by label.
+Classic Seasons' `test/row_for_row.sh <year>` builds the shared addon and every season to `<year>` three ways: the 0.6.x layout on launcher 1.5, the split layout on launcher 1.5, and the split layout on launcher 1.6 with the core's boot apply. The first two put the same files in the game folder, and the third gives the same database, rows matched by label.
 
 ```text
 a    0.6.x layout, launcher 1.5

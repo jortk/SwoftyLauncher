@@ -1,0 +1,32 @@
+{
+  "id": "broadcast_lens",
+  "name": "Broadcast Lens",
+  "description": "The optics and head of a broadcast camera: the picture rebuilt from a set broadcast resolution, a soft lens with colour fringes towards the edges, the edge enhancer, sensor noise and a vignette.",
+  "params": [
+    { "id": "resolution", "type": "enum", "values": ["native", "1080", "720", "576"], "default": "native",
+      "label": "Broadcast resolution", "doc": "The number of lines the picture is reduced to before it is rebuilt at screen size; native leaves the picture at screen size." },
+    { "id": "resample", "type": "enum", "values": ["smooth", "sharp"], "default": "smooth",
+      "label": "Rebuild filter", "doc": "How the reduced picture is rebuilt at screen size: smooth blends neighbouring lines, sharp keeps edges crisper with a slight overshoot." },
+    { "id": "softness", "type": "float", "default": 0, "min": 0, "max": 2, "step": 0.01,
+      "label": "Softness", "doc": "The optical blur radius in broadcast pixels; 0 adds no blur." },
+    { "id": "aberration", "type": "float", "default": 0, "min": 0, "max": 0.005, "step": 0.0001,
+      "label": "Chromatic aberration", "doc": "How far red and blue part at the corners, as a share of the picture width; the fringe grows from none at the centre towards the edges." },
+    { "id": "detail", "type": "float", "default": 0, "min": 0, "max": 2, "step": 0.01,
+      "label": "Detail", "doc": "How strongly the edge enhancer boosts mid-frequency edges; 0 is off." },
+    { "id": "detail_limit", "type": "float", "default": 0.08, "min": 0, "max": 0.5, "step": 0.01,
+      "label": "Detail limit", "doc": "The most the edge enhancer may change a pixel, in display colour; keeps the halos small." },
+    { "id": "noise", "type": "float", "default": 0, "min": 0, "max": 1, "step": 0.01,
+      "label": "Sensor noise", "doc": "How much noise the sensor adds, more in the shadows than in the highlights; 0 is none." },
+    { "id": "noise_size", "type": "float", "default": 1, "min": 1, "max": 4, "step": 0.1,
+      "label": "Noise size", "doc": "The size of a noise speck in broadcast pixels." },
+    { "id": "vignette", "type": "float", "default": 0, "min": 0, "max": 1, "step": 0.01,
+      "label": "Vignette", "doc": "How far the lens darkens the corners; 0 is none." }
+  ],
+  "textures": [
+    { "name": "src", "scale": 1, "format": "rgba16f", "mips": 8 }
+  ],
+  "passes": [
+    { "name": "grab", "shader": "broadcast_lens.hlsl", "entry": "grab", "output": "src", "budget_ms": 0.2 },
+    { "name": "lens", "shader": "broadcast_lens.hlsl", "entry": "lens", "inputs": ["src"], "budget_ms": 0.4 }
+  ]
+}

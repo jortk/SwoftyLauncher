@@ -1,0 +1,11 @@
+{
+  "content.package": {
+    "f1_1985": {
+      "$comment": "qualifying_tyres holds dry options only: softer, medium, harder",
+      "title": { "literal": "F1 1985" },
+      "entrant_list": "f1_1985",
+      "season": 1985,
+      "rules": { "qualifying_tyres": ["wet"] }
+    }
+  }
+}

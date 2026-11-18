@@ -1,17 +1,7 @@
-//! Multiplayer sessions between launchers.
+//! Online sessions between launchers. The session logic is a server module the launcher loads
+//! ([`client`]); what stays here is the data the pages render ([`types`]) and what this player's profile
+//! plays ([`fingerprint`]).
 
-pub mod bridge;
-pub mod diag;
-pub mod direct;
+pub mod client;
 pub mod fingerprint;
-pub mod game;
-pub mod progress;
-pub mod rooms;
-pub mod seal;
-pub mod session;
-pub mod stun;
-#[cfg(test)]
-mod testserver;
-pub mod transport;
-pub mod turn;
-pub mod ws;
+pub mod types;

@@ -1,0 +1,11 @@
+{
+  "content.package": {
+    "f1_1985": {
+      "$comment": "1985: the softest dry option is a qualifying tyre; its sets come from the event's per-session preset in Qualifying1..3 only",
+      "title": { "literal": "F1 1985" },
+      "entrant_list": "f1_1985",
+      "season": 1985,
+      "rules": { "tyre_warmers": false, "qualifying_tyres": ["softer"] }
+    }
+  }
+}

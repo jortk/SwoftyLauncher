@@ -31,7 +31,7 @@ With F1 25 on both Steam and the EA app, select the game name next to the cover 
 1. [Install your addons](/using/addons) and [mods](/using/mods), then pick a [profile](/using/profiles).
 2. Press **Play**.
 3. On your first Play, the launcher opens a one-time setup. Say whether your game folder holds mods Swofty didn't add, then select **I understand**. If you said no on a Steam copy, the launcher checks the game files against Steam's own list at launch and goes straight on. Otherwise select **Verify game files in Steam**, wait for Steam to finish, then select **I've verified, continue**. On the EA app copy, repair the game in the EA app instead.
-4. On your first launch, select **Accept and launch** in the **Modded play runs offline** dialog. For why modded play runs offline, see [Offline play](/reference/safety).
+4. **Play** launches straight away, since you accepted the **Swofty Launcher EULA** when the launcher first opened. For why modded play runs offline, see [Offline play](/reference/safety).
 5. The first launch after the setup can take 5 to 8 minutes. Don't press Play in Steam or the EA app while it runs.
 
 You'll see **Launching…** on the button, then **Stop** while the game runs. While Swofty builds your mods or copies them into the game folder, the button shows **Building…** and the bar beside it shows how far it got. **Cancel** stops the build after the file it is on and puts the game files back; your profile and addons stay as they are, and the next Play builds again. Addons in a running build can't be updated or removed until it finishes. If Steam is closed, the launcher starts it and waits for it to sign in first; see [Steam](/reference/launch#steam). When you want to play vanilla, launch through Steam as usual.
@@ -44,6 +44,8 @@ An antivirus such as Windows Defender can delete, quarantine or block the launch
 
 - Before the game starts, the launcher checks that the files it put in the game folder are still there. If one is missing or changed, F1 25 is not started: the game folder goes back to vanilla and a **Your antivirus removed mod files** dialog names the files.
 - When `swofty.exe` is gone from the launcher's `bin` folder, **Play** shows **Could not launch F1 25** with how to restore it from quarantine, which folder to exclude, and to reinstall the launcher if it isn't there.
+- On the EA app copy, the launcher checks offline play's `EAAntiCheat.GameServiceLauncher.exe` in the game folder 2 seconds after placing it, before it sends the EA app the launch link. If the file is gone, the EA app is not asked to start F1 25 and starts no repair: the game folder goes back to vanilla and a **Your antivirus blocked a Swofty program** dialog names the file and the folder to exclude. The same dialog ends the wait at once when the EA app logs that it can't find that file after the link.
+- When `f1op_stub.exe` alone is gone from `%LOCALAPPDATA%\Swofty\extensions\offline-play`, **Play** downloads it again, and `state\wrapper-run.log` says an antivirus most likely removed it, what to restore and what to exclude.
 - When `bin\simplified-helper.exe` is gone from Simplified for Swofty's folder, **Play** downloads and installs Simplified for Swofty again. When another addon's helper program is gone, the error names it and says to allow the addon's folder in the antivirus, then reinstall the addon.
 - When the launcher's own `loader` folder is gone from its install, F1 25 is not started and a **Swofty Launcher's loader folder is missing** dialog says to reinstall the launcher. Your addons and settings are kept.
 - Once the game runs, the launcher checks that the mods loaded. If they did not, a **Mods did not load** dialog appears, and the game keeps running without mods.
@@ -68,7 +70,7 @@ When the mods did not load and `version.dll` is still in the game folder, the la
 - Code Integrity and Microsoft Defender events since the game started
 - the antivirus registered with Windows, and programs that hook into games, such as Medal or RivaTuner, among the game's modules
 
-When the loader runs but the game can't create its log in the game folder, the log is in `state\loader-fallback.log` in the data folder instead. The session then counts the mods as loaded, and its `[warning]` line in `state\wrapper-run.log` says what to do.
+When the loader runs but the game can't create its log in the game folder, the log is in `state\loader-fallback.log` in the data folder instead. The crash report and its minidump go to `state\` there too, as `crash-<time>.txt` and `crash-<time>.dmp`, and the `[crash] crash report` line in the log names the full path. The session then counts the mods as loaded, and its `[warning]` line in `state\wrapper-run.log` says what to do.
 
 The **Mods did not load** dialog then names what it found and its fix, for example turning off Smart App Control, removing the Exploit protection settings for `F1_25.exe`, unticking its **Compatibility** tab, or the DLL protection of an antivirus other than Microsoft Defender, by name. When nothing it found explains it, the dialog says so, names any program hooked into the game to close first, and offers **Send Logs to Developers** and **Join the support Discord**. When Windows doesn't let the launcher look inside the game and no antivirus other than Microsoft Defender is on, the dialog says that instead of naming an antivirus. The details are under `[loader]` in `state\wrapper-run.log`, which [Send Logs](/using/send-logs) includes.
 
@@ -95,7 +97,7 @@ If Smart App Control is already off, a policy set by whoever manages the PC bloc
 
 ## If your game files aren't the ones Steam installed
 
-Before a modded session builds anything, the launcher checks the game against Steam's record of the files it installed. If a file was changed outside the launcher, for example by another mod tool or a manual install, F1 25 is not started and a **Your game files have been edited** modal says how many files changed, names the first six, and lists the fix.
+Before a modded session builds anything, the launcher checks the game against Steam's record of the files it installed. If a file was changed outside the launcher, for example by another mod tool or a manual install, F1 25 is not started and a **Your game files have been edited** modal says how many files changed, names the first six, and lists the fix. A DLL other than `steam_api64.dll` that differs from Steam's copy, such as an FSR 4, DLSS or VR runtime drop-in, doesn't stop the launch; a missing one does.
 
 To fix it:
 
@@ -107,6 +109,10 @@ The next launch checks the game again and continues once it matches Steam's copy
 ## If an addon needs a newer F1 25
 
 Addons are made for the latest F1 25 update. When an addon's changes don't apply to an older F1 25, F1 25 is not started and the play bar names the addon, your F1 25 version and the version it needs. Update F1 25 in Steam or the EA app, then press **Play** again. The original error is in the launch log, under **View log**.
+
+## If a program is set to run as administrator
+
+On the EA app copy, **Play** stops with **A program is set to run as administrator** when `EALauncher.exe`, `EADesktop.exe`, `F1_25.exe` or `EAAntiCheat.GameServiceLauncher.exe` is set to **Run this program as an administrator**. The dialog names each file. Right-click it, open **Properties > Compatibility**, untick **Run this program as an administrator**, and untick it under **Change settings for all users** too. Then press **Play** again. For `F1_25.exe` and `EAAntiCheat.GameServiceLauncher.exe`, running Swofty Launcher as administrator doesn't help. See [Programs set to run as administrator](/using/game-copies#programs-set-to-run-as-administrator).
 
 ## If the game closes as it starts
 

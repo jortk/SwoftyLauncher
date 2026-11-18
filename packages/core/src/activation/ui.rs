@@ -477,7 +477,9 @@ pub fn plan_lists(maps: &[MapUi], original: &dyn Fn(&str) -> PathBuf) -> Result<
         for rel in UI_ERPS {
             let p = original(&ui_file(rel));
             if let Some(r) = Erp::read_matching(&p, |n| n == name)?.pop() {
-                stock.insert(list, surface(&r.fragments[0].data()?)?);
+                let s = surface(&r.fragments[0].data()?)
+                    .map_err(|e| Error::Map(format!("{}: {name}: {e}", p.display())))?;
+                stock.insert(list, s);
                 break;
             }
         }
@@ -487,7 +489,13 @@ pub fn plan_lists(maps: &[MapUi], original: &dyn Fn(&str) -> PathBuf) -> Result<
         let mut set = BTreeSet::new();
         for (list, key) in ARRAY_SLOTS {
             let Some((_, surf)) = m.image(key)? else { continue };
-            let s = surface(&surf.fragments[0].data()?)?;
+            let s = match surface(&surf.fragments[0].data()?) {
+                Ok(s) => s,
+                Err(e) => {
+                    notes.push(format!("{}: {key} can't be read ({e}); left out", m.code()));
+                    continue;
+                }
+            };
             let Some(t) = stock.get(list) else {
                 notes.push(format!("{}: the game has no {list} texture array", m.code()));
                 continue;

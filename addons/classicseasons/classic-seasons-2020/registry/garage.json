@@ -1,9 +1,0 @@
-{
- "team.garage": {
-  "renault_2020": {
-   "package": "swofty.classic-seasons-2020/f1_2020",
-   "entry": "lotus",
-   "textures": "garage/renault_2020"
-  }
- }
-}

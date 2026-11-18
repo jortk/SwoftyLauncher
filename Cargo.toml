@@ -1,35 +1,40 @@
 [workspace]
 resolver = "3"
-members = ["addons/builtins", "apps/cli", "apps/launcher", "installer", "packages/addon-api", "packages/core", "packages/formats", "packages/sdk", "templates/launcher-addon", "templates/std/whatif/launcher"]
-default-members = ["addons/builtins", "apps/cli", "packages/addon-api", "packages/core", "packages/formats", "packages/sdk", "templates/launcher-addon", "templates/std/whatif/launcher"]
+members = ["addons/builtins", "apps/ads-helper", "apps/cli", "apps/launcher", "installer", "packages/addon-api", "packages/ads", "packages/core", "packages/formats", "packages/i18n", "packages/preview", "packages/sdk", "packages/shaders", "templates/launcher-addon", "templates/std/whatif/launcher"]
+default-members = ["addons/builtins", "apps/cli", "packages/addon-api", "packages/ads", "packages/core", "packages/formats", "packages/i18n", "packages/sdk", "packages/shaders", "templates/launcher-addon", "templates/std/whatif/launcher"]
 
 [workspace.package]
-version = "1.7.10"
+version = "1.9.77"
 edition = "2024"
 rust-version = "1.95"
-license = "AGPL-3.0-or-later"
+license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/Swofty-Developments/SwoftyLauncher"
 
 [workspace.dependencies]
 swofty-addon = { path = "packages/addon-api" }
+swofty-ads = { path = "packages/ads" }
 swofty-builtins = { path = "addons/builtins" }
 swofty-core = { path = "packages/core" }
 swofty-formats = { path = "packages/formats" }
+swofty-i18n = { path = "packages/i18n" }
+swofty-preview = { path = "packages/preview" }
 swofty-sdk = { path = "packages/sdk" }
+swofty-shaders = { path = "packages/shaders" }
 aes = "0.9"
 anyhow = "1"
+base64 = "0.22"
 bcdec_rs = "0.2"
 clap = { version = "4", features = ["derive", "env", "string"] }
 flate2 = "1"
 md-5 = "0.11"
 png = "0.18"
-rars = { version = "=0.12.0", default-features = false }
+rars = { version = "=0.12.4", default-features = false }
 regex = "1"
 ring = "0.17"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 sha1 = "0.11"
 sha2 = "0.11"
 tar = { version = "0.4", default-features = false }

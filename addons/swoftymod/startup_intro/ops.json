@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "when": { "startup_intro": true },
+  "ops": [
+    { "op": "file.put", "source": { "root": "cache", "path": "videos/cm_f1_sting.bk2" }, "target": "videos/cm_f1_sting.bk2" },
+    { "op": "lang.set", "language": "*", "key": "lng_subtitle_ea_sports_intro", "value": "SWOFTY" }
+  ]
+}

@@ -14,7 +14,8 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::helper::{
-    ADDON_CALLS, API_VERSION, Built, Call, HostCall, Invalidate, MOVE_ADDON, Reply, Request, TASKS, Welcome,
+    ADDON_CALLS, API_VERSION, Built, Call, HostCall, Invalidate, MOVE_ADDON, Reply, Request, SAVE_DIR, TASKS,
+    Welcome,
 };
 use crate::launcher::{
     Addon, AddonInfo, AddonStore, BuildCx, Claim, Cx, GameFiles, GameStatus, ProfileHeads, ProfileInfo,
@@ -69,6 +70,8 @@ fn dispatch(
             hello.host_calls.iter().any(|h| h == MOVE_ADDON),
             Ordering::Relaxed,
         );
+        host.saves
+            .store(hello.host_calls.iter().any(|h| h == SAVE_DIR), Ordering::Relaxed);
         *session = Some(Session {
             addon: hello.addon,
             data_dir: hello.data_dir,
@@ -181,6 +184,7 @@ impl Io {
 struct Host {
     io: Mutex<Io>,
     moves: AtomicBool,
+    saves: AtomicBool,
 }
 
 impl Host {
@@ -192,6 +196,7 @@ impl Host {
                 next: 0,
             }),
             moves: AtomicBool::new(false),
+            saves: AtomicBool::new(false),
         }
     }
 
@@ -310,6 +315,14 @@ impl GameFiles for Host {
 
     fn steam_save_dir(&self) -> Option<PathBuf> {
         host_path(self.call(HostCall::SteamSaveDir)).ok()
+    }
+
+    // None on a launcher before 1.9.29, which doesn't list save_dir.
+    fn save_dir(&self, _profile: &str) -> Option<PathBuf> {
+        if !self.saves.load(Ordering::Relaxed) {
+            return None;
+        }
+        host_path(self.call(HostCall::SaveDir)).ok()
     }
 
     fn profile_tracks(&self, _profile: &str) -> Result<Option<ProfileTracks>> {

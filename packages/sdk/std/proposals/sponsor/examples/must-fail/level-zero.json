@@ -1,0 +1,22 @@
+{
+  "sponsor": {
+    "lvl": {
+      "$comment": "loyalty levels start at 1",
+      "name": "lng_sponsor_lvl",
+      "logo": "logo.png",
+      "designs": [
+        {
+          "key": "p"
+        }
+      ],
+      "career": {
+        "loyalty": [
+          {
+            "level": 0,
+            "design": "p"
+          }
+        ]
+      }
+    }
+  }
+}

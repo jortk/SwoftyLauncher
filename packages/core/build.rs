@@ -45,6 +45,8 @@ const UNRELATED: &[&str] = &[
 const DATA: &[&str] = &[
     "../../addons/swoftymod/swofty.json",
     "../../addons/swoftymod/db/core.json",
+    "../../addons/swoftymod/startup_intro/ops.json",
+    "../../addons/swoftymod/startup_intro/cm_f1_sting.bk2",
     "../../tools/gamedb/catalog/keys.tsv.gz",
     "../../tools/gamedb/catalog/tables.tsv",
     "../../tools/uicatalog/catalog.json",
@@ -69,6 +71,26 @@ fn files(dir: &Path, skip: &[&str], out: &mut Vec<PathBuf>) {
     }
 }
 
+const LIBRARY: &str = "../../addons/swoftymod/shaders";
+
+fn library_table(root: &Path, paths: &[PathBuf]) -> String {
+    let base = root.join(LIBRARY);
+    let mut out = String::from("pub static FILES: &[(&str, &[u8])] = &[\n");
+    for path in paths {
+        let Ok(rel) = path.strip_prefix(&base) else {
+            continue;
+        };
+        let rel = rel.to_string_lossy().replace('\\', "/");
+        let abs = path.canonicalize().unwrap_or_else(|_| path.clone());
+        out.push_str(&format!(
+            "    ({rel:?}, include_bytes!({:?})),\n",
+            abs.to_string_lossy()
+        ));
+    }
+    out.push_str("];\n");
+    out
+}
+
 fn fnv(hash: &mut u64, bytes: &[u8]) {
     for b in bytes {
         *hash ^= u64::from(*b);
@@ -84,6 +106,13 @@ fn main() {
         files(&root.join(krate), &[], &mut paths);
     }
     paths.extend(DATA.iter().map(|d| root.join(d)));
+    let mut library = Vec::new();
+    files(&root.join(LIBRARY), &[], &mut library);
+    library.sort();
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("set by cargo"));
+    std::fs::write(out_dir.join("shader_library.rs"), library_table(&root, &library))
+        .expect("writes the shader library table");
+    paths.extend(library);
     paths.sort();
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for path in &paths {
@@ -107,7 +136,7 @@ fn main() {
     for dir in ["src", "../formats/src", "../addon-api/src", "../../Cargo.lock"] {
         println!("cargo:rerun-if-changed={}", root.join(dir).display());
     }
-    for d in DATA {
+    for d in DATA.iter().chain(&[LIBRARY]) {
         println!("cargo:rerun-if-changed={}", root.join(d).display());
     }
 }

@@ -1,0 +1,11 @@
+{
+  "content.package": {
+    "f1_1950": {
+      "$comment": "mandatory_tyre_change is true, false or null",
+      "title": { "literal": "F1 1950" },
+      "entrant_list": "f1_1950",
+      "season": 1950,
+      "rules": { "mandatory_tyre_change": "off" }
+    }
+  }
+}

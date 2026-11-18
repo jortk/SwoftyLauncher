@@ -1,11 +1,16 @@
 use std::sync::{Arc, LazyLock};
 
-use gpui_kit::component::{h_flex, v_flex};
+use crate::scale::px;
+use gpui_kit::assets::IconName;
+use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use swofty_i18n::tr;
 
 pub const INVITE: &str = "https://discord.gg/STWsgyJKZS";
 pub const LABEL: &str = "Join the Discord";
+pub(crate) const BANNER_CARD_ID: &str = "discord-banner";
 
 const BODY: &str = "Get help from the developers and hear about new releases and addons first.";
 pub(crate) const LOGO: &[u8] = include_bytes!("../assets/discord.svg");
@@ -28,7 +33,10 @@ fn server_icon(size: f32) -> Div {
 }
 
 /// The Discord invite at the top of the News page, shorter in `compact` windows.
-pub(crate) fn banner(compact: bool) -> Stateful<Div> {
+pub(crate) fn banner(
+    compact: bool,
+    on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
     let white = |alpha: f32| hsla(0., 0., 1., alpha);
     h_flex()
         .id("discord-banner")
@@ -36,7 +44,8 @@ pub(crate) fn banner(compact: bool) -> Stateful<Div> {
         .flex_shrink_0()
         .w_full()
         .min_h(px(if compact { 0. } else { 116. }))
-        .px(px(if compact { 20. } else { 24. }))
+        .pl(px(if compact { 20. } else { 24. }))
+        .pr(px(if compact { 38. } else { 24. }))
         .py(px(if compact { 14. } else { 20. }))
         .gap(px(18.))
         .items_center()
@@ -70,13 +79,13 @@ pub(crate) fn banner(compact: bool) -> Stateful<Div> {
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(white(0.8))
                         .child(svg().data(LOGO).size(px(13.)).text_color(white(0.8)))
-                        .child("DISCORD SERVER"),
+                        .child(tr("DISCORD SERVER")),
                 )
                 .child(
                     div()
                         .text_size(px(if compact { 17. } else { 20. }))
                         .font_weight(FontWeight::BOLD)
-                        .child("Swofty Developments"),
+                        .child(tr("Swofty Developments")),
                 )
                 .when(!compact, |d| {
                     d.child(
@@ -108,5 +117,24 @@ pub(crate) fn banner(compact: bool) -> Stateful<Div> {
                     cx.stop_propagation();
                     cx.open_url(INVITE);
                 }),
+        )
+        .child(
+            div()
+                .id("discord-banner-dismiss")
+                .absolute()
+                .top(px(if compact { 6. } else { 8. }))
+                .right(px(if compact { 6. } else { 8. }))
+                .p(px(4.))
+                .rounded(px(4.))
+                .cursor_pointer()
+                .text_color(white(0.75))
+                .hover(|s| s.bg(white(0.16)).text_color(white(1.)))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(move |ev, window, cx| {
+                    cx.stop_propagation();
+                    on_dismiss(ev, window, cx);
+                })
+                .tooltip(|window, cx| Tooltip::new(tr("Dismiss")).build(window, cx))
+                .child(Icon::new(IconName::X).size(px(14.))),
         )
 }

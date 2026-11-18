@@ -7,7 +7,7 @@ description: A launcher and mod loader for F1 25 on Windows and Linux. Addons ch
 screenshots:
   hero:
     src: /screenshots/hero-launcher.png
-    alt: The launcher's Addons page with SwoftyMod, Team Simplified, Custom Grid Size and an AlphaTauri livery addon, and the sidebar tiles for Profiles, Addons and Team Simplified's Mods
+    alt: The launcher's Home page with the Swofty Launcher 1.9 news post, the Discord server banner and the changelogs
   gallery:
     - src: /screenshots/gallery-ingame.png
       alt: The F1 25 home menu with ADDON SETTINGS under Career, the "Launched with Swofty Launcher" panel and the F9 prompt
@@ -25,9 +25,9 @@ hero:
     text: F1 25
     link: https://store.steampowered.com/app/3059520/
   download:
-    windows: https://github.com/Swofty-Developments/SwoftyLauncher/raw/main/installer/SwoftyLauncherInstaller.exe
-    linux: https://github.com/Swofty-Developments/SwoftyLauncher/raw/main/installer/SwoftyLauncherInstaller-linux.zip
-    both: https://github.com/Swofty-Developments/SwoftyLauncher/raw/main/installer/SwoftyLauncherInstaller.zip
+    windows: https://cdn.swofty.net/launcher/latest/SwoftyLauncherInstaller.exe
+    linux: https://cdn.swofty.net/launcher/latest/SwoftyLauncherInstaller-linux.zip
+    both: https://cdn.swofty.net/launcher/latest/SwoftyLauncherInstaller.zip
     manual: /guide/installation
   docs: /guide/
 

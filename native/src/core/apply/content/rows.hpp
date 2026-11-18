@@ -302,6 +302,42 @@ public:
     const std::vector<Write> &writes() const { return out_; }
     std::vector<std::string> lines;
 
+    // Moves every key this engine wrote under row `from` to row `to` (virtual entrant lists); returns how many.
+    std::size_t move_row(const std::string &from, const std::string &to)
+    {
+        std::size_t n = 0;
+        std::string prefix = from + ".";
+        for (auto &w : out_)
+            if (w.path.compare(0, prefix.size(), prefix) == 0) {
+                w.path = to + "." + w.path.substr(prefix.size());
+                w.key = gvdb::fnv64(w.path);
+                n++;
+            }
+        index_.clear();
+        for (std::size_t i = 0; i < out_.size(); i++)
+            index_[out_[i].key] = i;
+        undo_.clear();
+        return n;
+    }
+
+    // The record that created the key at `path` as a new record, or empty when no record did.
+    std::string creator(const std::string &path) const
+    {
+        auto it = index_.find(gvdb::fnv64(path));
+        if (it == index_.end() || !out_[it->second].fresh)
+            return {};
+        return out_[it->second].record;
+    }
+
+    // Whether this engine wrote the key at `path` as a new record (not over the game's own).
+    bool wrote_fresh(const std::string &path) const
+    {
+        auto it = index_.find(gvdb::fnv64(path));
+        return it != index_.end() && out_[it->second].fresh;
+    }
+
+    void put_text(const std::string &path, int tag, std::string text) { write(make(path, tag, std::move(text))); }
+
 private:
     struct Undo {
         uint64_t key;

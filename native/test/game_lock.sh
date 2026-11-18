@@ -1,14 +1,14 @@
 # Sourced by test scripts that start a fake F1_25.exe under Wine. On a machine with the shared
-# game lock (/mnt/work/.f1-game.lock.d, or $SWOFTY_GAME_LOCK), the script holds it for its whole
+# game lock (/mnt/work/F1/f1-game.lock.d, or $SWOFTY_GAME_LOCK), the script holds it for its whole
 # run, so a real launch never sees a stray F1_25.exe. It takes the lock only while the game queue
-# (.f1-game.queue beside the lock, or $SWOFTY_GAME_QUEUE) is empty, so a queued game launch goes
+# (f1-game.queue beside the lock, or $SWOFTY_GAME_QUEUE) is empty, so a queued game launch goes
 # first. CI has no lock folder and skips this.
 game_lock_take() {
-    local lock=${SWOFTY_GAME_LOCK:-/mnt/work/.f1-game.lock.d}
+    local lock=${SWOFTY_GAME_LOCK:-/mnt/work/F1/f1-game.lock.d}
     [ -n "${SWOFTY_GAME_LOCK_HELD:-}" ] && return 0
     [ -d "$(dirname "$lock")" ] || return 0
     local who="wine-test $(basename "$0") pid $$ $(date +%H:%M)" waited=0
-    local queue=${SWOFTY_GAME_QUEUE:-$(dirname "$lock")/.f1-game.queue}
+    local queue=${SWOFTY_GAME_QUEUE:-$(dirname "$lock")/f1-game.queue}
     until [ ! -s "$queue" ] && mkdir "$lock" 2>/dev/null; do
         if [ $waited -eq 0 ]; then
             if [ -s "$queue" ]; then

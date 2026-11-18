@@ -175,7 +175,9 @@ class RepoData(unittest.TestCase):
             for e in doc['bindings']:
                 self.assertTrue(e['pattern'], f'{name}: {e["id"]}')
                 self.assertTrue(e['section'].startswith('.'), f'{name}: {e["id"]}')
-                self.assertNotIn(e['section'], ov.get('sections', {}), f'{name}: {e["id"]} names a KB section')
+                smap = ov.get('sections', {})
+                if e['section'] in smap:
+                    self.assertIn(e['section'], smap.values(), f'{name}: {e["id"]} names a KB section')
                 self.assertIn(e['status'], ('stable', 'experimental', 'unresolvable'))
                 self.assertEqual(e['status'] == 'unresolvable', 'reason' in e)
 
@@ -194,6 +196,43 @@ class RepoData(unittest.TestCase):
                 self.assertNotIn('rva', e)
                 self.assertEqual('match' in e, 'match' in hinted.get(e['id'], {}), e['id'])
 
+    def test_f2_revamp_bindings(self):
+        by_id = {b['id']: b for b in self.bindings}
+        want = {
+            'k_Career_DriverAcademiesComponentDesc': 'data',
+            'k_Career_RivalManagerComponentDesc': 'data',
+            'Career_DriverAcademies_MapFindOrAdd': 'func',
+            'Game_DriverCareerTeamSelect_OnMessage': 'func',
+        }
+        for name, kind in want.items():
+            self.assertIn(name, by_id)
+            self.assertEqual(by_id[name]['kind'], kind, name)
+            self.assertEqual(by_id[name]['status'], 'experimental', name)
+        self.assertEqual(by_id['Career_DriverAcademies_MapFindOrAdd']['resolve']['kind'], 'rel32')
+        fields = {
+            ('DriverAcademiesComponent', 'academies_begin'): 0x298,
+            ('DriverAcademiesComponent', 'academies_end'): 0x2a0,
+            ('DriverAcademiesComponent', 'driver_academy_entries'): 0x2c8,
+            ('RivalManagerComponent', 'managers_begin'): 0xbd8,
+            ('RivalManagerComponent', 'managers_end'): 0xbe0,
+            ('RivalManager', 'current_rivalries_begin'): 0x18,
+            ('RivalManager', 'current_rivalries_end'): 0x20,
+            ('DriverCareerTeamSelectViewModel', 'selected_team_key'): 0xf20,
+        }
+        text = ''
+        for name in ('career.hpp', 'game.hpp'):
+            with open(os.path.join(bindgen.OUT_INC, 'game', name)) as f:
+                text += f.read()
+        for (struct, field), off in fields.items():
+            self.assertIn(f'static_assert(offsetof({struct}, {field}) == {off:#x});', text)
+
+    def test_steam_26566308_hints_the_f2_revamp_bindings(self):
+        hints = self.overlays['steam-26566308']['hints']
+        self.assertEqual(hints['k_Career_DriverAcademiesComponentDesc']['match'], '0x1a7328d')
+        self.assertEqual(hints['k_Career_RivalManagerComponentDesc']['match'], '0x15cd07c')
+        self.assertEqual(hints['Career_DriverAcademies_MapFindOrAdd']['match'], '0xd6f9af')
+        self.assertEqual(hints['Game_DriverCareerTeamSelect_OnMessage']['match'], '0x1a6b230')
+
     def test_ea_set_is_packed(self):
         self.assertIn('ea', self.overlays)
         self.assertTrue(self.overlays['ea']['build']['packed'])
@@ -203,6 +242,8 @@ class RepoData(unittest.TestCase):
 class SteamExe(unittest.TestCase):
     def test_every_pattern_matches_once(self):
         import bindverify
+        if not bindverify.is_kb_build(os.environ['SWOFTY_STEAM_EXE']):
+            self.skipTest('SWOFTY_STEAM_EXE is not the KB build')
         img = bindverify.Image(os.environ['SWOFTY_STEAM_EXE'])
         _, bindings, _, _ = bindgen.load()
         for b in bindings:

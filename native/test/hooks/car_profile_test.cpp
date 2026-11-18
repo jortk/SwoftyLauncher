@@ -80,6 +80,28 @@ int main()
                race.profile.ai_grip_scale == 0.87f && race.profile.when.size() == 2,
            "the F1 1990 race engine and AI grip are one record");
 
+    cp::Memo memo;
+    cp::Memo::Key key;
+    key.store = 7;
+    key.session = "race";
+    expect(!memo.fresh(1, key), "a car never evaluated is not fresh");
+    memo.note(1, key);
+    expect(memo.fresh(1, key) && !memo.fresh(0, key), "an evaluated car is fresh for the same inputs only");
+    cp::Memo::Key other = key;
+    other.store = 8;
+    expect(!memo.fresh(1, other), "a registry change makes the car evaluate again");
+    other = key;
+    other.session = "qualifying";
+    expect(!memo.fresh(1, other), "a session change makes the car evaluate again");
+    other = key;
+    other.ai = true;
+    expect(!memo.fresh(1, other), "a change of AI control makes the car evaluate again");
+    memo.forget(1);
+    expect(!memo.fresh(1, key), "a rebuilt car evaluates again");
+    memo.note(1, key);
+    memo.clear();
+    expect(!memo.fresh(1, key), "clear forgets every car");
+
     float v = 0;
     auto in_session = [&](const char *type) {
         for (uint32_t i = 0; i < 3; i++)

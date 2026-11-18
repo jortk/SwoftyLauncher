@@ -77,7 +77,7 @@ swofty build
 ```
 
 - The mod's id is `<author>.<name>` from `mod.serps`: each lowercased, each run of other characters turned into `-`. `RM Designs` and `Scuderia AlphaTauri ORLEN` give `rm-designs.scuderia-alphatauri-orlen`. Without either, the id comes from the file name: `My Mod (v2)` gives `my-mod-v2`.
-- The addon's id is `mod.<mod id>`, at most 64 characters; a longer one keeps its first words and ends in a short hash.
+- The addon's id is `imported-mod.<mod id>`. The importer asks for `mod.<mod id>`, at most 64 characters; a longer one keeps its first words and ends in a short hash. An import installed before the launcher renamed imports keeps `mod.<mod id>` ([The addon's id](./tracks#the-addon-s-id)).
 - Importing a mod again replaces its addon, and every profile keeps its place and switch.
 - `swofty build` prints the addon's ops among the rest. Read it for conflicts with other addons, and for ops waiting on the in-game loader. The **Addons** page shows the same counts on the addon's row ([Check an addon](/using/addons#check-an-addon)).
 - The addon's `import-report.txt` lists what the conversion did, and every conversion writes a log to `$DATA/addon-data/teamsimplified.mods/logs/`.
@@ -152,7 +152,7 @@ Without the in-game loader, `lang.set` ops wait and the text doesn't change.
 
 ## Parts
 
-A mod can come in parts: folders that each hold game files of their own, such as `2026 Broadcast graphics/shader_package_2025/` beside `Realistic Tyre colours/shader_package_2025/`. A mod with two or more parts imports as one addon per part, `mod.<mod id>.<part>`, each with its own switch, place in the load order and conflicts. A part is named by the folders that tell it apart: `Realistic Tyre colours — <mod name>`.
+A mod can come in parts: folders that each hold game files of their own, such as `2026 Broadcast graphics/shader_package_2025/` beside `Realistic Tyre colours/shader_package_2025/`. A mod with two or more parts imports as one addon per part, `imported-mod.<mod id>.<part>`, each with its own switch, place in the load order and conflicts. A part is named by the folders that tell it apart: `Realistic Tyre colours — <mod name>`.
 
 When the parts are alternatives that change the same things, such as tyre colour sets for different seasons, they import as variants: every variant is installed and only one is on.
 

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use md5::{Digest as _, Md5};
 use swofty_formats::erp::{Entry, ErpFile, Resource, STORED, ZSTD, compress};
 use swofty_formats::gvdb::Gvdb;
-use swofty_formats::pkg::{Node, Pkg};
+use swofty_formats::pkg::{Node, Pkg, is_pkg};
 
 use super::ailine::{self, Spacing};
 use super::grid;
@@ -127,6 +127,7 @@ pub const TRACK_LAYERS: &str = "track_data.track_layers";
 pub struct LayerWorld {
     pub group: String,
     pub eri: String,
+    pub cars: u32,
 }
 
 impl LayerWorld {
@@ -139,6 +140,7 @@ impl LayerWorld {
         (group_ok && eri_ok && !stock && group.contains(FILENAME) && eri.contains(FILENAME)).then(|| Self {
             group: group.to_owned(),
             eri: eri.to_owned(),
+            cars: 0,
         })
     }
 
@@ -161,15 +163,70 @@ impl LayerWorld {
     }
 }
 
+const GAME_SETUP_MODES: &str = "game_setup.game_setup_modes";
+const ENTRANT_SETUP_MODES: &str = "entrants.entrant_setup_modes";
+
+fn rows_by_label(db: &Gvdb, table: &str, row: &str) -> BTreeMap<String, String> {
+    let n = db.instance_count(table, row).unwrap_or(0);
+    (0..n)
+        .filter_map(|i| {
+            let at = format!("{table}.{row}_{i}");
+            Some((db.get_text(&format!("{at}._metadata_"))?, at))
+        })
+        .collect()
+}
+
+fn list_items(value: &str) -> impl Iterator<Item = &str> {
+    value.split(',').map(str::trim).filter(|v| !v.is_empty())
+}
+
+fn setup_mode_cars(db: &Gvdb) -> BTreeMap<String, u32> {
+    let entrant = rows_by_label(db, ENTRANT_SETUP_MODES, "entrant_setup_mode");
+    rows_by_label(db, GAME_SETUP_MODES, "game_setup_mode")
+        .into_iter()
+        .map(|(label, at)| {
+            let modes = db
+                .get_text(&format!("{at}.entrant_setup_modes"))
+                .unwrap_or_default();
+            let cars = list_items(&modes)
+                .filter_map(|m| db.get_text(&format!("{}.max_entrants", entrant.get(m)?)))
+                .filter_map(|v| v.trim().parse::<i64>().ok())
+                .filter(|n| *n > 0)
+                .max()
+                .map_or(0, |n| n.min(u32::MAX as i64) as u32);
+            (label, cars)
+        })
+        .collect()
+}
+
 pub fn layer_worlds(db: &Gvdb) -> Vec<LayerWorld> {
     let n = db.instance_count(TRACK_LAYERS, "TrackLayer").unwrap_or(0);
-    let worlds: BTreeSet<LayerWorld> = (0..n)
-        .filter_map(|i| {
-            let text = |f: &str| db.get_text(&format!("{TRACK_LAYERS}.TrackLayer_{i}.{f}"));
-            LayerWorld::new(&text("worldAssetGroup")?, &text("worldEri")?)
-        })
-        .collect();
-    worlds.into_iter().collect()
+    let mode_cars = setup_mode_cars(db);
+    let mut worlds: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for i in 0..n {
+        let text = |f: &str| db.get_text(&format!("{TRACK_LAYERS}.TrackLayer_{i}.{f}"));
+        let Some(world) = text("worldAssetGroup")
+            .zip(text("worldEri"))
+            .and_then(|(group, eri)| LayerWorld::new(&group, &eri))
+        else {
+            continue;
+        };
+        let modes = text("game_setup_modes").unwrap_or_default();
+        let cars = list_items(&modes)
+            .filter_map(|m| mode_cars.get(m).copied())
+            .max()
+            .unwrap_or(0);
+        let most = worlds.entry((world.group, world.eri)).or_default();
+        *most = (*most).max(cars);
+    }
+    worlds
+        .into_iter()
+        .map(|((group, eri), cars)| LayerWorld { group, eri, cars })
+        .collect()
+}
+
+pub fn room_for(worlds: &[LayerWorld], grid: u32) -> u32 {
+    worlds.iter().map(|w| w.cars).fold(grid, u32::max)
 }
 
 pub fn missing_worlds(worlds: &[LayerWorld], code: &str, provided: impl Fn(&str) -> bool) -> Vec<LayerWorld> {
@@ -180,6 +237,40 @@ pub fn missing_worlds(worlds: &[LayerWorld], code: &str, provided: impl Fn(&str)
         .collect()
 }
 
+pub const AI_ASSET_DATA: &str = "ai.asset_data.";
+
+/// An AI team an addon added by copying the row of team `from` in `ai.asset_data.<package>`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AiTeam {
+    pub package: String,
+    pub team: String,
+    pub from: String,
+}
+
+impl AiTeam {
+    pub fn group(&self, code: &str) -> String {
+        track_group(code, &format!("ai/{0}/{1}/{1}", self.package, self.team))
+    }
+}
+
+/// The AI teams the `add-row` copies `(from, row)` added to an `ai.asset_data` table, read from the built `db`.
+pub fn ai_teams<'a>(db: &Gvdb, copies: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<AiTeam> {
+    let label = |row: &str| db.get_text(&format!("{row}._metadata_"));
+    let teams: BTreeSet<AiTeam> = copies
+        .into_iter()
+        .filter_map(|(from, row)| {
+            let package = row.strip_prefix(AI_ASSET_DATA)?.split('.').next()?;
+            Some(AiTeam {
+                package: package.to_owned(),
+                team: label(row)?,
+                from: label(from)?,
+            })
+        })
+        .filter(|t| !t.team.is_empty() && t.team != t.from)
+        .collect();
+    teams.into_iter().collect()
+}
+
 pub struct PlaceInput<'a> {
     pub pkg: &'a TrackPackage,
     pub dir: &'a Path,
@@ -187,6 +278,7 @@ pub struct PlaceInput<'a> {
     pub slot: Option<(&'a str, &'a Path)>,
     pub cars: u32,
     pub worlds: &'a [LayerWorld],
+    pub ai_teams: &'a [AiTeam],
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -197,6 +289,7 @@ pub struct Placement {
     pub replaced: BTreeMap<String, PathBuf>,
     pub added: BTreeMap<String, PathBuf>,
     pub aliases: BTreeMap<String, String>,
+    pub ai_aliases: BTreeMap<String, String>,
     pub mips: usize,
     pub grid: Option<grid::Extension>,
     pub repaired: Vec<String>,
@@ -229,6 +322,55 @@ fn alias_world(
     set_data(&mut world, 0, &pkg.to_bytes()?)?;
     world.name = eaid;
     Ok([world, graph])
+}
+
+fn ai_dir(code: &str, package: &str, team: &str) -> String {
+    format!("{EAID}environment_package/tracks/{code}/ai/{package}/{team}/")
+}
+
+fn rename_strings(node: &mut Node, from: &str, to: &str) -> usize {
+    match node {
+        Node::Val(v) if v.as_str() == Some(from) => {
+            v.set_str(to);
+            1
+        }
+        Node::Obj(o) => o.items.iter_mut().map(|(_, n)| rename_strings(n, from, to)).sum(),
+        Node::Arr(a) => a.items.iter_mut().map(|n| rename_strings(n, from, to)).sum(),
+        _ => 0,
+    }
+}
+
+fn ai_stand_in(file: &ErpFile, res: &Resource, code: &str, team: &AiTeam) -> Result<Resource> {
+    let (src, dst) = (
+        ai_dir(code, &team.package, &team.from),
+        ai_dir(code, &team.package, &team.team),
+    );
+    let rest = res.name.strip_prefix(&src).unwrap_or(&res.name);
+    let rest = match rest.strip_prefix(team.from.as_str()) {
+        Some(ext) if ext.starts_with('.') => format!("{}{ext}", team.team),
+        _ => rest.to_owned(),
+    };
+    let mut res = file.load(res)?;
+    if let Some(data) = renamed_pkg(&res, team) {
+        let mut copy = res.clone();
+        if set_data(&mut copy, 0, &data).is_ok() {
+            res = copy;
+        }
+    }
+    res.name = format!("{dst}{rest}");
+    Ok(res)
+}
+
+fn renamed_pkg(res: &Resource, team: &AiTeam) -> Option<Vec<u8>> {
+    let data = res.fragments.first()?.data().ok()?;
+    if !is_pkg(&data) {
+        return None;
+    }
+    let mut pkg = Pkg::parse(&data).ok()?;
+    if rename_strings(&mut pkg.root, &team.from, &team.team) == 0 {
+        return None;
+    }
+    pkg.to_bytes().ok()
 }
 
 fn set_data(res: &mut Resource, index: usize, data: &[u8]) -> Result<()> {
@@ -326,6 +468,9 @@ fn stamp(input: &PlaceInput) -> Result<String> {
     for w in input.worlds {
         sha2::Digest::update(&mut h, format!("|{}|{}", w.group, w.eri));
     }
+    for t in input.ai_teams {
+        sha2::Digest::update(&mut h, format!("|ai:{}/{}<{}", t.package, t.team, t.from));
+    }
     Ok(crate::baseline::hex(&sha2::Digest::finalize(h))[..16].to_owned())
 }
 
@@ -400,6 +545,33 @@ pub fn place(input: &PlaceInput, cache: &Path) -> Result<Placement> {
         placement
             .aliases
             .insert(format!("{code}_{v}"), format!("{code}_{from}"));
+    }
+    for team in input.ai_teams {
+        let own = ai_dir(code, &team.package, &team.team);
+        if file.erp.resources.iter().any(|r| r.name.starts_with(&own)) {
+            continue;
+        }
+        let src = ai_dir(code, &team.package, &team.from);
+        let from: Vec<&Resource> = file
+            .erp
+            .resources
+            .iter()
+            .filter(|r| r.name.starts_with(&src))
+            .collect();
+        if from.is_empty() {
+            placement.notes.push(format!(
+                "no AI data can stand in for {}/{}: the track has none for {}",
+                team.package, team.team, team.from
+            ));
+            continue;
+        }
+        for r in from {
+            owned.push(ai_stand_in(&file, r, code, team)?);
+        }
+        placement.ai_aliases.insert(
+            format!("{}/{}", team.package, team.team),
+            format!("{}/{}", team.package, team.from),
+        );
     }
     let mut layer_groups = Vec::new();
     if input.slot.is_none() {
@@ -715,6 +887,7 @@ mod tests {
             slot: None,
             cars: 22,
             worlds: &[],
+            ai_teams: &[],
         };
         let edited = line("a longer racing line");
         std::fs::write(dir.join(&pkg.erp), archive(edited.to_bytes())).unwrap();
@@ -791,6 +964,7 @@ mod tests {
             slot: None,
             cars: 22,
             worlds: &[],
+            ai_teams: &[],
         };
         let placement = place(&input, &dir.join("cache")).unwrap();
         assert_eq!(placement.spaced, ["pit"]);
@@ -922,10 +1096,186 @@ mod tests {
             slot: None,
             cars: 0,
             worlds: &worlds,
+            ai_teams: &[],
         };
         let placement = place(&input, &dir.join("cache")).unwrap();
         let placed = ErpFile::open(&placement.dir.join(&placement.archive)).unwrap();
         (placement, placed)
+    }
+
+    fn lotus_and_cater() -> AiTeam {
+        AiTeam {
+            package: "f1_2025_vehicle_package".into(),
+            team: "cater".into(),
+            from: "lotus".into(),
+        }
+    }
+
+    fn unreadable_pkg() -> Vec<u8> {
+        let mut data = b"!pkgAITP".to_vec();
+        data.extend([0x10, 0, 0, 0x80, 0x20, 0, 0, 0x80]);
+        data.extend(b"!xyz lotus");
+        data
+    }
+
+    fn place_with_ai(name: &str, teams: &[&str]) -> (Placement, ErpFile) {
+        use swofty_formats::erp::Fragment;
+        use swofty_formats::pkg::{Obj, Val};
+        let dir = std::env::temp_dir().join(format!("swofty-place-{name}-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let pkg = TrackPackage::parse(crate::map::tests::OKAYAMA_LIKE.as_bytes()).unwrap();
+        world_archive(&dir, &pkg, &[]);
+        let resource = |name: String, kind: &str, raw: Vec<u8>| Resource {
+            name,
+            kind: swofty_formats::erp::kind(kind).unwrap(),
+            unk: vec![0; 4],
+            fragments: vec![Fragment {
+                name: *b"temp",
+                offset: 0,
+                size: raw.len() as u64,
+                flags: 0x10,
+                compression: STORED,
+                packed: raw.len() as u64,
+                raw,
+            }],
+            hash: [0; 16],
+        };
+        let mut ai = Vec::new();
+        for team in teams {
+            let at = ai_dir("testring", "f1_2025_vehicle_package", team);
+            let wear = Pkg {
+                name: *b"TTWD",
+                root: Node::Obj(Obj::new(vec![
+                    (Val::str("car"), Node::Val(Val::str(*team))),
+                    (Val::str("track"), Node::Val(Val::str("testring"))),
+                ])),
+                vca: Vec::new(),
+                layout: None,
+            };
+            ai.push(resource(
+                format!("{at}{team}.tyre_wear"),
+                "TyreWearData",
+                wear.to_bytes().unwrap(),
+            ));
+            ai.push(resource(format!("{at}{team}.vp_times"), "VPTimes", vec![7, 7, 7]));
+            ai.push(resource(
+                format!("{at}{team}.thpd"),
+                "AIThrottle",
+                unreadable_pkg(),
+            ));
+        }
+        let path = dir.join(&pkg.erp);
+        let base = ErpFile::open(&path).unwrap();
+        let entries = base
+            .erp
+            .resources
+            .iter()
+            .map(Entry::Copy)
+            .chain(ai.into_iter().map(Entry::Owned))
+            .collect();
+        let tmp = dir.join("with-ai.erp");
+        base.write(entries, &tmp).unwrap();
+        drop(base);
+        std::fs::rename(&tmp, &path).unwrap();
+        let input = PlaceInput {
+            pkg: &pkg,
+            dir: &dir,
+            game: &dir,
+            slot: None,
+            cars: 0,
+            worlds: &[],
+            ai_teams: &[lotus_and_cater()],
+        };
+        let placement = place(&input, &dir.join("cache")).unwrap();
+        let placed = ErpFile::open(&placement.dir.join(&placement.archive)).unwrap();
+        (placement, placed)
+    }
+
+    #[test]
+    fn an_addon_ai_team_gets_the_track_data_of_the_team_its_row_copies() {
+        let (placement, placed) = place_with_ai("ai-team", &["lotus", "mclaren"]);
+        let t = "eaid://environment_package/tracks/testring/ai/f1_2025_vehicle_package";
+        let wear = placed
+            .load(placed.erp.find(&format!("{t}/cater/cater.tyre_wear")).unwrap())
+            .unwrap();
+        let doc = Pkg::parse(&wear.fragments[0].data().unwrap()).unwrap();
+        let text = |k: &str| doc.root.as_obj()?.get(k)?.as_val()?.as_str().map(str::to_owned);
+        assert_eq!(text("car").as_deref(), Some("cater"));
+        assert_eq!(text("track").as_deref(), Some("testring"));
+        let times = placed
+            .load(placed.erp.find(&format!("{t}/cater/cater.vp_times")).unwrap())
+            .unwrap();
+        assert_eq!(times.fragments[0].data().unwrap(), [7, 7, 7]);
+        let throttle = placed
+            .load(placed.erp.find(&format!("{t}/cater/cater.thpd")).unwrap())
+            .unwrap();
+        assert!(Pkg::parse(&unreadable_pkg()).is_err());
+        assert_eq!(throttle.fragments[0].data().unwrap(), unreadable_pkg());
+        assert!(placed.erp.find(&format!("{t}/lotus/lotus.tyre_wear")).is_ok());
+        let group = lotus_and_cater().group("testring");
+        assert_eq!(
+            group,
+            "asset_groups/environment_package/tracks/testring/ai/f1_2025_vehicle_package/cater/cater.assetgroup"
+        );
+        assert_eq!(placement.groups.iter().filter(|g| **g == group).count(), 1);
+        assert_eq!(
+            placement
+                .ai_aliases
+                .get("f1_2025_vehicle_package/cater")
+                .map(String::as_str),
+            Some("f1_2025_vehicle_package/lotus")
+        );
+        std::fs::remove_dir_all(placement.dir.parent().unwrap().parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn an_ai_team_the_track_has_or_cannot_copy_is_left_alone() {
+        let (placement, placed) = place_with_ai("ai-own", &["lotus", "cater"]);
+        let t = "eaid://environment_package/tracks/testring/ai/f1_2025_vehicle_package";
+        let wear = placed
+            .load(placed.erp.find(&format!("{t}/cater/cater.tyre_wear")).unwrap())
+            .unwrap();
+        let doc = Pkg::parse(&wear.fragments[0].data().unwrap()).unwrap();
+        let car = doc
+            .root
+            .as_obj()
+            .and_then(|o| o.get("car")?.as_val()?.as_str().map(str::to_owned));
+        assert_eq!(car.as_deref(), Some("cater"));
+        assert!(placement.ai_aliases.is_empty());
+        std::fs::remove_dir_all(placement.dir.parent().unwrap().parent().unwrap()).ok();
+
+        let (placement, placed) = place_with_ai("ai-none", &["mclaren"]);
+        assert!(placed.erp.find(&format!("{t}/cater/cater.tyre_wear")).is_err());
+        assert!(placement.ai_aliases.is_empty());
+        assert_eq!(
+            placement.notes,
+            ["no AI data can stand in for f1_2025_vehicle_package/cater: the track has none for lotus"]
+        );
+        std::fs::remove_dir_all(placement.dir.parent().unwrap().parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn ai_teams_are_the_ai_rows_copied_from_another_team() {
+        use swofty_formats::gvdb::Record;
+        let mut db = Gvdb::default();
+        let mut text = |key: &str, value: &str| db.records.push(Record::new(key, 2, value));
+        let t = "ai.asset_data.f1_2025_vehicle_package.asset_data";
+        text(&format!("{t}_9._metadata_"), "lotus");
+        text(&format!("{t}_16._metadata_"), "cater");
+        text("entrants.drivers.driver_3._metadata_", "max");
+        text("entrants.drivers.driver_40._metadata_", "sw13_max");
+        let copies = [
+            (format!("{t}_9"), format!("{t}_16")),
+            (
+                "entrants.drivers.driver_3".to_owned(),
+                "entrants.drivers.driver_40".to_owned(),
+            ),
+        ];
+        assert_eq!(
+            ai_teams(&db, copies.iter().map(|(a, b)| (a.as_str(), b.as_str()))),
+            [lotus_and_cater()]
+        );
     }
 
     #[test]
@@ -995,5 +1345,80 @@ mod tests {
         assert!(missing_worlds(&worlds, "monaco", |g| g == registered).is_empty());
         assert_eq!(missing_worlds(&worlds, "testring", |g| g == registered), worlds);
         assert_eq!(LayerWorld::new("asset_groups/fixed.assetgroup", MOD_ERI), None);
+    }
+
+    #[test]
+    fn layer_worlds_carry_the_most_cars_a_setup_mode_of_their_rows_fields() {
+        use swofty_formats::gvdb::Record;
+        let mut records = Vec::new();
+        let mut table = |table: &str, row: &str, rows: &[Vec<(&str, String)>]| {
+            records.push(Record::new(
+                &format!("{table}._{row}_instancecount_"),
+                0,
+                rows.len().to_string(),
+            ));
+            for (i, fields) in rows.iter().enumerate() {
+                for (key, value) in fields {
+                    records.push(Record::new(
+                        &format!("{table}.{row}_{i}.{key}"),
+                        4,
+                        value.as_str(),
+                    ));
+                }
+            }
+        };
+        let entrant =
+            |label: &str, max: &str| vec![("_metadata_", label.to_owned()), ("max_entrants", max.to_owned())];
+        table(
+            ENTRANT_SETUP_MODES,
+            "entrant_setup_mode",
+            &[
+                entrant("a", "26"),
+                entrant("b", "-1"),
+                entrant("c", "30"),
+                entrant("d", "0"),
+            ],
+        );
+        let setup = |label: &str, modes: &str| {
+            vec![
+                ("_metadata_", label.to_owned()),
+                ("entrant_setup_modes", modes.to_owned()),
+            ]
+        };
+        table(
+            GAME_SETUP_MODES,
+            "game_setup_mode",
+            &[setup("m_a", "a"), setup("m_b", "b,d"), setup("m_c", "a, c")],
+        );
+        let layer = |label: &str, modes: &str| {
+            vec![
+                ("_metadata_", label.to_owned()),
+                ("game_setup_modes", modes.to_owned()),
+                ("worldAssetGroup", MOD_GROUP.to_owned()),
+                ("worldEri", MOD_ERI.to_owned()),
+            ]
+        };
+        table(
+            TRACK_LAYERS,
+            "TrackLayer",
+            &[layer("x", "m_a"), layer("y", "m_b"), layer("z", "m_a,missing")],
+        );
+        let worlds = layer_worlds(&Gvdb {
+            records: records.clone(),
+        });
+        assert_eq!(worlds.len(), 1);
+        assert_eq!(worlds[0].cars, 26);
+        assert_eq!(room_for(&worlds, 22), 26);
+        assert_eq!(room_for(&worlds, 28), 28);
+        assert_eq!(room_for(&[], 22), 22);
+        let mut db = Gvdb { records };
+        db.set(
+            &format!("{TRACK_LAYERS}.TrackLayer_1.game_setup_modes"),
+            "m_c",
+            None,
+        )
+        .unwrap();
+        let worlds = layer_worlds(&db);
+        assert_eq!(worlds[0].cars, 30);
     }
 }

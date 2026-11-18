@@ -4,7 +4,10 @@
 #include <atomic>
 #include <chrono>
 #include <map>
+#include <algorithm>
 #include <optional>
+#include <tuple>
+#include <vector>
 #include <swofty/career.hpp>
 #include <swofty/events.hpp>
 #include <swofty/registry.hpp>
@@ -18,8 +21,8 @@
 // Career: modes, contents, seasons and their boxes, calendars, ratings, characters and wizards. The 1.x career library (swofty/career.hpp) keeps
 // its names in this namespace: its Result is the operations' result here, and its Mode enum stays the 1.x
 // mode, so the career.mode record struct is ModeRecord. apply_teams, apply_lineup, set_driver_ratings,
-// swap_drivers, report_season, set_seat and set_car_number call the core's career operations
-// (SwoftyCoreCareerOps) and return unavailable on a core without them; apply_dropped_scores returns unavailable.
+// swap_drivers, report_season, set_seat, set_car_number and set_dropped_scores call the core's career operations
+// (SwoftyCoreCareerOps) and return unavailable on a core without them.
 // A season's teams name team.identity records (new teams included) in up to 12 career team slots.
 
 namespace swofty::career {
@@ -94,8 +97,8 @@ struct SeasonChange {
 SWOFTY_RECORD(SeasonChange, round, slot, seat, out, in, kind, until_round)
 
 struct Season {
-    static constexpr Version version{1, 0};
-    std::string data_group;
+    static constexpr Version version{1, 1};
+    std::string data_group;                    // left out of a year pack's season: a career mode makes it its own with a variant
     int year = 0;
     Ref<::swofty::content::Package> box;
     Ref<Calendar> calendar;
@@ -420,6 +423,96 @@ inline Result set_slots(std::string_view data_group, const std::vector<uint32_t>
     return detail::ops_result(t->set_slots(std::string(data_group).c_str(), team_stats.data(), team_stats.size()));
 }
 
+// The same by team references: slot N (1-based) races as the team the Nth reference names ("game/<label>", or
+// a team.identity id). invalid when the game has no row for a reference; unavailable on a core without table
+// version 7.
+inline Result set_slots(std::string_view data_group, const std::vector<Ref<teams::Identity>> &teams)
+{
+    auto t = detail::live_ops();
+    if (!t || t->version < 7 || !t->team_stat)
+        return Result::unavailable;
+    std::vector<uint32_t> stats;
+    for (const auto &team : teams) {
+        std::string id(team.id());
+        uint32_t stat = 0;
+        if (id.empty() || t->team_stat(id.c_str(), &stat) != SWOFTY_ASSET_OK)
+            return Result::invalid;
+        stats.push_back(stat);
+    }
+    return set_slots(data_group, stats);
+}
+
+// Where the loaded career's season is: season_index (0 the first season of the career), round (1-based, the
+// race weekend the career is at: the next race to run) and rounds (the season's weekend count).
+struct RoundPosition {
+    int season_index = 0, round = 0, rounds = 0;
+};
+
+// The loaded Driver Career's round, or nothing while no career is loaded, its season has no built weekends or
+// the career is busy; read it at an idle Team HQ. Needs table version 7.
+inline std::optional<RoundPosition> current_round()
+{
+    auto t = detail::live_ops();
+    if (!t || t->version < 7 || !t->current_round)
+        return std::nullopt;
+    int32_t index = 0, round = 0, rounds = 0;
+    if (t->current_round(&index, &round, &rounds) != SWOFTY_ASSET_OK)
+        return std::nullopt;
+    return RoundPosition{index, round, rounds};
+}
+
+// The season's seats as they are at `round`: every listed team keeps its slot and gets the drivers its `changes`
+// with round <= `round` leave on its seats. In the order of round, slot and seat: replace puts `in` on the seat
+// for the rest of the season; swap puts `in` on the seat and gives his old seat to the seat's previous driver;
+// move puts `in` on the seat and leaves his old seat empty until another change fills it; stand_in puts `in` on
+// the seat from its round up to (not including) until_round, one race when until_round is absent, then the seat's
+// driver before it returns. A season without changes returns its seats as they are.
+inline Season seats_at(const Season &season, int round)
+{
+    Season out = season;
+    out.changes.clear();
+    struct Cover {
+        size_t team;
+        int seat, until;
+        Ref<drivers::Identity> in;
+    };
+    std::vector<Cover> covers;
+    std::vector<SeasonChange> due;
+    for (const SeasonChange &c : season.changes)
+        if (c.round <= round)
+            due.push_back(c);
+    std::stable_sort(due.begin(), due.end(), [](const SeasonChange &a, const SeasonChange &b) {
+        return std::tie(a.round, a.slot, a.seat) < std::tie(b.round, b.slot, b.seat);
+    });
+    auto find_team = [&](int slot) -> SeasonTeam * { return out.teams.find(slot); };
+    for (const SeasonChange &c : due) {
+        SeasonTeam *team = find_team(c.slot);
+        if (!team || c.seat < 0 || c.seat > 1)
+            continue;
+        if (c.kind == ChangeKind::stand_in) {
+            covers.push_back({size_t(team - out.teams.items().data()), c.seat, c.until_round.value_or(c.round + 1), c.in});
+            continue;
+        }
+        Ref<drivers::Identity> previous = team->seats[c.seat];
+        if (c.kind == ChangeKind::swap || c.kind == ChangeKind::move)
+            for (SeasonTeam &other : out.teams)
+                for (int k = 0; k < 2; ++k)
+                    if (&other.seats[k] != &team->seats[c.seat] && other.seats[k].id() == c.in.id())
+                        other.seats[k] = c.kind == ChangeKind::swap ? previous : Ref<drivers::Identity>("");
+        team->seats[c.seat] = c.in;
+    }
+    for (const Cover &c : covers)
+        if (round < c.until)
+            out.teams.items()[c.team].seats[c.seat] = c.in;
+    return out;
+}
+
+// apply_lineup for the season's seats at `round` (seats_at): the changes due by then are written, a stand-in's
+// regular driver returns when his window ends. The player's seat is never given away (apply_lineup refuses it).
+// Call it at an idle Team HQ with the round from current_round, after set_slots; a seat already right is
+// unchanged, so calling it again is harmless.
+inline Result apply_round(const Season &season, int round, ApplyReport *report = nullptr);
+
 namespace detail {
 
 using SeasonOpFn = int (*)(SwoftyText, char *, size_t, size_t *);
@@ -470,6 +563,11 @@ inline Result apply_lineup(const Season &season, ApplyReport *report = nullptr)
     if (!t)
         return Result::unavailable;
     return detail::run_season_op(t->apply_lineup, season, report);
+}
+
+inline Result apply_round(const Season &season, int round, ApplyReport *report)
+{
+    return apply_lineup(seats_at(season, round), report);
 }
 
 namespace detail {
@@ -550,7 +648,17 @@ inline Result swap_drivers(Ref<drivers::Identity> a, Ref<drivers::Identity> b)
     return detail::ops_result(t->swap_drivers(sa, sb));
 }
 
-inline Result apply_dropped_scores(const events::StandingsRebuild &, int) { return Result::unavailable; }
+// While the loaded career is filed under data_group, the drivers' championship counts each driver's best `best`
+// results (the constructors' championship counts every result); 0 counts every result. unavailable on a core
+// without the call (table version 7).
+inline Result set_dropped_scores(std::string_view data_group, int best)
+{
+    auto t = detail::live_ops();
+    if (!t || t->version < 7 || !t->set_dropped_scores)
+        return Result::unavailable;
+    std::string group(data_group);
+    return detail::ops_result(t->set_dropped_scores(group.c_str(), best < 0 ? 0u : uint32_t(best)));
+}
 
 // The season at the Championship's season_index is year, from the addon that owns the active career's data
 // group: the core fires career.season.start once per career and year, activates the season's records and

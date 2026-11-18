@@ -459,8 +459,17 @@ impl Careers {
                 }
             }
         }
+        let twins: Vec<&Career> = in_save(index).collect();
         for r in self.careers.iter_mut() {
             if here.contains(r.career.as_str()) {
+                continue;
+            }
+            if twins.iter().any(|c| twin(r, c)) {
+                if matches!(r.status, Status::MissingSince(_)) {
+                    r.status = Status::Present;
+                    r.found_at = None;
+                    r.dismissed = false;
+                }
                 continue;
             }
             match (&r.status, gone.contains(r.career.as_str())) {
@@ -478,6 +487,18 @@ impl Careers {
         }
         dropped
     }
+}
+
+/// A row and an index career that are one career under two ids: the core
+/// names a career it cannot tie to a save slot by a key that can change
+/// between loads.
+fn twin(r: &Row, c: &Career) -> bool {
+    r.career != c.career
+        && r.mode.is_some()
+        && r.mode == text(c, "mode")
+        && !r.label.is_empty()
+        && r.label == c.label
+        && r.profile == c.profile
 }
 
 /// A career as the restore panel lists it.
@@ -504,6 +525,30 @@ fn brief(c: &Career) -> Brief {
     }
 }
 
+/// Whether a career belongs to an addon's game mode, or was made with addons: the careers a game
+/// without those addons does not know how to keep.
+pub fn is_addon(c: &Career) -> bool {
+    let key: String = text(c, "mode")
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_lowercase();
+    !c.addons.is_empty() || !matches!(key.as_str(), "" | "driver" | "drivercareer" | "myteam")
+}
+
+/// The addon careers an index holds in the save for `profile` (and the ones with no profile yet).
+pub fn addon_careers(index: &[Career], profile: Option<&str>) -> Vec<Brief> {
+    in_save(index)
+        .filter(|c| is_addon(c))
+        .filter(|c| match (profile, c.profile.as_deref()) {
+            (Some(p), Some(q)) => p == q,
+            _ => true,
+        })
+        .map(brief)
+        .collect()
+}
+
 /// What restoring a version does to the careers, from two indexes.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Diff {
@@ -511,13 +556,18 @@ pub struct Diff {
     pub get_back: Vec<Brief>,
     /// In the save now, not in the version.
     pub lose: Vec<Brief>,
+    /// In the save now and listed in the version as missing or deleted: restoring it does not bring them back.
+    pub marked_missing: Vec<Brief>,
     /// In both, with further progress now than in the version: `(now, in the version)`.
     pub progress: Vec<(Brief, Brief)>,
 }
 
 impl Diff {
     pub fn is_empty(&self) -> bool {
-        self.get_back.is_empty() && self.lose.is_empty() && self.progress.is_empty()
+        self.get_back.is_empty()
+            && self.lose.is_empty()
+            && self.marked_missing.is_empty()
+            && self.progress.is_empty()
     }
 }
 
@@ -538,12 +588,45 @@ pub fn diff(now: &[Career], version: &[Career]) -> Diff {
             Some(_) => {}
         }
     }
+    let flagged: BTreeSet<&str> = marked_missing(version)
+        .iter()
+        .map(|c| c.career.as_str())
+        .collect();
     for (id, c) in &have {
         if !then.contains_key(id) {
             out.lose.push(brief(c));
+            if flagged.contains(id) {
+                out.marked_missing.push(brief(c));
+            }
         }
     }
     out
+}
+
+/// The careers with a save slot that an index lists as missing or deleted.
+pub fn marked_missing(index: &[Career]) -> Vec<&Career> {
+    index
+        .iter()
+        .filter(|c| matches!(c.status(), "missing" | "deleted"))
+        .filter(|c| {
+            c.extra
+                .get("slot")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.is_empty())
+        })
+        .collect()
+}
+
+/// `marked_missing` as the restore panel lists them.
+pub fn missing_briefs(index: &[Career]) -> Vec<Brief> {
+    marked_missing(index).into_iter().map(brief).collect()
+}
+
+/// The career an index holds in the save that was played last.
+pub fn newest(index: &[Career]) -> Option<Brief> {
+    in_save(index)
+        .max_by_key(|c| number(c, "last_played").or(number(c, "last_saved").map(|ms| ms / 1000)))
+        .map(brief)
 }
 
 #[cfg(test)]
@@ -634,5 +717,97 @@ mod tests {
         assert_eq!(l.len(), 1);
         assert_eq!(l[0].state, State::DeletedInGame);
         assert!(read_listing(&dir, None).is_empty());
+    }
+
+    fn mt(id: &str, status: &str) -> String {
+        format!(
+            r#"{{"career":"{id}","profile":"MyTeam","label":"f1_career_2026","mode":"my_team","status":"{status}"}}"#
+        )
+    }
+
+    fn table(rows: &[String]) -> Vec<Career> {
+        parse(&format!(r#"{{"version":1,"careers":[{}]}}"#, rows.join(",")))
+    }
+
+    #[test]
+    fn a_career_that_alternates_between_two_ids_is_not_missing() {
+        let mut t = Careers::default();
+        let a = "mt-00000001-00d00000";
+        let b = "mt-00000001-00bc0000";
+        assert!(t.observe("s1", 1, &table(&[mt(a, "present")])).is_empty());
+        assert!(
+            t.observe("s2", 2, &table(&[mt(a, "missing"), mt(b, "present")]))
+                .is_empty()
+        );
+        assert!(
+            t.observe("s3", 3, &table(&[mt(a, "present"), mt(b, "missing")]))
+                .is_empty()
+        );
+        assert!(t.careers.iter().all(|r| r.status == Status::Present));
+        assert!(t.drop_to_show().is_empty());
+    }
+
+    #[test]
+    fn a_stale_missing_row_of_a_twin_is_cleared() {
+        let mut t = Careers::default();
+        t.observe("s1", 1, &table(&[mt("mt-1-a", "present")]));
+        t.careers[0].status = Status::MissingSince("s0".into());
+        t.careers[0].found_at = Some(1);
+        t.observe("s2", 2, &table(&[mt("mt-1-b", "present")]));
+        assert_eq!(t.find("mt-1-a").unwrap().status, Status::Present);
+        assert!(t.drop_to_show().is_empty());
+    }
+
+    #[test]
+    fn a_career_with_no_twin_is_still_reported_missing() {
+        let mut t = Careers::default();
+        let other = r#"{"career":"dc-00320000","profile":"MyTeam","label":"f1_career_2026","mode":"driver_career","status":"present"}"#;
+        t.observe("s1", 1, &table(&[mt("mt-1-a", "present")]));
+        let dropped = t.observe("s2", 2, &table(&[other.to_owned()]));
+        assert_eq!(dropped, [("mt-1-a".to_owned(), "s1".to_owned())]);
+        assert!(t.find("mt-1-a").unwrap().status.is_missing());
+    }
+
+    #[test]
+    fn diff_reports_the_careers_a_version_lists_as_missing() {
+        let now = parse(
+            r#"{"careers":[
+            {"career":"a","slot":"a","status":"present"},
+            {"career":"b","slot":"b","status":"present"},
+            {"career":"c","slot":"c","status":"present"}]}"#,
+        );
+        let version = parse(
+            r#"{"careers":[
+            {"career":"a","slot":"a","status":"present"},
+            {"career":"b","slot":"b","status":"missing"},
+            {"career":"c","slot":"c","status":"deleted"}]}"#,
+        );
+        let d = diff(&now, &version);
+        let ids = |l: &[Brief]| l.iter().map(|b| b.career.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&d.lose), ["b", "c"]);
+        assert_eq!(ids(&d.marked_missing), ["b", "c"]);
+        assert!(!d.is_empty());
+    }
+
+    #[test]
+    fn a_career_absent_from_the_version_is_lost_but_not_marked_missing() {
+        let now = parse(r#"{"careers":[{"career":"a","slot":"a","status":"present"}]}"#);
+        let d = diff(&now, &[]);
+        assert_eq!(d.lose.len(), 1);
+        assert!(d.marked_missing.is_empty());
+    }
+
+    #[test]
+    fn marked_missing_ignores_records_without_a_slot() {
+        let idx = index();
+        let found = marked_missing(&idx);
+        let ids: Vec<_> = found.iter().map(|c| c.career.as_str()).collect();
+        assert_eq!(ids, ["driver_career:b2", "my_team:c3"]);
+    }
+
+    #[test]
+    fn newest_is_the_last_played_career_in_the_save() {
+        assert_eq!(newest(&index()).unwrap().career, "driver_career:e5");
+        assert!(newest(&[]).is_none());
     }
 }

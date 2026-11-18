@@ -1,7 +1,8 @@
+use crate::notices::{Notification, Notify};
+use crate::scale::px;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::dialog::DialogFooter;
-use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{Icon, WindowExt, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -14,9 +15,11 @@ use crate::discord::{BLURPLE, INVITE, LOGO};
 use crate::pages::{game_art, label};
 use crate::shell::{Page, Shell};
 use crate::theme::{Palette, palette};
+use swofty_i18n::{tr, trf};
 
 const TITLE: &str = "Your game files have been edited";
 const MISSING_TITLE: &str = "Some game files are missing";
+const OURS_TITLE: &str = "An earlier session was not put back";
 
 /// A blocked launch the player can fix: files that aren't Steam's copy, or
 /// files Swofty did not put in the game folder.
@@ -36,6 +39,11 @@ impl Edited {
 
     fn leftovers(&self) -> bool {
         matches!(self, Self::Leftovers(_))
+    }
+
+    /// Whether the files in the way are all in Swofty's own folder.
+    fn ours(&self) -> bool {
+        matches!(self, Self::Leftovers(b) if b.ours())
     }
 
     fn missing(&self) -> Option<stock::Fix> {
@@ -72,6 +80,16 @@ impl Edited {
                      {puts}, and then Play works."
                 )
             }
+            Self::NotStock(r) if r.mixed() => {
+                let (changed, missing) = stock::split_absent(&r.detail);
+                format!(
+                    "{} changed outside Swofty and {} missing from the F1 25 folder, so it stopped before \
+                     changing anything. {} puts them back, and then Play works.",
+                    count(changed.len(), "was", "were"),
+                    count(missing.len(), "is", "are"),
+                    repair.restores
+                )
+            }
             Self::NotStock(r) => {
                 let (changed, them) = match r.files.len() {
                     1 => ("1 game file was".to_owned(), "it"),
@@ -84,6 +102,12 @@ impl Edited {
                     repair.restores
                 )
             }
+            Self::Leftovers(_) if self.ours() => "An earlier Swofty session ended without putting the F1 25 \
+                                                  folder back, and Swofty no longer has a record of the \
+                                                  files it left in its own swofty folder there, so it stopped \
+                                                  before touching anything. Restore game folder below moves \
+                                                  them aside and puts the game's own files back."
+                .to_owned(),
             Self::Leftovers(_) => "Swofty keeps F1 25 fully restorable: it only changes files it owns and \
                                    undoes them when you quit. It found files in the F1 25 folder that it \
                                    didn't put there, so it stopped before touching anything. Files edited \
@@ -101,8 +125,16 @@ impl Edited {
     fn title(&self) -> &'static str {
         match self.missing() {
             Some(_) => MISSING_TITLE,
+            None if self.ours() => OURS_TITLE,
             None => TITLE,
         }
+    }
+}
+
+fn count(n: usize, one: &str, many: &str) -> String {
+    match n {
+        1 => format!("1 game file {one}"),
+        n => format!("{n} game files {many}"),
     }
 }
 
@@ -253,7 +285,7 @@ fn files_box(edited: &Edited, p: Palette) -> impl IntoElement {
                         div()
                             .pl(px(21.))
                             .text_color(p.text_muted)
-                            .child(format!("and {} more", files.len() - shown)),
+                            .child(trf!("and {count} more", count = files.len() - shown)),
                     )
                 }),
         )
@@ -317,7 +349,7 @@ fn steps(edited: &Edited, repair: &Repair, p: Palette) -> AnyElement {
         };
         return v_flex()
             .gap(px(9.))
-            .child(label("WHAT TO DO", p))
+            .child(label(tr("WHAT TO DO"), p))
             .map(|d| match fix {
                 stock::Fix::Update => d.child(update),
                 stock::Fix::Verify => d.child(verify(1)),
@@ -325,11 +357,23 @@ fn steps(edited: &Edited, repair: &Repair, p: Palette) -> AnyElement {
             })
             .into_any_element();
     }
+    if edited.ours() {
+        return v_flex()
+            .gap(px(9.))
+            .child(label(tr("WHAT TO DO"), p))
+            .child(step(
+                1,
+                "Restore the game folder",
+                tr("Restore game folder below moves the files aside and puts the game's own files back."),
+                p,
+            ))
+            .into_any_element();
+    }
     let leftovers = edited.leftovers();
     let first = if leftovers { 2 } else { 1 };
     v_flex()
         .gap(px(9.))
-        .child(label("WHAT TO DO", p))
+        .child(label(tr("WHAT TO DO"), p))
         .when(leftovers, |d| {
             d.child(step(
                 1,
@@ -354,7 +398,7 @@ fn steps(edited: &Edited, repair: &Repair, p: Palette) -> AnyElement {
             d.child(step(
                 4,
                 "Or restore the game folder",
-                "Restore game folder below moves the files aside and puts the game's own files back.",
+                tr("Restore game folder below moves the files aside and puts the game's own files back."),
                 p,
             ))
         })
@@ -374,7 +418,7 @@ pub(crate) fn discord_link(id: &'static str, p: Palette) -> Stateful<Div> {
         .text_color(p.text_muted)
         .hover(|s| s.bg(p.hover).text_color(p.text))
         .child(svg().data(LOGO).size(px(15.)).text_color(rgb(BLURPLE)))
-        .child("Get help on Discord")
+        .child(tr("Get help on Discord"))
         .on_click(|_, _, cx| cx.open_url(INVITE))
 }
 
@@ -400,7 +444,7 @@ fn footer(
                             .outline()
                             .h(px(36.))
                             .px(px(14.))
-                            .label("Go to Simplified Importer")
+                            .label(tr("Go to Simplified Importer"))
                             .on_click(move |_, window, cx| {
                                 window.close_dialog(cx);
                                 importer.update(cx, |s, cx| s.open_page(Page::Importer, cx)).ok();
@@ -414,7 +458,7 @@ fn footer(
                             .h(px(36.))
                             .px(px(14.))
                             .icon(IconName::RotateCcw)
-                            .label("Restore game folder")
+                            .label(tr("Restore game folder"))
                             .on_click(move |_, window, cx| {
                                 window.close_dialog(cx);
                                 restore.update(cx, |s, cx| s.restore_game_folder(window, cx)).ok();
@@ -432,9 +476,9 @@ fn footer(
                             .on_click(move |_, window, cx| {
                                 cx.open_url(open.url);
                                 window.close_dialog(cx);
-                                window.push_notification(
-                                    Notification::info("Press Play again when Steam has finished.")
-                                        .title("Steam is verifying F1 25"),
+                                window.notify(
+                                    Notification::info(tr("Press Play again when Steam has finished."))
+                                        .title(tr("Steam is verifying F1 25")),
                                     cx,
                                 );
                             }),
@@ -489,7 +533,7 @@ impl Shell {
                 .footer(footer(
                     shell,
                     edited.leftovers(),
-                    edited.missing().is_none(),
+                    edited.missing().is_none() && !edited.ours(),
                     edited.open(&repair),
                     p,
                 ))
@@ -499,7 +543,7 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
-    use super::{Edited, notice, repair};
+    use super::{Edited, OURS_TITLE, TITLE, notice, repair};
     use swofty_core::install::Source;
     use swofty_core::recovery::Blocked;
     use swofty_core::stock;
@@ -523,7 +567,7 @@ mod tests {
     #[test]
     fn missing_files_on_the_latest_game_are_verified() {
         let r = repair(Source::Steam);
-        let m = missing(Some("1.0.141.7865"));
+        let m = missing(Some("1.0.145.2472"));
         assert_eq!(m.title(), "Some game files are missing");
         assert_eq!(m.open(&r).unwrap().url, "steam://validate/3059520");
         let why = m.why(&r);
@@ -544,7 +588,7 @@ mod tests {
         assert_eq!(old.open(&r), None);
         let why = old.why(&r);
         assert!(
-            why.contains("Your F1 25 is 1.0.138.5601, older than 1.0.141.7865"),
+            why.contains("Your F1 25 is 1.0.138.5601, older than 1.0.145.2472"),
             "{why}"
         );
         assert!(why.contains("Updating F1 25 puts them back"), "{why}");
@@ -561,6 +605,31 @@ mod tests {
         assert_eq!(
             notice(&report, Some(Source::Steam)),
             "F1 25 is missing game files; update it in Steam or the EA app"
+        );
+    }
+
+    #[test]
+    fn changed_and_missing_files_are_both_counted() {
+        let detail = |rel: &str, size| stock::Foreign {
+            rel: rel.to_owned(),
+            measured: rel.to_owned(),
+            size,
+            steam: 10,
+            modified: None,
+        };
+        let report = stock::Report::new(
+            vec!["a.erp".into(), "b.erp".into(), "c.erp".into()],
+            std::path::Path::new("/games/F1 25"),
+        )
+        .with_detail(vec![
+            detail("a.erp", None),
+            detail("b.erp", Some(3)),
+            detail("c.erp", None),
+        ]);
+        let why = Edited::NotStock(report).why(&repair(Source::Steam));
+        assert!(
+            why.starts_with("1 game file was changed outside Swofty and 2 game files are missing"),
+            "{why}"
         );
     }
 
@@ -595,6 +664,39 @@ mod tests {
     #[test]
     fn a_folder_outside_steam_gets_no_button() {
         assert_eq!(repair(Source::Unknown).open, None);
+    }
+
+    #[test]
+    fn files_left_in_swoftys_own_folder_are_not_called_edited_game_files() {
+        let file = |path: &str, replaced| swofty_core::recovery::BlockedFile {
+            path: path.into(),
+            sha256: None,
+            replaced,
+        };
+        let blocked = |files| {
+            Edited::Leftovers(Blocked {
+                game: "/games/F1 25".into(),
+                files,
+            })
+        };
+        let r = repair(Source::Steam);
+        let ours = blocked(vec![
+            file("swofty/state.json", false),
+            file("swofty/addons/core/swofty_core.dll", false),
+        ]);
+        assert_eq!(ours.title(), OURS_TITLE);
+        assert!(
+            ours.why(&r).contains("Restore game folder below"),
+            "{}",
+            ours.why(&r)
+        );
+        assert!(!ours.why(&r).contains("didn't put there"));
+        let mixed = blocked(vec![file("swofty/state.json", false), file("version.dll", false)]);
+        assert_eq!(mixed.title(), TITLE);
+        assert!(mixed.why(&r).contains("didn't put there"));
+        let replaced = blocked(vec![file("swofty/state.json", true)]);
+        assert_eq!(replaced.title(), TITLE);
+        assert_eq!(leftovers().title(), TITLE);
     }
 
     #[test]

@@ -14,16 +14,17 @@
 namespace {
 
 // StateIntro's onStateUpdate (FeFlow_StateIntro_OnUpdate 0x1436da4d0, slot 9 of vt_Sess_Intro 0x14585bff0,
-// L1, no signature: the KB build only) waits until the title's sync point (state+0xcd0, sync_points.boot;
-// Vm_SyncPoint_IsComplete 0x1442626c0) has both bool nodes true: the request node +0x80 and the UI's node
-// +0xa0, which the title's UI sets on a button. Then it sends its own request (kind 0x2e), which loads the
+// L1) waits until the title's sync point (state+0xcd0, sync_points.boot; Vm_SyncPoint_IsComplete 0x1442626c0, a
+// protector thunk, found through the update's own call) has both bool nodes true: the request node +0x80 and the
+// UI's node +0xa0, which the title's UI sets on a button. Then it sends its own request (kind 0x2e), which loads the
 // profile and whose callback (FeFlow_StateIntro_OnEngaged) sets +0xef4, and the next update returns the
 // front-end link. The core sets the two nodes with Vm_NodeSet_Bool (0x140973e20, (node, &value, 0, 0) as the
 // sync point's own writes do) once the title's view exists ([[state+0xc88]+0x140]+0x198), so the game's own
 // path runs from there.
 const runtime::Sig SIG_INTRO_UPDATE{"fe_flow.state_intro_on_update", "41 57 41 56 56 57 53 48 83 EC 70 48 89 D6 48 89 CF 48 8B 89 F8 0B 00 00", 0x36da4d0};
 const runtime::Sig SIG_NODE_SET_BOOL{"vm.node_set_bool", "41 56 56 57 55 53 48 81 EC 20 03 00 00 F6 41 26 01 0F 85 ?? ?? ?? ?? 44 89 CB 44 89 C7 49 89 D6 48 89 CE 48 8B 49 58 48 8B 01 FF 50 38 84 DB 75 0E 0F B6 08", 0x973e20};
-const runtime::Sig SIG_SYNC_COMPLETE{"vm.sync_point_is_complete", "E9 ?? ?? ?? ?? 33 47 0F 84 F2 95 46 01 98 73 7B A4 A3", 0x42626c0};
+const runtime::Sig SIG_SYNC_COMPLETE{"vm.sync_point_is_complete", "48 8D 8F D0 0C 00 00 E8 ?? ?? ?? ?? 84 C0", 0x42626c0,
+                                     runtime::Sig::rel32, 7, 8, 5};
 const runtime::Sig SIG_INTRO_VT{"session.intro", "48 8D 05 ?? ?? ?? ?? 48 89 01 48 81 C1 E0 0D 00 00", 0x585bff0, runtime::Sig::riprel, 0, 3, 7};
 const runtime::Sig SIG_BOOL_TYPE{"vm.bool_type_desc", "48 8D 0D ?? ?? ?? ?? FF 50 10 39 C3 75 17 48 8B 07", 0x6129dc0, runtime::Sig::riprel, 0, 3, 7};
 const runtime::Sig SIG_EMPTY_NODE{"vm.empty_node_handle", "0F 85 ?? ?? ?? ?? 48 8B 1D ?? ?? ?? ?? C5 F8 57 C0 C5 F8 29 44 24 30 48 C7 44 24 40 00 00 00 00 48 8D 15 ?? ?? ?? ?? 4C 8D 05", 0x6ca0e90, runtime::Sig::riprel, 39, 42, 7};
@@ -211,8 +212,8 @@ void title_setup()
     ga.intro_vt = runtime::find(SIG_INTRO_VT, "title", "title");
     ga.bool_type = runtime::find(SIG_BOOL_TYPE, "title", "title");
     ga.empty_node = runtime::find(SIG_EMPTY_NODE, "title", "title");
-    if (!runtime::same_build()) {
-        title_why = "StateIntro's state layout (+0xcd0, +0xef3, +0xef4) is the KB build's and this is not that build";
+    if (!runtime::verified_build()) {
+        title_why = "StateIntro's state layout (+0xcd0, +0xef3, +0xef4) is not verified on this build";
         return;
     }
     if (!ga.intro_update || !ga.intro_vt || !ga.node_set_bool || !ga.sync_complete || !ga.bool_type || !ga.empty_node) {
@@ -294,6 +295,22 @@ std::string state()
 uintptr_t node_set_bool()
 {
     return ga.node_set_bool;
+}
+
+bool complete_sync(void *sync, const char *what)
+{
+    if (!ga.node_set_bool || !ga.sync_complete || !ga.bool_type || !ga.empty_node || !sync)
+        return false;
+    auto *s = static_cast<uint8_t *>(sync);
+    const uint8_t one = 1;
+    for (size_t off : {SYNC_REQUEST, SYNC_UI}) {
+        void *node = *reinterpret_cast<void **>(s + off);
+        if (!bool_node(node) || node_value(node))
+            continue;
+        reinterpret_cast<NodeSetBool_t *>(ga.node_set_bool)(node, &one, 0, 0);
+        swofty::log("[title] set %s's %s node to true", what, off == SYNC_REQUEST ? "request (+0x80)" : "ui (+0xa0)");
+    }
+    return reinterpret_cast<SyncComplete_t *>(ga.sync_complete)(sync);
 }
 
 }

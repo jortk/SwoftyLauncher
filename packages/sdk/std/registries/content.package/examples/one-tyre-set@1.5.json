@@ -1,0 +1,13 @@
+{
+  "content.package": {
+    "f1_2005": {
+      "entrant_list": "f1_2005",
+      "season": 2005,
+      "rules": {
+        "refuelling": true,
+        "race_fuel_kg": 75,
+        "race_tyre_change": false
+      }
+    }
+  }
+}

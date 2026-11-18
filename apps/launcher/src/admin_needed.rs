@@ -1,8 +1,9 @@
 use std::path::Path;
 use std::time::Duration;
 
+use crate::notices::{Notification, Notify};
+use crate::scale::px;
 use gpui_kit::component::WindowExt;
-use gpui_kit::component::notification::Notification;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use swofty_core::install::Source;
@@ -11,6 +12,7 @@ use swofty_core::{compat, copies};
 use crate::app_log;
 use crate::game::Install;
 use crate::shell::Shell;
+use swofty_i18n::{tr, trf};
 
 const TITLE: &str = "F1 25 needs administrator rights";
 
@@ -18,13 +20,64 @@ pub(crate) fn text(dir: &Path, source: Source, windows: bool) -> String {
     if !windows {
         return format!("{}.", compat::write_blocked_text_for(dir, false));
     }
-    format!(
-        "F1 25 is installed in {}, a folder Windows lets only administrators change, so Swofty can't \
-         add your mods there.\n\nRestart Swofty Launcher as administrator to play with mods, or move \
-         F1 25 to a folder outside Program Files{}.",
-        dir.display(),
-        copies::move_hint(source)
+    trf!(
+        "F1 25 is installed in {folder}, a folder Windows lets only administrators change, so Swofty can't add your mods there.\n\nRestart Swofty Launcher as administrator to play with mods, or move F1 25 to a folder outside Program Files{hint}.",
+        folder = dir.display(),
+        hint = copies::move_hint(source)
     )
+}
+
+pub(crate) fn run_as_admin_title() -> &'static str {
+    tr("A program is set to run as administrator")
+}
+
+/// [`compat::RunAsAdmin::headline`] in the launcher's language.
+pub(crate) fn run_as_admin_headline(r: &compat::RunAsAdmin) -> String {
+    match r.names().as_slice() {
+        [name] => trf!(
+            "Windows won't start {name}: it is set to run as administrator",
+            name = name
+        ),
+        names => trf!(
+            "Windows won't start {names}: they are set to run as administrator",
+            names = names.join(", ")
+        ),
+    }
+}
+
+/// [`compat::RunAsAdmin::text`] in the launcher's language, a paragraph each
+/// for what Windows refuses, why running as administrator doesn't help, and
+/// what to untick.
+pub(crate) fn run_as_admin_text(r: &compat::RunAsAdmin) -> String {
+    let (names, paths) = (r.names(), r.paths());
+    let (what, fix) = match (names.as_slice(), paths.as_slice()) {
+        ([name], [path]) => (
+            trf!(
+                "{name} is set to run as administrator, so Windows won't start it for an EA app session (error 740).",
+                name = name
+            ),
+            trf!(
+                "Right-click {path}, open Properties > Compatibility and untick \"Run this program as an administrator\", also under \"Change settings for all users\". Then press Play again.",
+                path = path
+            ),
+        ),
+        _ => (
+            trf!(
+                "These files are set to run as administrator, so Windows won't start them for an EA app session (error 740):\n{paths}",
+                paths = paths.join("\n")
+            ),
+            tr("For each one, right-click it, open Properties > Compatibility and untick \"Run this program as an administrator\", also under \"Change settings for all users\". Then press Play again.").to_owned(),
+        ),
+    };
+    let note = r.game.then(|| {
+        tr("The EA app starts F1 25 without administrator rights, so running Swofty Launcher as administrator doesn't help.")
+            .to_owned()
+    });
+    std::iter::once(what)
+        .chain(note)
+        .chain([fix])
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 impl Shell {
@@ -62,9 +115,9 @@ impl Shell {
 const ELEVATED_SETTLE: Duration = Duration::from_secs(6);
 
 fn not_restarted(text: String, window: &mut Window, cx: &mut App) {
-    window.push_notification(
+    window.notify(
         Notification::warning(text)
-            .title("Not restarted as administrator")
+            .title(tr("Not restarted as administrator"))
             .autohide(false),
         cx,
     );
@@ -93,9 +146,9 @@ fn elevated_started(started: Result<compat::Elevated, String>, window: &mut Wind
         Err(why) => {
             app_log::note(&format!("restart as administrator: {why}"));
             return not_restarted(
-                format!(
-                    "Windows didn't restart Swofty Launcher: {why}. It keeps running without administrator \
-                     rights."
+                trf!(
+                    "Windows didn't restart Swofty Launcher: {why}. It keeps running without administrator rights.",
+                    why = why
                 ),
                 window,
                 cx,
@@ -127,11 +180,10 @@ fn elevated_started(started: Result<compat::Elevated, String>, window: &mut Wind
                     ));
                     window.activate_window();
                     not_restarted(
-                        format!(
-                            "The administrator copy of Swofty Launcher closed as it started (exit code \
-                             {code:#x}). This one keeps running without administrator rights. Press {} so \
-                             the developers can see why.",
-                            crate::send_logs::label()
+                        trf!(
+                            "The administrator copy of Swofty Launcher closed as it started (exit code {code}). This one keeps running without administrator rights. Press {button} so the developers can see why.",
+                            code = format!("{code:#x}"),
+                            button = crate::send_logs::label()
                         ),
                         window,
                         cx,
@@ -145,9 +197,35 @@ fn elevated_started(started: Result<compat::Elevated, String>, window: &mut Wind
 
 #[cfg(test)]
 mod tests {
-    use super::text;
-    use std::path::Path;
+    use super::{run_as_admin_headline, run_as_admin_text, text};
+    use std::path::{Path, PathBuf};
+    use swofty_core::compat::RunAsAdmin;
     use swofty_core::install::Source;
+
+    #[test]
+    fn run_as_admin_says_what_the_cli_says_a_paragraph_at_a_time() {
+        let game = RunAsAdmin::new([PathBuf::from(r"D:\Games\F1 25\F1_25.exe")], true);
+        let shown = run_as_admin_text(&game);
+        assert_eq!(shown.split("\n\n").count(), 3, "{shown}");
+        assert_eq!(shown.replace("\n\n", " "), game.text());
+        assert_eq!(run_as_admin_headline(&game), game.headline());
+        let ea = RunAsAdmin::new(
+            [
+                PathBuf::from(r"C:\EA Desktop\EALauncher.exe"),
+                PathBuf::from(r"C:\EA Desktop\EADesktop.exe"),
+            ],
+            false,
+        );
+        let shown = run_as_admin_text(&ea);
+        assert!(
+            shown.contains(
+                "(error 740):\nC:\\EA Desktop\\EALauncher.exe\nC:\\EA Desktop\\EADesktop.exe\n\nFor each one"
+            ),
+            "{shown}"
+        );
+        assert!(!shown.contains("Swofty Launcher as administrator"), "{shown}");
+        assert_eq!(run_as_admin_headline(&ea), ea.headline());
+    }
 
     #[test]
     fn names_the_folder_and_both_ways_out() {

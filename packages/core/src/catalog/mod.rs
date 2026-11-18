@@ -2,9 +2,11 @@
 //! Swofty registry, fetched and saved so the last catalog shows offline, and
 //! downloads checked against the size and SHA-256 the registry lists.
 
+pub mod media;
 pub mod publishers;
 pub mod requires;
 pub mod search;
+pub mod source;
 pub mod stars;
 
 use std::io::{Read, Write};
@@ -16,7 +18,7 @@ use semver::VersionReq;
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::manifest::{AddonManifest, Category, Requirement};
+use crate::manifest::{AddonManifest, Category, Platform, Requirement};
 use crate::store::Store;
 use crate::transfer;
 use crate::{Error, Result, io_err};
@@ -27,7 +29,7 @@ pub const CACHE_DIR: &str = "cache/registry";
 pub const CATALOG_FILE: &str = "catalog.json";
 pub const LOG_FILE: &str = "state/registry.log";
 pub const TIMEOUT: Duration = Duration::from_secs(10);
-pub const DOWNLOAD_LIMIT: u64 = 4 * 1024 * 1024 * 1024;
+pub const DOWNLOAD_LIMIT: u64 = 6 * 1024 * 1024 * 1024;
 const CATALOG_LIMIT: u64 = 16 * 1024 * 1024;
 /// The least time the catalog's body gets.
 const CATALOG_FLOOR: Duration = Duration::from_secs(60);
@@ -64,6 +66,8 @@ pub struct Addon {
     #[serde(default)]
     pub homepage: Option<String>,
     #[serde(default)]
+    pub repository: Option<String>,
+    #[serde(default)]
     pub icon: Option<String>,
     #[serde(default)]
     pub publisher: Option<Publisher>,
@@ -85,6 +89,13 @@ pub struct Addon {
     pub latest: Option<Version>,
     #[serde(default)]
     pub versions: Vec<Version>,
+    /// The pictures, videos and video links on the addon's page, in order.
+    #[serde(
+        default,
+        deserialize_with = "media::listed",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub media: Vec<media::Media>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -122,6 +133,25 @@ pub struct Version {
         skip_serializing_if = "Option::is_none"
     )]
     pub requires: Option<Vec<Requirement>>,
+    /// The platforms the version's `swofty.json` lists as tested; empty means not tested.
+    #[serde(
+        default,
+        deserialize_with = "listed_platforms",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub platforms: Vec<Platform>,
+}
+
+/// The platforms the launcher knows; a value it doesn't know, or a list it can't read, is left out.
+fn listed_platforms<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<Vec<Platform>, D::Error> {
+    let raw = Option::<serde_json::Value>::deserialize(d)?;
+    let names: Vec<String> = raw
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    let mut out: Vec<Platform> = names.iter().filter_map(|n| Platform::parse(n)).collect();
+    out.sort();
+    out.dedup();
+    Ok(out)
 }
 
 /// A `requires` list the launcher can't read counts as unlisted, so the
@@ -140,6 +170,19 @@ impl Version {
 }
 
 impl Addon {
+    /// The platforms the addon's newest listed version is tested on; empty means not tested.
+    pub fn platforms(&self) -> &[Platform] {
+        self.latest
+            .as_ref()
+            .or_else(|| self.versions.iter().find(|v| !v.yanked))
+            .map_or(&[], |v| v.platforms.as_slice())
+    }
+
+    /// The link to the addon's source code, when the catalog names one the launcher may open.
+    pub fn source_url(&self) -> Option<&str> {
+        self.repository.as_deref().and_then(crate::manifest::https_url)
+    }
+
     /// Every listed version once, newest first, yanked ones left out.
     pub fn listed(&self) -> Vec<&Version> {
         let mut out: Vec<&Version> = Vec::new();
@@ -260,12 +303,13 @@ pub fn updates<'a>(
         .collect()
 }
 
-/// [`updates`] for the addons in `store`, leaving out the ones the launcher ships.
+/// [`updates`] for the addons in `store`, leaving out the ones the launcher ships and the imports
+/// ([`source::takes_updates`]).
 pub fn store_updates(store: &Store, catalog: &[Addon], launcher: &semver::Version) -> Result<Vec<Update>> {
     let addons = store.addons()?;
-    let installed = addons
-        .values()
-        .filter(|m| !store.is_builtin(&m.id) && !crate::managed::is_managed(&m.id));
+    let installed = addons.values().filter(|m| {
+        !store.is_builtin(&m.id) && !crate::managed::is_managed(&m.id) && source::takes_updates(m)
+    });
     Ok(updates(installed, catalog, launcher))
 }
 
@@ -530,7 +574,10 @@ pub fn log(root: &Path, line: &str) {
         && let Ok(text) = std::fs::read_to_string(&path)
     {
         let keep = text.len() / 2;
-        let cut = text[keep..].find('\n').map_or(text.len(), |i| keep + i + 1);
+        let cut = text.as_bytes()[keep..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(text.len(), |i| keep + i + 1);
         std::fs::write(&path, &text[cut..]).ok();
     }
     if let Some(dir) = path.parent() {
@@ -574,7 +621,7 @@ pub fn save(mut reader: impl Read, v: &Version, to: &Path, progress: &dyn Fn(Sta
     within_limit(v)?;
     let mut file = std::fs::File::create(to).map_err(io_err(to))?;
     let mut hash = Sha256::new();
-    let mut buf = vec![0; 64 * 1024];
+    let mut buf = vec![0; 256 * 1024];
     let mut len = 0u64;
     loop {
         let n = reader
@@ -620,27 +667,31 @@ pub fn download(v: &Version, to: &Path, progress: &dyn Fn(Stage)) -> Result<()> 
         too_long: &too_long,
     };
     let mut open = |from: u64| {
-        let mut request = ureq::get(url)
-            .header("User-Agent", agent_name())
-            .header("Accept-Encoding", "identity");
-        if from > 0 {
-            request = request.header("Range", format!("bytes={from}-"));
-        }
-        let response = request
-            .config()
-            .timeout_resolve(Some(Duration::from_secs(15)))
-            .timeout_connect(Some(Duration::from_secs(15)))
-            .timeout_send_request(Some(Duration::from_secs(30)))
-            .timeout_recv_response(Some(Duration::from_secs(60)))
-            .timeout_recv_body(Some(body_timeout(v.size - from)))
-            .http_status_as_error(false)
-            .build()
-            .call()
-            .map_err(transfer::Opening::Call)?;
+        let request = || {
+            let mut request = ureq::get(url)
+                .header("User-Agent", agent_name())
+                .header("Accept-Encoding", "identity");
+            if from > 0 {
+                request = request.header("Range", format!("bytes={from}-"));
+            }
+            request
+                .config()
+                .timeout_resolve(Some(Duration::from_secs(15)))
+                .timeout_connect(Some(Duration::from_secs(15)))
+                .timeout_send_request(Some(Duration::from_secs(30)))
+                .timeout_recv_response(Some(Duration::from_secs(60)))
+                .timeout_recv_body(Some(body_timeout(v.size - from)))
+                .http_status_as_error(false)
+                .build()
+                .call()
+        };
+        let (result, attempts) = transfer::send(request);
+        let response = result.map_err(transfer::Opening::Call)?;
         let status = response.status().as_u16();
         if status >= 400 {
             return Err(transfer::Opening::Refused(Error::Other(format!(
-                "{url}: HTTP {status}"
+                "{url}: HTTP {status}{}",
+                transfer::attempts_note(attempts)
             ))));
         }
         Ok(response)
@@ -781,6 +832,7 @@ mod tests {
             native: false,
             yanked: false,
             requires: None,
+            platforms: Vec::new(),
         }
     }
 
@@ -794,6 +846,7 @@ mod tests {
             category: None,
             kind: Vec::new(),
             homepage: None,
+            repository: None,
             icon: None,
             publisher: None,
             publishers: Vec::new(),
@@ -805,6 +858,7 @@ mod tests {
             updated_at: String::new(),
             latest: versions.first().cloned(),
             versions,
+            media: Vec::new(),
         }
     }
 
@@ -987,6 +1041,26 @@ mod tests {
 
     fn sha256_hex(data: &[u8]) -> String {
         Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn a_full_log_halves_at_a_line_even_when_the_middle_is_inside_a_character() {
+        let root = scratch("log-half");
+        let path = root.join(LOG_FILE);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let line = "Synced stars \u{b7} 0 starred\n";
+        let mut text = line.repeat(LOG_LIMIT as usize / line.len() + 2);
+        while text.is_char_boundary(text.len() / 2) {
+            text.insert(0, 'x');
+        }
+        assert!(!text.is_char_boundary(text.len() / 2));
+        std::fs::write(&path, &text).unwrap();
+        log(&root, "after");
+        let kept = std::fs::read_to_string(&path).unwrap();
+        assert!(kept.len() < text.len() / 2 + line.len() + 64);
+        assert!(kept.starts_with("Synced stars"));
+        assert!(kept.trim_end().ends_with(" after"));
+        std::fs::remove_dir_all(&root).ok();
     }
 
     fn scratch(name: &str) -> PathBuf {
@@ -1190,7 +1264,7 @@ mod tests {
         assert_eq!(body_timeout(0), DOWNLOAD_FLOOR);
         assert_eq!(body_timeout(200 * 1024 * 1024), DOWNLOAD_FLOOR);
         assert_eq!(body_timeout(1024 * 1024 * 1024), Duration::from_secs(8192));
-        assert_eq!(body_timeout(DOWNLOAD_LIMIT), Duration::from_secs(32768));
+        assert_eq!(body_timeout(DOWNLOAD_LIMIT), Duration::from_secs(49152));
     }
 
     #[test]
@@ -1272,6 +1346,45 @@ mod tests {
         assert_eq!(addons[0].kind_labels(), ["Code"]);
         assert_eq!(addons[0].stars, 0);
         assert!(parse("<html>").is_none());
+    }
+
+    #[test]
+    fn platforms_are_the_listed_ones_and_absent_means_none() {
+        let version =
+            |platforms: &str| format!(r#"{{"version":"1.0.0","size":1,"sha256":"","url":"u"{platforms}}}"#);
+        let listed = |platforms: &str| {
+            let text = format!(
+                r#"{{"addons":[{{"id":"a.b","name":"B","latest":{}}}]}}"#,
+                version(platforms)
+            );
+            parse(&text).unwrap().remove(0)
+        };
+        assert!(listed("").platforms().is_empty());
+        assert!(listed(r#","platforms":null"#).platforms().is_empty());
+        assert!(listed(r#","platforms":[]"#).platforms().is_empty());
+        assert_eq!(
+            listed(r#","platforms":["ea","steam","ea","gog"]"#).platforms(),
+            [Platform::Steam, Platform::Ea]
+        );
+        assert!(listed(r#","platforms":"steam""#).platforms().is_empty());
+    }
+
+    #[test]
+    fn source_url_is_the_listed_repository_when_it_is_https() {
+        let listed = |repository: &str| {
+            let text = format!(r#"{{"addons":[{{"id":"a.b","name":"B","repository":{repository}}}]}}"#);
+            parse(&text).unwrap().remove(0)
+        };
+        assert_eq!(
+            listed(r#""https://github.com/me/b""#).source_url(),
+            Some("https://github.com/me/b")
+        );
+        assert_eq!(listed(r#""http://example.com/b""#).source_url(), None);
+        assert_eq!(listed("null").source_url(), None);
+        let without = parse(r#"{"addons":[{"id":"a.b","name":"B"}]}"#)
+            .unwrap()
+            .remove(0);
+        assert_eq!(without.source_url(), None);
     }
 
     #[test]

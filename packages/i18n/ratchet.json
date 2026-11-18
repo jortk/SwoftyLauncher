@@ -1,0 +1,13 @@
+{
+  "admin_needed.rs": 1,
+  "app_log.rs": 8,
+  "browser/jobs.rs": 1,
+  "browser/sync.rs": 2,
+  "game.rs": 3,
+  "game_edited.rs": 10,
+  "multiplayer.rs": 4,
+  "play_bar.rs": 1,
+  "play_checks.rs": 1,
+  "setup.rs": 6,
+  "shaders/preview/worker.rs": 2
+}

@@ -8,7 +8,7 @@ description: The C++ mixin layer in swofty/mixin.hpp - bindings, the mixin macro
 The mixin API in `swofty/mixin.hpp` declares the handlers your plugin runs inside the game's code (wraps, site handlers, vtable slots, redirects and byte patches) over the [mixin system](/reference/addons/hooking).
 
 ```cpp [native/src/my_plugin.cpp]
-// Trimmed from Progressive Career: addons/progressive/native/src/ui/back.cpp and ui/suffix.cpp
+// Trimmed from Progressive Career: native/src/ui/back.cpp and ui/suffix.cpp
 #include <cstring>
 #include <string>
 
@@ -176,7 +176,7 @@ Handlers below an overwrite still install, with a warning. Two overwrites on one
 ### SWOFTY_SITE
 
 ```cpp
-// From addons/rnd-tyres-thermal/native/src/rnd_fifth_pie.cpp
+// From R&D: Tyres & Thermal Management's native/src/rnd_fifth_pie.cpp
 SWOFTY_SITE(site_Career_RnDPieSliceNameJoin, swofty::Context &c)
 {
     if (!g_live.load() || !code4(c) || c.rdi != err_name())
@@ -207,7 +207,7 @@ SWOFTY_VTABLE(vt_Fake_Other, 8, uintptr_t)
 ### SWOFTY_REDIRECT
 
 ```cpp
-// From addons/rnd-tyres-thermal/native/src/rnd_fifth_pie.cpp
+// From R&D: Tyres & Thermal Management's native/src/rnd_fifth_pie.cpp
 SWOFTY_REDIRECT(site_Career_RnDPieSliceDescFormat, int64_t, NeStr **out, const char *fmt, const char *name)
 {
     if (g_live.load() && reinterpret_cast<uintptr_t>(name) == err_name())
@@ -314,6 +314,8 @@ Without `swofty/session.json`, mixins are not checked:
 ```text
 [core] no session.json; mixins are not checked against a manifest
 ```
+
+A wrap or site on the very address of one that is already installed (a core mixin set, or an addon that installed earlier) is not a conflict, whichever pass installs it: it chains behind the earlier handlers and the log prints `chained onto the one installed earlier`. Only a hook whose patched bytes overlap another's without sharing its address, or an overwrite, conflicts.
 
 A conflict drops every addon involved, so you lose all of their mixins, not just the conflicting ones. In a conflict in one mixin commit between an addon and one of swofty_core's own hook sets (`swofty_core.dll (...)` in the log), only the core's set is dropped:
 

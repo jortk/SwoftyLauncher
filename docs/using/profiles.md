@@ -7,16 +7,18 @@ description: Create, switch, rename, duplicate and delete profiles, each with it
 
 Use a profile to keep a whole setup together: which addons are on, their load order and every addon setting. When you want to swap setups, switch profiles. Each one keeps its own saves.
 
+**Settings > General > Use profiles** hides everything on this page and keeps the active profile. See [Settings](/using/settings#general).
+
 To play F1 25 exactly as shipped, choose `vanilla`, the built-in profile with nothing installed. You can't edit it. Every modded profile includes the [built-in addons](/using/addons#built-in-addons), SwoftyMod and the Simplified Importer.
 
 ## Create a profile
 
 1. Open the **Profiles** page.
 2. Select the **New profile** button in the header or the dashed **New profile** card.
-3. Type a name using letters, digits, `-` and `_`.
+3. Type a name using letters, digits, `-` and `_`. A name another profile has, in any capitals, is taken.
 4. Select **Create**.
 
-Your new profile starts with the built-in addons and nothing else. To fill out your setup, turn on addons on the [Addons](/using/addons) page and convert mods in the [Simplified Importer](/using/mods).
+Your new profile starts with the built-in addons and nothing else. To fill out your setup, [add addons](/using/addons#add-an-addon-to-a-profile) and turn them on on the [Addons](/using/addons) page and convert mods in the [Simplified Importer](/using/mods).
 
 ## Switch profile
 
@@ -31,7 +33,7 @@ When you press **Play**, the launcher uses your active profile.
 
 To change a profile's name or make a copy of its setup, open the **Profiles** page and expand its card footer:
 
-- The pencil icon renames it.
+- The pencil icon renames it. Close F1 25 first: you can't rename a profile while the game is running.
 - The copy icon duplicates it into a new profile with the same content.
 
 You won't see either icon on `vanilla`, because that profile cannot be changed.

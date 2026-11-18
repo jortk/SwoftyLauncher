@@ -1,0 +1,12 @@
+[package]
+name = "addon-icons"
+version = "0.1.0"
+edition = "2024"
+license = "PolyForm-Noncommercial-1.0.0"
+publish = false
+
+# Kept out of the launcher's workspace: only regenerating packages/core/src/ui/icons.bc7 needs resvg.
+[workspace]
+
+[dependencies]
+resvg = "0.45"

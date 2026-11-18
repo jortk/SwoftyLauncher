@@ -1,0 +1,12 @@
+{
+  "content.package": {
+    "f1_2008": {
+      "$comment": "true or false",
+      "entrant_list": "f1_2008",
+      "season": 2008,
+      "rules": {
+        "race_start_fuel_from_quali": "yes"
+      }
+    }
+  }
+}

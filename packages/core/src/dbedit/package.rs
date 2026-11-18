@@ -708,14 +708,24 @@ pub fn export_packages(store: &Store, game: &Game, packages: &[Package], out: &P
             left_out += 1;
         }
     }
+    for c in super::calendar::cut_rounds(&db) {
+        let by = packages.iter().rev().find(|p| p.edits.get(c.key).is_some());
+        export
+            .warnings
+            .push(c.line(by.map_or("database", |p| p.manifest.name.as_str())));
+    }
     let picks: Vec<(String, Vec<String>)> = packages
         .iter()
         .map(|p| (p.manifest.name.clone(), super::driver_manager::picks(&p.edits)))
         .collect();
     if picks.iter().any(|(_, p)| !p.is_empty()) {
         let names = super::driver_manager::names(store);
-        export.warnings =
-            super::driver_manager::warnings(&db, &picks, &names, super::driver_manager::Why::GameFiles);
+        export.warnings.extend(super::driver_manager::warnings(
+            &db,
+            &picks,
+            &names,
+            super::driver_manager::Why::GameFiles,
+        ));
     }
     let bytes = db.to_bytes();
     if bytes == stock {

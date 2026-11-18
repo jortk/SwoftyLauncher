@@ -94,6 +94,29 @@ int main()
     }
 
     {
+        using runtime::career::poll_reads;
+        using runtime::career::Where;
+        expect(poll_reads(Where::career) && poll_reads(Where::unknown) && !poll_reads(Where::elsewhere),
+               "the component poll reads the game in a career and in an unknown mode, not elsewhere");
+        Tracker t;
+        Components dc;
+        dc.entity = dc.career = true;
+        dc.mode = SWOFTY_CAREER_DRIVER;
+        dc.humans = 1;
+        dc.player = true;
+        dc.driver = 7;
+        t.components(dc, 100);
+        expect(t.settle().loaded, "a career loads from a read in career mode");
+        t.components(poll_reads(Where::elsewhere) ? dc : Components{}, 200);
+        Edges e = t.settle();
+        expect(e.unloaded && !e.loaded && !t.state().loaded, "in Time Trial the poll reports no career without a read: the career unloads");
+        Tracker fresh;
+        fresh.components(Components{}, 100);
+        expect(quiet(fresh.settle()) && !fresh.state().loaded && fresh.state().components == SWOFTY_CAREER_COMPONENTS_UNSEEN,
+               "a game started into Time Trial publishes nothing and the components stay unseen");
+    }
+
+    {
         Tracker t;
         Components mt;
         mt.entity = mt.career = true;

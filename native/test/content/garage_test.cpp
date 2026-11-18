@@ -90,11 +90,21 @@ int main()
                       view = root + "garage_liveries/garage_livery_renault_a_01_da.tif";
     check(p.arc.find(surface) && p.arc.find(view), "the names are the root, the file's path and .tif.image or .tif");
     const ef::Entry *e = p.arc.find(surface);
-    check(e && e->mid.compare(0, 13, "GfxSurfaceRes") == 0 && e->frags.size() == 2 && e->frags[0].size == 40, "the surface has the 40 byte header and a pixel fragment");
+    check(e && e->mid.compare(0, 13, "GfxSurfaceRes") == 0 && e->frags.size() == 3 && e->frags[0].size == 40, "the surface has the 40 byte header, a pixel fragment and a streaming descriptor");
     std::string head = p.frag(surface, 0);
     uint32_t want[] = {2, 0x108, g::FMT_BC1_SRGB, 16, 8, 1, 5, 1, 0, 0};
     check(head.size() == 40 && std::memcmp(head.data(), want, 40) == 0, "its header holds the format, size and mip count");
     check(p.frag(surface, 1) == img.pixels, "its pixel fragment is every mip level as the DDS has it");
+    std::string desc = p.frag(surface, 2);
+    const std::string mips = "environment_package/core_assets/objects/textures/garage_liveries/garage_livery_renault_a_01_da.tif.2025.mipmaps";
+    check(desc.size() >= 256 && uint8_t(desc[0]) == mips.size() && desc.substr(1, mips.size()) == mips && desc[1 + mips.size()] == '\0' &&
+              g::le32(desc, 2 + mips.size()) == 0,
+          "its streaming descriptor names the stock .mipmaps file below the root, with no streamed level, in a fragment as large as the stock ones");
+    float one = 0;
+    std::memcpy(&one, desc.data() + 2 + mips.size() + 8, 4);
+    check(one == 1.0f, "the descriptor ends with the stock 1.0 field");
+    g::Built plain = g::build(files, root, true, false);
+    check(Parsed(plain.erp).arc.find(surface)->frags.size() == 2 && plain.erp != built.erp, "a build without descriptors keeps two fragments");
     std::string srv = p.frag(view, 0);
     check(srv.size() == 24 + surface.size() + 1 && g::le32(srv, 0) == 5 && g::le32(srv, 4) == g::FMT_BC1_SRGB && g::le32(srv, 12) == 5 &&
               srv.substr(24, surface.size()) == surface,

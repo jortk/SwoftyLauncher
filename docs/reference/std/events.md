@@ -150,7 +150,7 @@ swofty::events::on_frame(tick, nullptr, &token);
 // ok and fills token; unavailable once the setup found no frame tick on this build
 ```
 
-`on_frame` callbacks run on the first flow-thread update after each rendered frame, and at least every 33 ms when no frame is rendered, as on loading screens. Only one thread runs them at a time. The core logs the first two ticks:
+`on_frame` callbacks run on the first flow-thread update after each rendered frame, and at least every 33 ms when no frame is rendered, as on loading screens. Only one thread runs them at a time. They keep running in the pause menu, with the real seconds since the last frame, so an addon that counts game time needs its own [pause check](/std/systems/failures#pausing). The core logs the first two ticks:
 
 ```text
 [events] flow tick 1 observed, dt 0.000000; onFrame is live
@@ -210,6 +210,7 @@ Choose the event with a `SWOFTY_EVENT_*` constant from `swofty_api.h`:
 |---|---|
 | `SWOFTY_EVENT_SESSION_START` | `session.start` |
 | `SWOFTY_EVENT_SESSION_END` | `session.end` |
+| `SWOFTY_EVENT_SESSION_UNLOAD` | `session.unload` |
 | `SWOFTY_EVENT_RACE_START` | `race.start` |
 | `SWOFTY_EVENT_LAP` | `lap` |
 | `SWOFTY_EVENT_FLAG` | `flag` |
@@ -224,8 +225,38 @@ Choose the event with a `SWOFTY_EVENT_*` constant from `swofty_api.h`:
 | `SWOFTY_EVENT_CAREER_HUB` | `career.hub` |
 | `SWOFTY_EVENT_CAREER_STARTING` | `career.starting` |
 | `SWOFTY_EVENT_CAREER_CONTENT_PRESSED` | `career.content.pressed` ([career contents](./career-content)) |
+| `SWOFTY_EVENT_TELEMETRY_OVERTAKE` | `telemetry.overtake` ([telemetry](./telemetry#events)) |
+| `SWOFTY_EVENT_TELEMETRY_COLLISION` | `telemetry.collision` ([telemetry](./telemetry#events)) |
+| `SWOFTY_EVENT_TELEMETRY_RETIREMENT` | `telemetry.retirement` ([telemetry](./telemetry#events)) |
 
 `session.start` fires when the game enters a session (`Game_GameModule_OnSessionEnter`), `race.start` when the formation lap component reports the race started. Both pass `a = b = 0` and no `data`.
+
+`session.end` fires once when the session ends: when `StateSession` exits, or, if the game goes straight to unloading, when `StateUnloadSession` begins, or when a new `session.start` arrives while one is still open (a restart). `session.unload` fires once when `StateUnloadSession` begins, after `session.end`. The order for one session is `session.start`, `session.end`, `session.unload`; a restart gives `session.end` then `session.start` again, and a quit mid-session gives `session.end` then `session.unload`. Neither carries `data`. `e->a` on `session.end` says why it fired: `0` the session state exited, `1` a restart, `2` the session was still open when unloading began. `session.unload` passes `a = b = 0`.
+
+Stop driving the player's car on `session.end`, not on `session.unload`; by the time the unload begins the game refuses control changes.
+
+```cpp
+static void on_session_end(const SwoftyEvent *e, void *)
+{
+    // e->a: 0 StateSession exited, 1 restart, 2 ended as the unload began
+    release_player_car();
+}
+
+static void on_session_unload(const SwoftyEvent *, void *)
+{
+    forget_session_state();
+}
+
+ev::subscribe(SWOFTY_EVENT_SESSION_END, on_session_end);
+ev::subscribe(SWOFTY_EVENT_SESSION_UNLOAD, on_session_unload);
+```
+
+```text
+[events] session.end (StateSession exited)
+[events] session.unload (StateUnloadSession entering)
+```
+
+`state`, `session.grid` and `session.formation_lap` are not fired: the flow hook sees front-end states, not the race's own states, and `race.start` is the only formation lap moment the core hooks.
 
 ## Flow and career events
 
@@ -287,9 +318,47 @@ The `blocked` flag comes from [blocking a career mode](./career#blocking-a-caree
 - `career.hub` left always comes before `career.unloaded`.
 - `flow.state` runs on the thread that changes the state, which is the flow thread.
 
+## Pause and resume
+
+`pause` fires when the game's pause reason mask goes from 0 to non-zero, and `resume` when it returns to 0. The game keeps one bit per reason that holds the pause, such as the pause menu; a bit that sets or clears while another is held fires nothing. They fire on the thread that makes the game's pause call, and pass `data = nullptr`.
+
+| Event | `e->a` | `e->b` |
+|---|---|---|
+| `pause` | the mask after the change | the reason bit that was set |
+| `resume` | 0 | the reason bit that was cleared |
+
+`swofty/view.hpp` reads the same mask for an addon that polls instead of subscribing:
+
+```cpp
+#include <swofty/events.hpp>
+#include <swofty/view.hpp>
+
+void on_pause(const SwoftyEvent *e, void *)
+{
+    swofty::log("[my-addon] paused, reasons %08llx", (unsigned long long)e->a);
+}
+
+SWOFTY_ON_LOAD
+{
+    swofty::events::subscribe(SWOFTY_EVENT_PAUSE, on_pause);
+    swofty::events::subscribe(SWOFTY_EVENT_RESUME, [](const SwoftyEvent *, void *) { swofty::log("[my-addon] resumed"); });
+}
+
+void each_frame(double dt, void *)
+{
+    if (swofty::view::paused()) // pause_reasons() != 0, any thread
+        return;
+    // count game time with dt
+}
+```
+
+`swofty::view::available()` is false on a core without the `SwoftyCorePauseReasons` export, where `pause_reasons()` is 0 and `paused()` is false. The core logs each reason change as `[view] pause reason bit … set/cleared, mask …`, for the first 64 changes of a run.
+
+This mask is the game's pause call. The `paused` view flag that [post-processing](/reference/addons/postfx#when-a-pass-runs) shaders read follows the game's pause flow state instead.
+
 ## Availability
 
-The core implements `on_frame`, `session.start`, `race.start` and, from core 0.2.11 (API version 6), the four flow and career events above, and from core 0.2.12 (API version 7) `career.starting`. `career.content.pressed` fires on cores with [career contents](./career-content). The other names (`session.end`, `lap`, `flag`, `state`, `screen`, `pause`, `resume`, `results`) are accepted but do not fire yet.
+The core implements `on_frame`, `session.start`, `race.start` and, from core 0.2.11 (API version 6), the four flow and career events above, and from core 0.2.12 (API version 7) `career.starting`. `career.content.pressed` fires on cores with [career contents](./career-content). `telemetry.overtake`, `telemetry.collision` and `telemetry.retirement` fire on cores with the [telemetry](./telemetry#events) feature on. `pause` and `resume` fire on cores that export `SwoftyCorePauseReasons` ([pause and resume](#pause-and-resume)). The other names (`session.end`, `lap`, `flag`, `state`, `screen`, `results`) are accepted but do not fire yet.
 
 A build where a hook does not resolve leaves only that event silent. The `[events] setup:` and `[career] setup:` lines say which:
 

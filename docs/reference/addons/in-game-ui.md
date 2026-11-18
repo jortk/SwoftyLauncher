@@ -448,3 +448,90 @@ To apply the same `clone-entry` and `set-value` edits to `!pkg` resources, use t
 - [Addon manifest](./manifest#operations): the `screens` field.
 - [UI library](/reference/std/ui): view-model properties and commands.
 - [Menus and UI](/reference/ui/): editing a screen's layout with Swofty UI.
+
+## Main menu state files
+
+The launcher writes `swofty/home_menu.json` into the game folder at launch and rewrites it when the latest video has been fetched. The core reads it for the main menu's top-right strip and the video card. With the **Home screen video** setting off (`"home_video": false` in `config.json`) the file has no `video`, the launcher doesn't fetch it, and the home screen has no video card.
+
+```json
+{
+  "schema": 1,
+  "launcher_version": "1.8.37",
+  "discord": { "signed_in": true, "name": "swofty", "avatar": "C:/users/.../multiplayer/avatar.png" },
+  "video": {
+    "title": "Latest video",
+    "url": "https://youtu.be/abc123",
+    "thumbnail": "C:/users/.../cache/home_menu/thumbnail.jpg"
+  }
+}
+```
+
+`avatar` is present only while signed in and the image file exists. `video` is present when the registry answered at least once; a failed fetch keeps the cached video.
+
+The video comes from the registry's `GET /v1/video/latest`:
+
+```json
+{ "id": "abc123", "title": "Latest video", "url": "https://youtu.be/abc123",
+  "thumbnail_url": "https://i.ytimg.com/vi/abc123/hqdefault.jpg", "published_at": "2026-11-09T10:00:00Z" }
+```
+
+To open a link the core writes `swofty/open_url.json`, `{"url": "https://youtu.be/abc123"}`. The launcher reads and deletes it while the game runs, and opens the link in the default browser of the host. It opens only `https` links on `www.youtube.com`, `youtube.com` and `youtu.be`.
+
+## Main menu tiles
+
+swofty_core builds the main menu's tile list in this order: Braking Point, Career, Grand Prix, Time Trial, Split Screen, the challenge tile when the game builds it, Theatre, Showroom, Customisation, a divider, Addon Settings. The F1 World, League Racing and Player Hub tiles and the divider are not added. Grand Prix and Time Trial are copies of the F1 World item with their own id, title and description. Split Screen is the game's Local Multiplayer item (id `local_multiplayer`) with its own title and description; its stock route opens the game's Local Multiplayer list, which is the lone Splitscreen tile, and Back from there returns to the main menu. Showroom is a copy of the Theatre item that fires the `swofty_showroom` route, a copy of the F1 World hub's own `showroom` route with the hub swapped for `fe_home`: it closes only the home screen, so `slice_bg_content_underlay` and the player card stay open for the series picks, opens `fe_showroom` with its view model callback before input, and closes the theming overlay. Customisation is a copy of the Theatre item (id `swofty_customisation`) that fires the `swofty_customisation` route and opens the game's CUSTOMISATION screen: Driver Profile, Race & Casual Wear, Car and Badges.
+
+The tiles stay in the stock vertical list at the stock position, all in the large default tile style: Theatre, Showroom and Customisation are copies of the Theatre item and, like Split Screen, take the type `fe_tile_button_default`, and the divider tile (the stock divider adder) sits before Addon Settings. A launcher build with the environment variable `SWOFTY_HOME_ROWS` set also adds a rows layout (scene slots in `fe_home.idf`, templates in `fe_home.ui`, flag `swofty/ui/home_rows.flag`); it is off by default.
+
+```text
+[main-menu] home tile block at 0x...; adders F1 World 0x..., challenge 0x..., Local Multiplayer 0x..., Theatre 0x...
+[main-menu] stock F1 World, divider, League Racing, Player Hub and Theatre tiles skipped
+[main-menu] the launcher's rows of cards are in this build
+[main-menu] tiles added after Career: Grand Prix, Time Trial, Split Screen, Theatre, Showroom, Customisation (last index 8)
+```
+
+The Customisation card reaches the game's customisation screen without the F1 World hub:
+
+- `swofty_customisation` is a route the launcher adds to the `fe_home` group, a copy of the home's own `customisation` route: the standard wipe, close `fe_home`, `slice_bg_content_underlay` and `fe_planes`, then `Migrate customisation_flow enter_f1_life_customisation`, which opens `customisation_f1_life_entry`. The F1 World hub's own `customisation` route closes `fe_f1_world` instead.
+- Back from that screen fires a route in the `customisation_f1_life_entry` group: `back_1` (`Migrate frontend_flow enter_fe_f1_world`, which opens the F1 World hub) when the screen was opened from the hub, and `back`, which leads nowhere, when it was opened from the main menu. The launcher adds `swofty_back_home` to that group in `routes_customisation_and_store.uir`, the activity container's `home` route as the container's own `swofty_back_home` has it. After a Customisation card press the core replaces `back` (or `back_1`, or `back_2`, the screen's Back to the news) with it: Back returns to the main menu. A Customisation screen reached any other way keeps the game's Back. The press stays armed until the swap, a migration to `frontend_flow`, or `fe_home` opens; the help page some customisation screens open (`team_hq_flow`) keeps it.
+- The launcher writes `swofty/ui/home_customisation.flag` only when both routes are in the build; without it the core adds no Customisation card. A build that cannot add them warns `ui: no Customisation card on the main menu: ...`.
+
+```text
+[main-menu] the launcher's Customisation routes are in this build
+[main-menu] customisation card pressed (item 0x...): route swofty_customisation; the Customisation screen's Back returns to the main menu
+[main-menu] nav: Migrate command: flow 'customisation_flow' entry 'enter_f1_life_customisation' -> accepted; the flow the game last accepted is now customisation_flow
+[main-menu] nav: route 'back' fired in group 0x... (customisation_f1_life_entry)
+[main-menu] back: the Customisation screen was entered from the main menu card; its Back (route back in customisation_f1_life_entry) returns to the main menu
+[main-menu] back: the game's handler fired route back from its own view model (group 0x...); it is replaced by swofty_back_home in the same group, so the F1 World hub is never opened
+```
+
+When the home tile block does not match byte for byte, the core logs `the home tile block did not resolve on this build; the stock main menu stays` and changes nothing.
+
+`SWOFTY_MAIN_MENU=0` leaves the stock main menu. `SWOFTY_MAIN_MENU_NAV` is logged.
+
+The Time Trial and Grand Prix cards open the activity container without the F1 World hub:
+
+- `swofty_time_trial` is a route the launcher adds to the `fe_home` group, a copy of the game's `home_to_activity` that migrates to the `f1_world_flow` entry `swofty_enter_time_trial`, which opens the activity container with the command `time_trial` already raised, the way the game's `enter_splitscreen_era_select` raises `ss_game_mode_select`. The Time Trial card fires it.
+- The Grand Prix card fires the game's own `home_to_activity` (the plain `enter_f1_world_activity` entry) and the core raises `solo_gp` on the activity container once its tabs exist: the command the container's own Grand Prix card raises. The game answers with `grand_prix_resume`, whose route migrates to the front-end flow's `enter_gp_resume` and opens `grand_prix_continue`, the game's Grand Prix screen with the saved seasons, **Continue** and **New Grand Prix**, as F1 World > Play > Grand Prix does. The core asks the game's season lookup once (`probe:` lines) for the log only.
+- Back from the container fires `f1_world` or `home`; the core replaces it with `swofty_back_home`, the container's `home` route behind the standard full-screen wipe with the theming overlay opened after `Migrate frontend_flow enter_fe_home`. Back from the Showroom fires `back_1`; the core replaces it with `swofty_home`, a copy of the hub's `back_1` in the `fe_showroom` group. Back from the saves list fires `back`, the game's migration to the activity container, and stays the game's; after a Grand Prix card press the core leaves the container for the main menu with `swofty_back_home` once its tabs exist. Before `swofty_back_home` the core sets `#ui_menu_data.frontend_transition_state` to `main_menu`.
+- A Time Trial or Grand Prix session that ends hands over through `frontend_transition.ui`, whose `migrate_to_f1_world` node enters `swofty_enter_return` (the bare activity container) instead of `enter_f1_world_container`. The core raises the command of the card that started the session once the container is active, 300 ms after its own first command (`show_default`, `tab_activated`), not when its tabs are built: raised that early the game refuses the route (`The screen f1_world_activity_container is not currently active`) and the screen stays black. `time_trial` opens the Time Trial picker, `solo_gp` the saves list with the season just played.
+- `swofty_grand_prix` (the activity container with `grand_prix_new`) and `swofty_grand_prix_saves` (a copy of the `theatre` route that opens `grand_prix_continue` straight from the home screen) stay in the routes and are not fired: opened that way the saves screen's slot list crashed the game in `Game_CareerContinue_ListSlots` (1.9.4).
+- The core logs every `Migrate` route command (`nav: Migrate command: flow ... entry ...`), keeps the flow the game last accepted, and when a screen it asked for is not open after 4 seconds fires `swofty_back_home` (the `f1_world_flow` or `customisation_flow` is current) or the `open` route of `fe_home` (the front-end flow is current).
+
+`SWOFTY_MAIN_MENU_ENTRY=chain` opens the pickers the old way (`home_to_activity`, then the command 900 ms after the container is up; `SWOFTY_MAIN_MENU_ROUTE` replaces the route name, `SWOFTY_MAIN_MENU_CHAIN=0` stops at the container). `SWOFTY_MAIN_MENU_BACK=stock|home|twostep` leaves the game's Back, fires the container's `home`, or takes the hub's own Back. `SWOFTY_MAIN_MENU_RETURN=0` leaves the session-end hand-over on the bare container. `SWOFTY_MAIN_MENU_RECOVER=0` turns the recovery off. `SWOFTY_MAIN_MENU_STATEFIX=0` leaves the transition state alone. `SWOFTY_MAIN_MENU_MIGRATELOG=0` leaves the `Migrate` command unhooked.
+
+```text
+[main-menu] nav: the launcher's Time Trial, Grand Prix and Back routes are in this build
+[main-menu] nav: route Migrate command hooked at base+0x...
+[main-menu] chain: Time Trial card pressed; route swofty_time_trial opens the activity container, then 'time_trial' is raised on it (the Time Trial picker)
+[main-menu] chain: Grand Prix card pressed; route home_to_activity opens the activity container, then 'solo_gp' is raised on it (the container's own Grand Prix command: the saved seasons and New Grand Prix)
+[main-menu] nav: Migrate command: flow 'f1_world_flow' entry 'swofty_enter_time_trial' -> accepted; the flow the game last accepted is now f1_world_flow
+[main-menu] back: the game's handler fired route f1_world from its own view model (group 0x59ba71d1); it is replaced by swofty_back_home in the same group, so the F1 World hub is never opened
+[main-menu] nav: session-end hand-over landed on the activity container (the F1 World hub was skipped); raising 'solo_gp' on it once it is active
+```
+
+While the main menu is open the overlay paints the Swofty Launcher version, the Discord sign-in state and avatar in the top right, and the latest video's thumbnail with `Press RB to watch` (`Press V to watch` without a gamepad) in the bottom right. Pressing the key writes `swofty/open_url.json`. Entering Time Trial while signed out of Discord shows the game's message popup once per session; its OK continues.
+
+The top-right account panel and the bottom-right video card are game UI. The launcher build adds two component slots to `fe_home.idf` (`swofty_details_account` and `swofty_details_video`, copies of the `details_offline` and `details_news` slots of the "Launched with" and news cards) and two groups to `contextual_panels` in `fe_home.ui` (`swofty_account_panel` and `swofty_video_panel`, copies of `offline_contextual_panel` and `news_contextual_panel`, always visible). Their text reads `ui_menu_data.swofty_panel_text`, `swofty_video_title` and `swofty_video_prompt`, which the core sets on the flow thread.
+
+The overlay draws only the two images: the video thumbnail inside the news card's image area and the Discord avatar beside the account panel. Positions are in scene units (the front end spans about 17.8 by 10 units), converted through the 16:9 band the front end is laid out in: the full height of a 16:9 or wider frame, and the full width of a taller one such as a Steam Deck's 16:10, centred with the game's backdrop above and below. Sizes scale with the band's height.

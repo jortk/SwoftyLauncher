@@ -356,10 +356,9 @@ inline bool valid_name(std::string_view n)
 }
 
 
-// The EA copy's save device (vtable 0x145b6dbf0) has no Steam helper: it opens <title dir>\\<save>\\<file> in place.
+// The EA copy's save device (vtable bound as vt_Ne_SaveSystem2Win) has no Steam helper: it opens <title dir>\\<save>\\<file> in place.
 // Its title dir is the wide string at save system+0xc0 (device+0x18 = save system+0x50, so config+0x70), an
 // inline buffer of config+0x68 characters whose storage sits at config+0x78.
-constexpr uintptr_t EA_VTABLE = 0x145b6dbf0;
 constexpr size_t EA_DEVICE_CONFIG = 0x18;
 constexpr size_t EA_CONFIG_CAP = 0x68;
 constexpr size_t EA_CONFIG_PTR = 0x70;

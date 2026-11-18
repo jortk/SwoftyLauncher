@@ -279,8 +279,10 @@ public:
             for (auto &l : p.stat_lines)
                 swofty::log("%s", l.c_str());
             std::string names;
-            for (auto &d : p.done)
+            for (auto &d : p.done) {
                 names += (names.empty() ? "" : ", ") + d.code + " " + std::to_string(d.stat_id);
+                runtime::udp_track(d.stat_id, d.addon, d.code);
+            }
             if (!names.empty())
                 report.summary = names;
         }

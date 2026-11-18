@@ -273,6 +273,52 @@ template <class Each> void each_setup(const void *career, const Access &a, Each 
     }
 }
 
+// The entrant lists the game loaded, with no career: the EntrantsSystem at g_Game_Manager +0x290 (+0x260 on EA, see
+// runtime::manager_entrants_system), the object the CareerSetupComponent's +0x290 points at. Its list slots
+// (+0x560..+0x568) are indexed by stat_id and run to the highest loaded id; an id the game did not load has no list
+// in its slot. The career tile's router (FeTile_Route_CareerItem) and the save-slot predicates read a career's data
+// group from these slots by its entrant list stat_id, so an id past them or on an empty slot faults the router on the
+// tile press (1.9.15: stat_id 240 of 105 slots, null+0xf08). Field contents work at ids past the table's row count
+// (stat_id 138 of 149 slots with 91 rows), so the slots are the bound, not the row count.
+
+struct Loaded {
+    bool known = false;
+    size_t slots = 0;
+    bool list = false;
+};
+
+inline Loaded loaded_list(const void *entrants, int64_t id, const Access &a)
+{
+    Loaded l;
+    if (!entrants || !a.readable(entrants, GROUPS_END + 8, a.user))
+        return l;
+    auto *lb = at<const uint8_t *>(entrants, GROUPS_BEGIN), *le = at<const uint8_t *>(entrants, GROUPS_END);
+    if (!lb || le <= lb || size_t(le - lb) % GROUP_STRIDE || size_t(le - lb) / GROUP_STRIDE > MAX_GROUPS)
+        return l;
+    l.known = true;
+    l.slots = size_t(le - lb) / GROUP_STRIDE;
+    const uint8_t *slot = id >= 0 && size_t(id) < l.slots ? lb + size_t(id) * GROUP_STRIDE : nullptr;
+    l.list = slot && a.readable(slot, GROUP_STRIDE, a.user) && at<const void *>(slot, GROUP_AT);
+    return l;
+}
+
+// Why a content whose database requirements hold is still refused for the loaded lists, or empty when its list is
+// loaded or the lists can't be read on this build.
+inline std::string loaded_why(const Desc &d, int64_t group, const Loaded &l)
+{
+    if (!l.known)
+        return {};
+    if (group < 0 || size_t(group) >= l.slots)
+        return "entrant list " + d.data_group + " has stat_id " + std::to_string(group) + ", past the " +
+               std::to_string(l.slots) + " entrant list slots the game loaded; the career tile's router reads the " +
+               "data group from those slots by that id";
+    if (!l.list)
+        return "entrant list " + d.data_group + " has stat_id " + std::to_string(group) + ", and the game loaded no " +
+               "list at that id (" + std::to_string(l.slots) + " slots); the career tile's router reads the data " +
+               "group from that slot";
+    return {};
+}
+
 // What the predicate reads for the first championship with a CareerSetupComponent.
 inline GroupSeen data_group(const void *career, const Access &a)
 {

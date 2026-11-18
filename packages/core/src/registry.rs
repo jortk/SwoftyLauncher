@@ -150,6 +150,8 @@ impl Registry {
 pub struct ProfileState {
     store: Store,
     profile: String,
+    /// The addon these calls come from.
+    addon: String,
     read_only: bool,
 }
 
@@ -208,7 +210,7 @@ impl AddonStore for ProfileState {
 
     fn install(&self, path: &Path) -> swofty_addon::Result<AddonInfo> {
         self.writable()?;
-        let m = self.store.install_addon(path).map_err(other)?;
+        let m = self.store.install_addon_by(path, &self.addon).map_err(other)?;
         let p = self.store.profile(&self.profile).map_err(other)?;
         Ok(self.info(&m, &p))
     }
@@ -304,7 +306,9 @@ impl GameFiles for GameDir {
         if path.is_file() {
             Ok(path)
         } else {
-            Err(swofty_addon::Error::Other(format!("{rel} is not a game file")))
+            Err(swofty_addon::Error::Other(format!(
+                "{rel} is not in the game folder; if it is one of the game's own files, verify the game files in Steam or the EA app"
+            )))
         }
     }
 
@@ -326,6 +330,12 @@ impl GameFiles for GameDir {
 
     fn steam_save_dir(&self) -> Option<PathBuf> {
         crate::steam::find_save_dir()
+    }
+
+    fn save_dir(&self, profile: &str) -> Option<PathBuf> {
+        crate::vault::Location::of_profile(&self.data, profile)
+            .map(|l| l.dir)
+            .filter(|d| d.is_dir())
     }
 
     fn profile_tracks(
@@ -376,6 +386,7 @@ impl Host {
             state: ProfileState {
                 store: store.clone(),
                 profile: profile.name.clone(),
+                addon: addon.into(),
                 read_only: false,
             },
         })
@@ -624,6 +635,76 @@ mod tests {
                 .unwrap()
                 .set_enabled("t.saves", true)
                 .is_err()
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    fn copy(root: &Path, ea: bool) -> GameDir {
+        let dir = root.join("game");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(crate::GAME_EXE), b"exe").unwrap();
+        match ea {
+            true => {
+                std::fs::create_dir_all(dir.join("__Installer")).unwrap();
+                std::fs::write(dir.join("__Installer/installerdata.xml"), b"<game/>").unwrap();
+            }
+            false => std::fs::write(dir.join("EAJavelinInstaller_installscript.vdf"), b"").unwrap(),
+        }
+        let pfx = root.join("pfx");
+        std::fs::create_dir_all(pfx.join("drive_c/users/steamuser/AppData/Local/F1 25/savegame/ea/profile"))
+            .unwrap();
+        std::fs::write(pfx.join("user.reg"), b"").unwrap();
+        let store = Store::new(root);
+        let mut config = crate::session::Config::default();
+        config.games.active = Some(dir.clone());
+        config.games.added = vec![dir.clone()];
+        config.launch.ea_prefix = Some(pfx);
+        store.save_config(&config).unwrap();
+        let profiles = root.join("profiles");
+        std::fs::create_dir_all(&profiles).unwrap();
+        std::fs::write(profiles.join("hi.json"), r#"{"name":"hi","launcher_saves":true}"#).unwrap();
+        let game = Game {
+            dir,
+            user_reg: None,
+            identity: crate::baseline::Identity {
+                build_id: "1".into(),
+                exe_sha256: "0".repeat(64),
+            },
+        };
+        GameDir::new(&store, &game).unwrap()
+    }
+
+    #[test]
+    fn the_save_dir_is_the_launcher_store_with_launcher_saves_on() {
+        let root = tmp("save-dir-steam");
+        let game = copy(&root, false);
+        assert_eq!(
+            game.save_dir("hi"),
+            None,
+            "the store isn't made until the first Play"
+        );
+        let store = crate::launcher_saves::remote_dir(&root, "hi");
+        std::fs::create_dir_all(&store).unwrap();
+        assert_eq!(game.save_dir("hi"), Some(store));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_save_dir_of_an_ea_copy_is_its_own_save_per_launcher_profile() {
+        if cfg!(windows) {
+            return;
+        }
+        let root = tmp("save-dir-ea");
+        let game = copy(&root, true);
+        std::fs::create_dir_all(crate::launcher_saves::ea_dir(&root, "hi")).unwrap();
+        let ea = root.join("pfx/drive_c/users/steamuser/AppData/Local/F1 25/savegame/ea/profile");
+        assert_eq!(
+            game.save_dir("hi").as_deref(),
+            Some(crate::launcher_saves::ea_dir(&root, "hi").as_path())
+        );
+        assert_eq!(
+            game.save_dir(crate::profile::VANILLA).as_deref(),
+            Some(ea.as_path())
         );
         std::fs::remove_dir_all(&root).ok();
     }

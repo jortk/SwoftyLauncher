@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+import os
 import struct
 import random
 import sys
@@ -9,8 +10,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[4]
-sys.path[:0] = [str(ROOT / "addons/classicseasons/classic-seasons/tools"), str(ROOT / "tools"),
-                str(ROOT / "addons/rnd-tyres-thermal/tools")]
+REPOS = Path(os.environ.get("SWOFTY_ADDON_REPOS") or ROOT.parent)
+sys.path[:0] = [str(REPOS / "classic-seasons/classic-seasons/tools"), str(ROOT / "tools"),
+                str(REPOS / "rnd-tyres-thermal/tools")]
 import logos
 
 OUT = Path(__file__).resolve().parent
@@ -171,6 +173,10 @@ def build_game():
                                (URI + ".image", [(b"head", head, erpw.STORED), (b"data", data, erpw.ZSTD)]),
                                (URI, [(b"view", view, erpw.ZSTD)])])
     write_erp(game / "flow_none.erp", [("eaid://ui_package/art/other.texture", [(b"data", b"q" * 100, erpw.STORED)])])
+    overlay = OUT / "game/swofty/assets/resources"
+    overlay.mkdir(parents=True, exist_ok=True)
+    head4, data4, _ = stock_array(64, 64, 4)
+    write_erp(overlay / "0.erp", [(URI + ".image", [(b"head", head4, erpw.STORED), (b"data", data4, erpw.ZSTD)])])
 
     shape = (OUT / "shape64.bc7").read_bytes()
     donor = data[64 * 64:2 * 64 * 64]

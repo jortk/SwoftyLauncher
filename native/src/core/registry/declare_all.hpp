@@ -6,6 +6,7 @@
 #include <swofty/systems/drivers.hpp>
 #include <swofty/systems/liveries.hpp>
 #include <swofty/systems/power.hpp>
+#include <swofty/systems/sessions.hpp>
 #include <swofty/systems/sounds.hpp>
 #include <swofty/systems/teams.hpp>
 #include <swofty/systems/tracks.hpp>
@@ -58,6 +59,7 @@ template <class Declare> std::size_t declare_system_registries(Declare &&declare
     one(tracks::venues);
     one(tracks::data);
     one(tracks::per_package);
+    one(sessions::points);
     return count;
 }
 

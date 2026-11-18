@@ -110,6 +110,10 @@ $DATA/
     ids.json                            the stat-id store, kept by the core
   careers/
     index.json                          the career index
+  laps/                                 Time Trial lap files, written by the core
+  tt/
+    outbox/  inbox/                     the in-game boards mailbox
+    replays/                            the game's replays of personal bests, and Add to game's inbox/
 
 <game>/swofty/
   state.json                            names $DATA to the core, placed by the install
@@ -275,7 +279,7 @@ Reordering addons resolves field conflicts the same way it resolves file conflic
 
 ## Send Logs
 
-The bundle adds the core's `registry/effective.json` (from the data folder), `registry/conflicts.json` and `registry/catalog.json`. `effective.json` is written at each session load and on a crash. It holds each registry's effective records, with the origin of every field that a layer changed:
+The bundle adds the core's `registry/effective.json` (from the data folder), `registry/conflicts.json`, `registry/catalog.json`, and the stat-id allocations `registry/ids.json` and `registry/row-ids.json` (addon ids and row labels only). `effective.json` is written at each session load and on a crash. It holds each registry's effective records, with the origin of every field that a layer changed:
 
 ```json
 {

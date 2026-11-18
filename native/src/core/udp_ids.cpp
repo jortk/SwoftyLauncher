@@ -10,6 +10,8 @@
 
 #include <atomic>
 #include <cstdio>
+#include <map>
+#include <mutex>
 #include <string>
 
 // UDP telemetry reports the stat ids of added teams and drivers, which overlays that know EA's ids show
@@ -17,7 +19,11 @@
 // (both import descriptors, like the other socket hooks). This hook copies a buffer that parses as an F1
 // packet (udp_ids_logic.hpp), replaces the ids swofty/udp_ids.json maps, and sends the copy; every other
 // call passes through with its arguments. Datagrams to the LAN game port 21414 and to 10.77.0.0/16 are
-// never looked at. SWOFTY_UDP_STOCK_IDS=0 turns it off.
+// never looked at. SWOFTY_UDP_STOCK_IDS=0 turns it off. With the telemetry feature on, the same hook also hands every
+// such packet to the telemetry decoder (telemetry.cpp) before any rewrite. A Session packet of an added track gets
+// trackId -1 and is followed by the Swofty Track packet with the track's Swofty track id (udp_ids_logic.hpp,
+// session_track); SWOFTY_UDP_STOCK_IDS=0 turns that off too, and SWOFTY_UDP_TRACK_PACKET=0 keeps the trackId rewrite
+// but sends no Swofty Track packet, for a tool that fails on a packet id it does not know.
 
 namespace {
 
@@ -32,10 +38,45 @@ void *detour_target;
 void *orig_sendto;
 ids::Map map;
 std::atomic<bool> armed;
+std::atomic<bool> rewriting;
 std::atomic<unsigned> said;
 std::atomic<int> seen_formats;
 std::atomic<uint64_t> odd_sizes[4];
 std::atomic<unsigned> trial_said;
+std::mutex track_mu;
+std::map<int, std::string> tracks;
+std::atomic<bool> has_tracks;
+std::atomic<bool> track_said;
+std::atomic<bool> track_packet{true};
+
+int session(SOCKET s, const char *buf, int len, int flags, const sockaddr *to, int tolen, bool &sent)
+{
+    auto real = reinterpret_cast<SendToFn>(orig_sendto);
+    uint8_t copy[ids::SESSION_SIZE];
+    uint8_t extra[ids::TRACK_PACKET_SIZE];
+    memcpy(copy, buf, ids::SESSION_SIZE);
+    {
+        std::lock_guard g(track_mu);
+        sent = ids::session_track(map, tracks, copy, ids::SESSION_SIZE, extra);
+    }
+    if (!sent)
+        return 0;
+    int r = real(s, reinterpret_cast<const char *>(copy), len, flags, to, tolen);
+    DWORD err = GetLastError();
+    bool packet = track_packet.load(std::memory_order_relaxed);
+    if (r != SOCKET_ERROR && packet)
+        real(s, reinterpret_cast<const char *>(extra), int(sizeof extra), flags, to, tolen);
+    if (!track_said.exchange(true)) {
+        uint32_t id = uint32_t(extra[ids::HEADER]) | uint32_t(extra[ids::HEADER + 1]) << 8 |
+                      uint32_t(extra[ids::HEADER + 2]) << 16 | uint32_t(extra[ids::HEADER + 3]) << 24;
+        swofty::log("[udp] first Session packet of an added track: statId %u sent as %d, %s %u with id %u (%s)",
+                    unsigned(extra[ids::HEADER + 4]), int(int8_t(copy[ids::SESSION_TRACK])),
+                    packet ? "Swofty Track packet" : "no Swofty Track packet", unsigned(ids::TRACK_PACKET), id,
+                    reinterpret_cast<const char *>(extra + ids::HEADER + 5));
+    }
+    SetLastError(err);
+    return r;
+}
 
 bool lan_traffic(const sockaddr *to, int tolen)
 {
@@ -98,6 +139,15 @@ int WSAAPI h_sendto(SOCKET s, const char *buf, int len, int flags, const sockadd
     if (!armed.load(std::memory_order_relaxed) || !buf || len < int(ids::HEADER) + 1 || len > int(ids::MAX_PACKET) ||
         lan_traffic(to, tolen))
         return real(s, buf, len, flags, to, tolen);
+    runtime::telemetry_udp(reinterpret_cast<const uint8_t *>(buf), size_t(len));
+    if (!rewriting.load(std::memory_order_relaxed))
+        return real(s, buf, len, flags, to, tolen);
+    if (has_tracks.load(std::memory_order_relaxed) && len == int(ids::SESSION_SIZE) && uint8_t(buf[6]) == ids::SESSION) {
+        bool sent = false;
+        int r = session(s, buf, len, flags, to, tolen, sent);
+        if (sent)
+            return r;
+    }
     if (!ids::identify(reinterpret_cast<const uint8_t *>(buf), size_t(len))) {
         if (const ids::Layout *l = ids::misfit(reinterpret_cast<const uint8_t *>(buf), size_t(len)))
             odd(l, len);
@@ -127,19 +177,35 @@ bool wanted_off()
     return true;
 }
 
+bool track_packet_off()
+{
+    char v[16] = {};
+    DWORD n = GetEnvironmentVariableA("SWOFTY_UDP_TRACK_PACKET", v, sizeof v);
+    if (!n || n >= sizeof v || (strcmp(v, "0") && strcmp(v, "off")))
+        return false;
+    swofty::log("[udp] Swofty Track packet off (SWOFTY_UDP_TRACK_PACKET=%s)", v);
+    return true;
+}
+
 void setup()
 {
-    if (wanted_off())
-        return;
-    std::string text = runtime::read_file(runtime::swofty_root() + L"udp_ids.json", size_t(4) << 20);
-    if (text.empty())
-        return;
-    std::string why;
-    if (!ids::load(text, map, why)) {
-        swofty::log("[udp] swofty\\udp_ids.json is unusable (%s); telemetry ids stay as the game sends them", why.c_str());
-        return;
+    track_packet = !track_packet_off();
+    bool tel = runtime::telemetry_wants_udp();
+    bool rewrite = false;
+    if (!wanted_off()) {
+        std::string text = runtime::read_file(runtime::swofty_root() + L"udp_ids.json", size_t(4) << 20);
+        std::string why;
+        if (!text.empty() && !ids::load(text, map, why))
+            swofty::log("[udp] swofty\\udp_ids.json is unusable (%s); telemetry ids stay as the game sends them",
+                        why.c_str());
+        else
+            rewrite = !text.empty() && (map.any || !map.track_ids.empty());
+        std::lock_guard g(track_mu);
+        for (auto &[id, key] : map.tracks)
+            tracks[id] = key;
+        has_tracks = !tracks.empty();
     }
-    if (!map.any)
+    if (!rewrite && !tel)
         return;
     HMODULE ws = LoadLibraryW(L"ws2_32.dll");
     detour_target = ws ? reinterpret_cast<void *>(GetProcAddress(ws, "sendto")) : nullptr;
@@ -164,12 +230,18 @@ void setup()
             slots++;
         });
     if (!slots) {
-        swofty::log("[udp] no game import slot for sendto; telemetry ids stay as the game sends them");
+        swofty::log("[udp] no game import slot for sendto; telemetry ids stay as the game sends them%s",
+                    tel ? " and the telemetry feed gets no car data" : "");
         return;
     }
     armed = true;
+    rewriting = rewrite;
+    if (!rewrite) {
+        swofty::log("[udp] sendto hooked for the telemetry feed, %d slot(s); no id rewrite", slots);
+        return;
+    }
     std::string head = std::to_string(map.teams.size()) + " team id(s), " + std::to_string(map.drivers.size()) +
-                       " driver id(s)";
+                       " driver id(s), " + std::to_string(map.track_ids.size()) + " track(s) by Swofty track id";
     swofty::log("[udp] stock ids on: %s, %d sendto slot(s)", head.c_str(), slots);
     std::string line;
     size_t shown = 0;
@@ -189,6 +261,15 @@ namespace runtime {
 void udp_ids_setup()
 {
     setup();
+}
+
+void udp_track(int64_t stat_id, const std::string &addon, const std::string &code)
+{
+    if (stat_id < 0 || stat_id > 255 || addon.empty() || code.empty())
+        return;
+    std::lock_guard g(track_mu);
+    tracks[int(stat_id)] = addon + "/" + code;
+    has_tracks = true;
 }
 
 }

@@ -7,7 +7,7 @@
 
 // career::set_seat's planner: pure logic over the career's entrant rows (lineup_plan.hpp's Row), so
 // native/test builds it on the host. The executor is apply_lineup's (career_ops.cpp execute()). The seat
-// change is Career Mode Editor's Driver Career drivers.swap (addons/career-editor/native/src/drivers.cpp):
+// change is Career Mode Editor's Driver Career drivers.swap (its native/src/drivers.cpp):
 // a race driver and the seat's driver exchange seats; a free agent takes the seat and its driver leaves the
 // grid, after the incoming driver, as the game's replace (0x140d766b0) orders it.
 //

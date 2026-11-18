@@ -19,9 +19,9 @@ pub fn default_path(data: &Path) -> PathBuf {
     if let Some(p) = std::env::var_os(ENV).filter(|p| !p.is_empty()) {
         return PathBuf::from(p);
     }
-    let shared = Path::new("/mnt/work");
+    let shared = Path::new("/mnt/work/F1");
     if cfg!(target_os = "linux") && shared.is_dir() {
-        return shared.join(".f1-game.lock.d");
+        return shared.join("f1-game.lock.d");
     }
     let parent = data.parent().unwrap_or(data);
     parent.join("swofty-game.lock.d")

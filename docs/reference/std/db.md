@@ -208,7 +208,7 @@ for (db::Result r = db::open("entrants.teams", &cur); r == db::Result::ok; r = d
 The core finds the rows from the table's path: it drops a trailing `s` from the last segment and reads `<table>._<stem>_instancecount_` rows named `<table>.<stem>_<n>`. `open("entrants.teams")` walks `entrants.teams.team_0` onwards. The stem is case-sensitive, so a table whose rows are named another way returns `late` from `open`: `tracks` holds `tracks.Track_<n>` (43 rows in the shipping file) and `open("tracks")` looks for `tracks.track_<n>`. Read the count and build the keys yourself for those. Progressive Career does this for the statistics table, whose rows are `StatisticInfo_<n>`:
 
 ```cpp
-// addons/progressive/native/src/names.cpp, trimmed
+// Progressive Career's native/src/names.cpp, trimmed
 template <class F> void each_row(const std::string &table, const std::string &stem, F f)
 {
     int64_t count = 0;

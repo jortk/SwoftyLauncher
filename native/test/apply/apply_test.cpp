@@ -10,6 +10,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace ap = swofty_core::apply;
@@ -118,15 +119,45 @@ void test_sizing()
     check(rm::slots_for(1677722) == (uint64_t(1) << 22), "1,677,722 records size 2^22");
     check(rm::slots_for(0) == 8 && rm::slots_for(6) == 8 && rm::slots_for(7) == 16, "the smallest map is 8 slots");
     auto t = rm::target(742857, 84112, 103984);
-    check(t.want == 742857 + 84112 + 103984 + 32 + 4096 && !t.capped, "the target adds edits, records, probes and margin");
-    check(t.want == 935081, "W7's example target is 935,081");
+    check(t.slack == 9405 && t.want == 742857 + 84112 + 103984 + 32 + 4096 + 9405 && !t.capped,
+          "the target adds edits, records, probes, margin and 5% of the addons' records as slack");
+    check(t.want == 944486, "W7's example target is 935,081 plus 9,405 slack");
     check(rm::slots_for(t.want) == (uint64_t(1) << 21), "W7's example reserves 2^21");
     auto big = rm::target(742857, 900000, 200000);
-    check(big.capped && big.want == rm::CAP && big.capped_from == 742857 + 900000 + 200000 + 32 + 4096,
+    check(big.capped && big.want == rm::CAP && big.capped_from == 742857 + 900000 + 200000 + 32 + 4096 + 55000,
           "the target is capped at 1,677,721");
     check(rm::slots_for(big.want) == (uint64_t(1) << 21), "the cap never asks for 2^22");
     auto small = rm::target(742857, 10, 0);
-    check(rm::slots_for(small.want) == rm::STOCK_SLOTS, "a small profile keeps the stock 2^20 map");
+    check(small.slack == 1 && rm::slots_for(small.want) == rm::STOCK_SLOTS, "a small profile keeps the stock 2^20 map");
+    auto none = rm::target(742857, 0, 0);
+    check(none.slack == 0 && none.want == 742857 + 32 + 4096, "nothing planned adds no slack");
+
+    auto near = rm::target(773261, 0, 61213);
+    check(773261 + 61213 + 32 + 4096 == 838602 && rm::slots_for(838602) == rm::STOCK_SLOTS,
+          "1121flatpunto45l's plan without slack reserved for 838,602, 258 short of the growth point, and kept 2^20");
+    check(near.slack == 3061 && near.want == 841663 && rm::slots_for(near.want) == (uint64_t(1) << 21),
+          "with slack the same plan sizes up to 2^21");
+    check(rm::left(uint64_t(1) << 21, 773261) - rm::PROBE_RECORDS >= 61528,
+          "the sized map holds the 61,528 keys the boot asked for, 315 past the plan");
+    check(rm::left(rm::STOCK_SLOTS, 773261) - rm::PROBE_RECORDS == 61471 && 61471 < 61528,
+          "the unsized map left 61,471, short of the 61,528 asked");
+    auto frog = rm::target(838858 - 32 - 4096 - 60000, 0, 60000);
+    check(rm::slots_for(frog.want) == (uint64_t(1) << 21), "frogofbread's 838,858 reservation sizes up with slack");
+    for (uint64_t keys : {uint64_t(20000), uint64_t(61213), uint64_t(90000)}) {
+        uint64_t file = rm::grows_at(rm::STOCK_SLOTS) - 32 - 4096 - keys;
+        for (uint64_t under : {uint64_t(0), uint64_t(1), uint64_t(258), keys / 50}) {
+            auto at = rm::target(file - under, 0, keys);
+            uint64_t slots = rm::slots_for(at.want);
+            check(slots == (uint64_t(1) << 21) &&
+                      rm::left(slots, file - under) - rm::PROBE_RECORDS >= keys + keys / 50,
+                  "a plan of " + std::to_string(keys) + " keys " + std::to_string(under) +
+                      " under the growth point sizes up and leaves room for a 2% undercount");
+        }
+        auto below = rm::target(file - keys / 10, 0, keys);
+        check(rm::slots_for(below.want) == rm::STOCK_SLOTS &&
+                  rm::left(rm::STOCK_SLOTS, file - keys / 10) - rm::PROBE_RECORDS >= keys + below.slack,
+              "a plan of " + std::to_string(keys) + " keys that keeps 2^20 still leaves room for its slack");
+    }
     check(rm::left(rm::STOCK_SLOTS, 742857) == 838860 - 742857 - 4096, "the unsized room is about 92,000 records");
     check(rm::left(8, 100) == 0, "a full map has no room");
 }
@@ -143,6 +174,22 @@ void test_budget()
     check(b.admitted_keys == 100 && b.refused_keys == 70 && b.asked_keys == 170, "the budget counts asked, admitted, refused");
     auto none = rm::admit(0, {{"a", 1, 1}, {"b", 0, 3}});
     check(!none.addons[0].admitted && none.addons[1].admitted, "an addon that only overwrites always fits");
+
+    auto fits = rm::admit_whole(200, {{"a", 40, 50}, {"b", 70, 70}, {"c", 0, 5}});
+    check(fits.admitted_keys == 110 && fits.refused_keys == 0 && fits.addons[0].admitted && fits.addons[1].admitted &&
+              fits.addons[2].admitted,
+          "a boot whose rows fit is admitted whole");
+    std::vector<rm::AddonAsk> asks = {{"swofty.swofty-seasons-2015", 6783, 6800}, {"swofty.swofty-seasons-2023", 5263, 5300},
+                                      {"swofty.swofty-seasons-2024", 5036, 5062}, {"swofty.core", 0, 12}};
+    auto old_way = rm::admit(12000, asks);
+    check(old_way.addons[0].admitted && !old_way.addons[1].admitted && old_way.addons[2].admitted && old_way.addons[3].admitted,
+          "per addon, the room refuses one addon of a laid-out boot and applies the others around its rows");
+    auto whole = rm::admit_whole(12000, asks);
+    bool any = false;
+    for (auto &v : whole.addons)
+        any = any || v.admitted;
+    check(!any && whole.admitted_keys == 0 && whole.refused_keys == 6783 + 5263 + 5036,
+          "past the room, no addon of a laid-out boot is applied, not even one that only overwrites a count");
 }
 
 void test_room_json()
@@ -174,6 +221,27 @@ void test_room_json()
     check(rm::line(r).find("value map sized for 1,677,721 records before load (older addons' edits 84,112; 1.6 "
                            "records 103,984)") != std::string::npos,
           "the room line says what it sized for: " + rm::line(r));
+    r.slack = 9405;
+    r.reserved_for = 944486;
+    r.registry_planned = 103669;
+    r.registry_counted = 103984;
+    Value sized = rm::to_json(r);
+    check(sized["slack"].as_int() == 9405 && sized["registry"]["planned_keys"].as_int() == 103669 &&
+              sized["registry"]["counted_keys"].as_int() == 103984,
+          "room.json carries the slack and the planned and counted keys");
+    check(rm::line(r).find("; sizing: planned 103,669 1.6 key(s), boot asked 103,984 (+315); reserved for 944,486 "
+                           "(9,405 slack) past the game's own growth point 838,860: sized up") != std::string::npos,
+          "the room line gives planned vs asked and the sizing decision: " + rm::line(r));
+    rm::Report kept = r;
+    kept.presize = "not_needed";
+    kept.slots = rm::STOCK_SLOTS;
+    kept.reserved_for = 838602;
+    kept.slack = 0;
+    kept.registry_planned = 61213;
+    kept.registry_counted = 61528;
+    check(rm::line(kept).find("planned 61,213 1.6 key(s), boot asked 61,528 (+315); reserved for 838,602 (0 slack) "
+                              "within the game's own growth point 838,860: not sized up") != std::string::npos,
+          "and says when it kept the game's size: " + rm::line(kept));
     rm::Report empty;
     Value e = rm::to_json(empty);
     check(e["presize"].as_string() == "not_needed" && e["profile"].as_string() == "default" && !e.contains("slots"),
@@ -279,6 +347,20 @@ void test_database_ids()
           "and the career that saved 509 resolves through its map again");
     check(t.allocate("vehicle", "cs/other", "d").id == 510 && t.allocate("vehicle", "cs/more", "d").id == 514,
           "the moved id stays reserved for the career that saved it");
+
+    ap::ids::Store pk;
+    pk.define_pool("vehicle.package", {{{1, 254}}});
+    for (int i = 0; i < 3; i++)
+        pk.allocate("vehicle.package", "cs/pkg_" + std::to_string(i), "d");
+    check(pk.map_for_career("c1").count("vehicle.package") == 0, "a career's map leaves out vehicle packages");
+    ap::ids::Store pl;
+    pl.define_pool("vehicle.package", {{{1, 254}}});
+    check(pl.load("{\"version\":1,\"ids\":{},\"careers\":{\"c1\":{\"vehicle.package\":{\"cs/gone\":1}}}}") &&
+              pl.allocate("vehicle.package", "cs/new", "d").id == 1,
+          "a package id only a career lists is free");
+    check(pl.adopt("c2", {{"vehicle.package", {{"cs/old", 2}}}}, "d").empty() &&
+              pl.dump().find("cs/old") == std::string::npos,
+          "adopting a career keeps none of its package ids");
 
     ap::ids::Store k;
     k.define_pool("vehicle", {{{509, 1023}}});
@@ -498,6 +580,20 @@ void test_facts()
     for (auto &[label, want] : modes)
         check(std::string(want) != "grand_prix" || std::string(label) == "grand_prix_23",
               std::string("only the Grand Prix row is grand_prix: ") + label);
+
+    using K = f::ModeKind;
+    const std::tuple<bool, bool, const char *, K> kinds[] = {
+        {true, true, "time_trial", K::time_trial}, {true, true, "my_team", K::career},       {true, true, "driver_career", K::career},
+        {true, true, "grand_prix", K::other},      {true, true, "split_screen", K::other},   {true, true, "story", K::other},
+        {true, true, "f1_world", K::other},        {true, true, "unknown", K::unknown},      {true, true, "", K::unknown},
+        {true, false, "time_trial", K::unknown},   {false, true, "time_trial", K::unknown},  {true, true, "something_new", K::unknown},
+    };
+    for (auto &[context, holder, mode, want] : kinds)
+        check(f::mode_kind(context, holder, mode) == want, std::string("mode kind of ") + mode + (context ? "" : " without a context") +
+                                                                (holder ? "" : " without a mode object") + " is " + f::mode_kind_name(want));
+    for (auto &[label, want] : modes)
+        check(f::mode_kind(true, true, f::mode_of(label)) != K::other || std::string(want) != "unknown",
+              std::string("an unlisted mode never counts as another mode: ") + label);
 
     auto is = [](uint32_t id, bool sprint, const char *type, const char *session) {
         f::Session s = f::session_of(id, sprint);

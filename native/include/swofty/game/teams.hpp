@@ -26,7 +26,9 @@ struct TeamRecord {
     int32_t team_wear_secondary_colour; // L2 experimental
     int32_t team_wear_tertiary_colour; // L2 experimental
     int32_t ui_team_colour; // L2 experimental
-    uint8_t _pad_0x580[0x1e8];
+    uint8_t _pad_0x580[0xd];
+    bool show_custom_badge_in_ui; // L2 experimental
+    uint8_t _pad_0x58e[0x1da];
 };
 static_assert(offsetof(TeamRecord, display_name) == 0xb0);
 static_assert(offsetof(TeamRecord, display_name_code) == 0x148);
@@ -42,6 +44,7 @@ static_assert(offsetof(TeamRecord, team_wear_primary_colour) == 0x570);
 static_assert(offsetof(TeamRecord, team_wear_secondary_colour) == 0x574);
 static_assert(offsetof(TeamRecord, team_wear_tertiary_colour) == 0x578);
 static_assert(offsetof(TeamRecord, ui_team_colour) == 0x57c);
+static_assert(offsetof(TeamRecord, show_custom_badge_in_ui) == 0x58d);
 static_assert(sizeof(TeamRecord) == 0x768);
 
 inline constexpr address<"Team_Build_FanZoneStandings"> Team_Build_FanZoneStandings{}; // L2 experimental
@@ -49,6 +52,8 @@ using Team_Insert_RecordByStatId_t = void *(void *slots, const uint32_t *record)
 inline constexpr fn<"Team_Insert_RecordByStatId", Team_Insert_RecordByStatId_t> Team_Insert_RecordByStatId{}; // L2 experimental
 inline constexpr call<"site_Team_LoadInsertCall"> site_Team_LoadInsertCall{}; // L2 experimental
 inline constexpr site<"site_Team_LoadInserted"> site_Team_LoadInserted{}; // L2 experimental
+inline constexpr site<"site_Team_RecognitionFirstRecord"> site_Team_RecognitionFirstRecord{}; // L2 experimental
+inline constexpr site<"site_Team_RecognitionRecordsExit"> site_Team_RecognitionRecordsExit{}; // L2 experimental
 inline constexpr site<"site_Team_SessionCarBadgeLabel"> site_Team_SessionCarBadgeLabel{}; // L2 experimental
 inline constexpr site<"site_Team_TimingPillBadgeLabel"> site_Team_TimingPillBadgeLabel{}; // L2 experimental
 

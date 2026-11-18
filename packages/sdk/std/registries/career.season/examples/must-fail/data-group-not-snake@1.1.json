@@ -1,0 +1,9 @@
+{
+  "career.season": {
+    "bad_group": {
+      "$comment": "data_group is lower snake case or empty",
+      "data_group": "F1 Career",
+      "year": 2008
+    }
+  }
+}

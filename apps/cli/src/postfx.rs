@@ -43,13 +43,15 @@ fn compile(dir: &Path, out: Option<&Path>) -> Result<ExitCode> {
     let mut failed = 0;
     for pass in &m.postfx {
         let label = pass.label();
-        match postfx::compile(&dir.join(&pass.shader), &cache) {
+        let entry = postfx::Entry::of(pass);
+        let shader = match (entry.raw, entry.name) {
+            (true, name) => format!("{}, raw {}", pass.shader, name.unwrap_or("main")),
+            (false, Some(name)) => format!("{}, {name}", pass.shader),
+            (false, None) => pass.shader.clone(),
+        };
+        match postfx::compile(&dir.join(&pass.shader), &cache, entry) {
             Ok(c) => {
-                println!(
-                    "ok    {label} ({}): {} bytes of signed DXIL",
-                    pass.shader,
-                    c.dxil.len()
-                );
+                println!("ok    {label} ({shader}): {} bytes of signed DXIL", c.dxil.len());
                 for line in c.log.lines() {
                     println!("      {line}");
                 }
@@ -60,7 +62,7 @@ fn compile(dir: &Path, out: Option<&Path>) -> Result<ExitCode> {
             }
             Err(e) => {
                 failed += 1;
-                println!("FAIL  {label} ({}): {}", pass.shader, e.summary);
+                println!("FAIL  {label} ({shader}): {}", e.summary);
                 for line in e.log.lines() {
                     println!("      {line}");
                 }

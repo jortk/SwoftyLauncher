@@ -96,14 +96,14 @@ When two addons set the same string key, load order decides, and the core's conf
 - `lap` is `session.lap`.
 - `flag` is `session.flag`.
 - `results` is `session.results.finalise`.
-- `session.end` is `session.end`.
+- `session.end` and `session.unload` are `session.end` and `session.unload`.
 
-The 1.5 core accepts the last eight (`session.end`, `lap`, `flag`, `state`, `screen`, `pause`, `resume`, `results`) and never fires them. An older addon subscribed to one of them receives it on 1.6. The full list of events is on [Events](/std/events#the-lifecycle).
+The 1.5 core accepts the last eight (`session.end`, `lap`, `flag`, `state`, `screen`, `pause`, `resume`, `results`) and never fires them; from the core that adds `session.unload`, `session.end` and `session.unload` do fire. An older addon subscribed to one of them receives it on 1.6. The full list of events is on [Events](/std/events#the-lifecycle).
 
 ## What stays exactly as it is
 
 - **`SwoftyApi`:** append-only. Version 9 adds `registry`, `hooks` and `services` after `era`, and a check like `api->version >= 8` still passes.
-- **Exported tables:** `SwoftyCoreHub`, `SwoftyCoreHud`, `SwoftyCoreEra`, `SwoftyCoreCareerContent` and the rest keep their names, layouts and versions.
+- **Exported tables:** `SwoftyCoreHub`, `SwoftyCoreHud`, `SwoftyCorePauseReasons`, `SwoftyCoreEra`, `SwoftyCoreCareerContent` and the rest keep their names, layouts and versions.
 - **Result codes, feature gates and `available()`** don't change.
 - **Loading:** an older DLL has no `SwoftyAddonRegister`, and it loads at the stage its manifest says.
 - **Mixins:** chains, priorities, load order and the conflict rules don't change.

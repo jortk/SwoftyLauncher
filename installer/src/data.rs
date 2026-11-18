@@ -2,6 +2,13 @@ use std::collections::BTreeMap;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 
+use swofty_core::builtin::CORE_ID;
+use swofty_core::data_move::{
+    self, Location,
+    find::{self, Found},
+    journal_pending,
+    link::{create as link, remove as unlink, target as link_target},
+};
 use swofty_core::disk;
 use swofty_core::launcher::Progress;
 use swofty_core::process::{same_folder, same_path};
@@ -16,6 +23,7 @@ const CHECKING: &str = "Checking the copied data folder";
 pub struct Data {
     pub default: PathBuf,
     pub env: Option<PathBuf>,
+    pub install: Option<PathBuf>,
 }
 
 impl Data {
@@ -23,7 +31,28 @@ impl Data {
         Self {
             default: swofty_core::paths::platform_data_dir(),
             env: std::env::var_os(ENV).filter(|v| !v.is_empty()).map(PathBuf::from),
+            install: None,
         }
+    }
+
+    pub fn apart(&self, to: &Path) -> Result<(), String> {
+        let Some(root) = &self.install else {
+            return Ok(());
+        };
+        let within = |inner: &Path, outer: &Path| inner.ancestors().any(|a| same_path(a, outer));
+        if within(to, root) {
+            return Err(format!(
+                "Updates cannot install when the data folder is inside the install folder. Choose a data folder outside {}.",
+                root.display()
+            ));
+        }
+        if within(root, to) {
+            return Err(format!(
+                "Updates cannot install when the install folder is inside the data folder. Choose a data folder that does not contain {}.",
+                root.display()
+            ));
+        }
+        Ok(())
     }
 
     pub fn link(&self) -> Option<PathBuf> {
@@ -65,6 +94,108 @@ impl Data {
     }
 }
 
+pub fn size(bytes: u64) -> String {
+    if bytes >= 1 << 30 {
+        format!("{} GB", disk::gb(bytes))
+    } else {
+        format!("{} MB", bytes.div_ceil(1 << 20))
+    }
+}
+
+pub fn addon_count(dir: &Path) -> usize {
+    std::fs::read_dir(dir.join("addons")).map_or(0, |read| {
+        read.flatten()
+            .filter(|e| e.path().join("swofty.json").is_file())
+            .filter(|e| !swofty_core::managed::is_managed(&e.file_name().to_string_lossy()))
+            .count()
+    })
+}
+
+pub fn finder(data: &Data, installs: &[PathBuf]) -> Vec<Found> {
+    if data.env.is_some() || addon_count(&data.current()) > 0 {
+        return Vec::new();
+    }
+    let location = Location {
+        default: data.default.clone(),
+        env: None,
+        install: data.install.clone(),
+        games: Vec::new(),
+    };
+    let bundled = [CORE_ID.to_owned(), swofty_core::managed::ID.to_owned()];
+    find::candidates(&location, installs, &bundled)
+}
+
+pub fn adopt(data: &Data, found: &Path, installs: &[PathBuf]) -> Result<(), String> {
+    let location = Location {
+        default: data.default.clone(),
+        env: None,
+        install: data.install.clone(),
+        games: Vec::new(),
+    };
+    let bundled = [CORE_ID.to_owned(), swofty_core::managed::ID.to_owned()];
+    data_move::adopt(&location, found, installs, &bundled).map_err(|e| e.to_string())?;
+    match data_move::recover(&data.default, &data_move::Ops::system()) {
+        Some(Ok(_)) | None => Ok(()),
+        Some(Err(e)) => Err(e.to_string()),
+    }
+}
+
+pub fn on_other_drive(a: &Path, b: &Path) -> bool {
+    let volume = |p: &Path| p.ancestors().find(|a| a.exists()).and_then(disk::volume);
+    matches!((volume(a), volume(b)), (Some(x), Some(y)) if x != y)
+}
+
+pub fn on_install_drive(install: &Path) -> PathBuf {
+    let mut root = PathBuf::new();
+    for part in install.components() {
+        match part {
+            std::path::Component::Prefix(_) | std::path::Component::RootDir => root.push(part),
+            _ => break,
+        }
+    }
+    if cfg!(windows) && root.parent().is_none() && root.as_os_str().len() > 1 {
+        root.join(FOLDER)
+    } else {
+        install.parent().unwrap_or(&root).join(FOLDER)
+    }
+}
+
+pub fn drive_name(install: &Path) -> String {
+    match install.components().next() {
+        Some(std::path::Component::Prefix(p)) if cfg!(windows) => {
+            p.as_os_str().to_string_lossy().into_owned()
+        }
+        _ => install.parent().unwrap_or(install).display().to_string(),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Choice {
+    #[default]
+    Leave,
+    Move,
+}
+
+pub fn asks(install: &Path, data: &Data) -> bool {
+    drives_differ(data, on_other_drive(install, &data.current()))
+}
+
+fn drives_differ(data: &Data, other_drive: bool) -> bool {
+    data.movable() && data.env.is_none() && other_drive
+}
+
+pub fn target(choice: Choice, install: &Path, data: &Data, typed: &str) -> String {
+    target_with(choice, asks(install, data), install, typed)
+}
+
+fn target_with(choice: Choice, asked: bool, install: &Path, typed: &str) -> String {
+    if asked && choice == Choice::Move {
+        on_install_drive(install).display().to_string()
+    } else {
+        typed.to_owned()
+    }
+}
+
 pub fn pick(picked: PathBuf, data: &Data) -> PathBuf {
     let empty = std::fs::read_dir(&picked).is_ok_and(|mut d| d.next().is_none());
     let named = picked.file_name().is_some_and(|n| n.eq_ignore_ascii_case(FOLDER));
@@ -92,6 +223,20 @@ pub struct DataMove {
 }
 
 pub fn plan(data: &Data, to: &Path) -> Result<Option<DataMove>, String> {
+    if journal_pending(&data.default) {
+        return Err(
+            "A data folder move from the launcher is not finished. Open Swofty Launcher to finish it, then run the installer again."
+                .into(),
+        );
+    }
+    if to.is_absolute() && to.parent().is_none() {
+        return Err(format!(
+            "{} is a whole drive. Choose a folder on it, such as {}.",
+            to.display(),
+            to.join(FOLDER).display()
+        ));
+    }
+    data.apart(to)?;
     let linked = data.link();
     let (from, record) = match (&data.env, &linked) {
         (Some(env), _) if same_folder(env, to) => return Ok(None),
@@ -110,6 +255,16 @@ pub fn plan(data: &Data, to: &Path) -> Result<Option<DataMove>, String> {
             Record::Link,
         ),
     };
+    if record != Record::Env
+        && let Some(target) = &linked
+        && !target.exists()
+    {
+        return Err(format!(
+            "{} links to {}, which is missing. Reconnect that drive or folder, or restore it, before moving your data.",
+            data.default.display(),
+            target.display()
+        ));
+    }
     if !to.is_absolute() {
         return Err("Choose a full path for the data folder.".into());
     }
@@ -197,6 +352,7 @@ impl DataMove {
         if let Some(why) = (ops.blocked)() {
             return Err(why);
         }
+        swofty_core::data_move::history::record(&self.default, &self.from, "moved by the installer");
         progress.report(0.0, MOVING);
         match self.record {
             Record::Link => self.relink(ops, progress),
@@ -381,36 +537,6 @@ fn aside(default: &Path) -> PathBuf {
         .expect("an unused name")
 }
 
-pub fn link_target(at: &Path) -> Option<PathBuf> {
-    at.symlink_metadata()
-        .ok()
-        .filter(|m| m.file_type().is_symlink())?;
-    let target = std::fs::read_link(at).ok()?;
-    let target = match target.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
-        Some(plain) => PathBuf::from(plain),
-        None => target,
-    };
-    if target.is_absolute() {
-        Some(target)
-    } else {
-        Some(at.parent()?.join(target))
-    }
-}
-
-#[cfg(windows)]
-fn link(target: &Path, at: &Path) -> io::Result<()> {
-    crate::win32::junction(target, at)
-}
-
-#[cfg(not(windows))]
-fn link(target: &Path, at: &Path) -> io::Result<()> {
-    std::os::unix::fs::symlink(target, at)
-}
-
-fn unlink(at: &Path) -> io::Result<()> {
-    std::fs::remove_dir(at).or_else(|_| std::fs::remove_file(at))
-}
-
 #[cfg(windows)]
 fn set_env(to: &Path) -> io::Result<()> {
     crate::win32::set_user_env(ENV, to)
@@ -481,7 +607,7 @@ fn copy_tree(src: &Path, dst: &Path, copied: &mut dyn FnMut(u64)) -> io::Result<
 fn copy_link(src: &Path, dst: &Path) -> io::Result<()> {
     let target = std::fs::read_link(src)?;
     if std::fs::metadata(src).is_ok_and(|m| m.is_dir()) {
-        crate::win32::junction(&target, dst)
+        link(&target, dst)
     } else {
         std::os::windows::fs::symlink_file(&target, dst)
     }
@@ -541,6 +667,7 @@ mod tests {
         Data {
             default: default.to_path_buf(),
             env: None,
+            install: None,
         }
     }
 
@@ -563,6 +690,19 @@ mod tests {
         );
         assert_eq!(read(&to.join("profiles/default.json")), "{}");
         assert_eq!(read(&to.join("state/session.json")), "{\"a\":1}");
+    }
+
+    #[test]
+    fn refuses_to_move_while_a_launcher_move_is_unfinished() {
+        let dir = temp("journal");
+        let (default, to) = (dir.join("Local/Swofty"), dir.join("D/SwoftyData"));
+        seed(&default);
+        write(&dir.join("Local/swofty-data-move.json"), "{}");
+        let err = plan(&data(&default), &to).unwrap_err();
+        assert!(err.contains("Open Swofty Launcher to finish it"), "{err}");
+        std::fs::remove_file(dir.join("Local/swofty-data-move.json")).unwrap();
+        assert!(plan(&data(&default), &to).unwrap().is_some());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -693,6 +833,24 @@ mod tests {
     }
 
     #[test]
+    fn stops_instead_of_starting_fresh_when_the_link_target_is_missing() {
+        let dir = temp("dangling");
+        let (default, gone) = (dir.join("Local").join("Swofty"), dir.join("D").join("Old"));
+        std::fs::create_dir_all(&gone).unwrap();
+        std::fs::create_dir_all(default.parent().unwrap()).unwrap();
+        link(&gone, &default).unwrap();
+        std::fs::remove_dir(&gone).unwrap();
+        let d = data(&default);
+        for to in [default.clone(), dir.join("E").join("New")] {
+            let err = plan(&d, &to).unwrap_err();
+            assert!(err.contains("is missing"), "{err}");
+        }
+        assert!(default.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(!dir.join("E").join("New").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn refuses_to_move_while_the_launcher_or_the_game_runs() {
         let dir = temp("running");
         let (default, to) = (dir.join("Local/Swofty"), dir.join("D/SwoftyData"));
@@ -743,6 +901,161 @@ mod tests {
     static SET: Mutex<Option<PathBuf>> = Mutex::new(None);
 
     #[test]
+    fn refuses_a_data_folder_inside_or_around_the_install_folder() {
+        let dir = temp("apart");
+        let (install, default) = (dir.join("Games/Swofty Launcher"), dir.join("Local/Swofty"));
+        let d = Data {
+            install: Some(install.clone()),
+            ..data(&default)
+        };
+        for inside in [install.clone(), install.join("Swofty"), install.join("a/b")] {
+            let e = plan(&d, &inside).unwrap_err();
+            assert!(e.contains("inside the install folder"), "{e}");
+            assert!(d.describe(&inside).is_err());
+            assert!(d.apart(&inside).is_err());
+        }
+        let e = plan(&d, &dir.join("Games")).unwrap_err();
+        assert!(
+            e.contains("does not contain") || e.contains("inside the data folder"),
+            "{e}"
+        );
+        assert!(plan(&d, &dir.join("Games/Swofty Launcher Data")).is_ok());
+        assert!(plan(&d, &dir.join("Elsewhere/Swofty")).is_ok());
+        assert!(d.apart(&default).is_ok());
+        assert!(data(&default).apart(&install).is_ok());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn asks_only_when_the_drives_differ() {
+        let dir = temp("asks");
+        let d = data(&dir.join("Local/Swofty"));
+        assert!(drives_differ(&d, true));
+        assert!(!drives_differ(&d, false));
+        let env = Data {
+            env: Some(dir.join("E")),
+            ..d.clone()
+        };
+        assert_eq!(env.movable(), cfg!(windows));
+        assert!(!drives_differ(&env, true));
+        let relative = Data {
+            env: Some(PathBuf::from("relative")),
+            ..d
+        };
+        assert!(!drives_differ(&relative, true));
+        assert!(!asks(&dir.join("Install"), &data(&dir.join("Local/Swofty"))));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn defaults_to_leave_and_only_moves_when_asked_and_chosen() {
+        assert_eq!(Choice::default(), Choice::Leave);
+        let install = Path::new("/drive/SwoftyLauncher");
+        assert_eq!(target_with(Choice::Leave, true, install, "typed"), "typed");
+        assert_eq!(target_with(Choice::Move, false, install, "typed"), "typed");
+        let moved = target_with(Choice::Move, true, install, "typed");
+        assert_ne!(moved, "typed");
+        assert!(moved.ends_with(FOLDER), "{moved}");
+        assert!(!Path::new(&moved).starts_with(install));
+    }
+
+    #[test]
+    fn the_drive_choice_lands_in_a_folder_outside_the_install() {
+        let on = on_install_drive(Path::new("/mnt/d/Games/SwoftyLauncher"));
+        assert!(!on.starts_with("/mnt/d/Games/SwoftyLauncher"));
+        if cfg!(windows) {
+            assert_eq!(
+                on_install_drive(Path::new(r"D:\Games\SwoftyLauncher")),
+                PathBuf::from(r"D:\Swofty")
+            );
+        }
+    }
+
+    #[test]
+    fn counts_the_addons_of_a_folder_without_the_managed_one() {
+        let dir = temp("count");
+        write(&dir.join("addons/a.one/swofty.json"), "{}");
+        write(&dir.join("addons/a.two/swofty.json"), "{}");
+        write(&dir.join("addons/teamsimplified.mods/swofty.json"), "{}");
+        write(&dir.join("addons/no-manifest/readme.txt"), "x");
+        assert_eq!(addon_count(&dir), 2);
+        assert_eq!(addon_count(&dir.join("missing")), 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_finder_offers_a_folder_only_when_the_current_one_has_no_addons() {
+        let dir = temp("finder");
+        let default = dir.join("Local/Swofty");
+        std::fs::create_dir_all(&default).unwrap();
+        let old = dir.join("Local/Swofty.old");
+        write(&old.join("addons/mine.one/swofty.json"), "{\"id\":\"mine.one\"}");
+        write(&old.join("profiles/default.json"), "{}");
+        let found = finder(&data(&default), &[]);
+        assert_eq!(
+            found.iter().map(|f| f.path.clone()).collect::<Vec<_>>(),
+            vec![old.clone()]
+        );
+        write(&default.join("addons/mine.two/swofty.json"), "{}");
+        assert!(finder(&data(&default), &[]).is_empty());
+        std::fs::remove_dir_all(&default).unwrap();
+        let env = Data {
+            env: Some(dir.join("E")),
+            ..data(&default)
+        };
+        assert!(finder(&env, &[]).is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn using_a_found_folder_points_the_default_at_it() {
+        let dir = temp("adopt");
+        let (default, old) = (dir.join("Local/Swofty"), dir.join("D/Old"));
+        write(&old.join("addons/mine.one/swofty.json"), "{\"id\":\"mine.one\"}");
+        write(&old.join("config.json"), "{}");
+        write(&default.join("config.json"), "{}");
+        adopt(&data(&default), &old, &[]).unwrap();
+        assert_eq!(link_target(&default), Some(old.clone()));
+        assert!(read(&default.join("config.json")).contains("{}"));
+        let aside = std::fs::read_dir(dir.join("Local"))
+            .unwrap()
+            .flatten()
+            .any(|e| e.file_name().to_string_lossy().contains(".fresh-"));
+        assert!(aside);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_drive_root_is_refused_as_a_data_folder() {
+        let dir = temp("drive-root");
+        let root = if cfg!(windows) {
+            Path::new(r"D:\")
+        } else {
+            Path::new("/")
+        };
+        let e = plan(&data(&dir.join("Local/Swofty")), root).unwrap_err();
+        assert!(e.contains("whole drive"), "{e}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn data_that_stays_inside_the_install_folder_is_refused_too() {
+        let dir = temp("apart-stay");
+        let install = dir.join("Install");
+        let d = Data {
+            install: Some(install.clone()),
+            ..data(&install.join("Swofty"))
+        };
+        assert!(plan(&d, &install.join("Swofty")).is_err());
+        let env = Data {
+            env: Some(install.join("Swofty")),
+            ..d
+        };
+        assert!(env.apart(&env.current()).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn follows_swofty_data_dir_and_updates_it() {
         let dir = temp("env");
         let (default, old, new) = (dir.join("Local/Swofty"), dir.join("D/Old"), dir.join("E/New"));
@@ -750,6 +1063,7 @@ mod tests {
         let d = Data {
             default: default.clone(),
             env: Some(old.clone()),
+            install: None,
         };
         assert_eq!(d.current(), old);
         assert_eq!(plan(&d, &old).unwrap(), None);

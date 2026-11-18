@@ -1,0 +1,12 @@
+{
+  "content.package": {
+    "f1_1970": {
+      "$comment": "a bool or null",
+      "entrant_list": "f1_1970",
+      "season": 1970,
+      "rules": {
+        "formation_lap": "off"
+      }
+    }
+  }
+}

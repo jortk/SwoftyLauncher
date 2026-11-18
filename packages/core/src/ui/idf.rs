@@ -267,6 +267,122 @@ pub fn id_problems(p: &Pkg) -> Result<Vec<String>> {
     Ok(out)
 }
 
+pub fn find_mut<'a>(e: &'a mut Node, name: &str) -> Option<&'a mut Node> {
+    if elem_name(e) == name {
+        return Some(e);
+    }
+    let kids = e.as_obj_mut()?.get_mut("children")?.as_arr_mut()?;
+    kids.items.iter_mut().find_map(|c| find_mut(c, name))
+}
+
+/// The one element named `name` below `e`, or the way it isn't.
+pub fn expect<'a>(e: &'a Node, name: &str) -> Result<&'a Node> {
+    find(e, name).ok_or_else(|| err(format!("the scene has no element {name}")))
+}
+
+pub fn rename(e: &mut Node, name: &str) -> Result<()> {
+    e.o_mut()?.set("name", Node::Val(Val::str(name)));
+    Ok(())
+}
+
+pub fn fp32(v: f64) -> Val {
+    Val::raw(*b"fp32", (v as f32).to_le_bytes())
+}
+
+pub fn si32(v: i32) -> Val {
+    Val::raw(*b"si32", v.to_le_bytes())
+}
+
+/// Sets a param, keeping the tag the element's template gave it when it has the param (a string
+/// param keeps its own string tag).
+pub fn set_param_like(e: &mut Node, name: &str, mut value: Val) -> Result<()> {
+    if let Some(old) = param(e, name)
+        && matches!(value.value, Value::Str(_))
+        && matches!(old.value, Value::Str(_))
+    {
+        value.ty = old.ty;
+    }
+    put_param(e, name, value)
+}
+
+pub fn set_transform(e: &mut Node, pos: [f64; 3], rot: [f64; 4], scale: [f64; 3]) -> Result<()> {
+    let o = e.o_mut()?;
+    o.set("position", Node::Val(vec3([pos[0], pos[1], pos[2], 0.0])));
+    o.set("scale", Node::Val(vec3([scale[0], scale[1], scale[2], 0.0])));
+    o.set("rotation", Node::Val(quat(rot)));
+    Ok(())
+}
+
+pub fn position(e: &Node) -> Option<[f64; 3]> {
+    let v = e.as_obj()?.get("position")?.as_val()?;
+    match &v.value {
+        Value::Raw(b) if b.len() >= 12 => {
+            let f = |i: usize| f32::from_le_bytes(b[i * 4..i * 4 + 4].try_into().expect("4 bytes")) as f64;
+            Some([f(0), f(1), f(2)])
+        }
+        _ => None,
+    }
+}
+
+/// Moves the stock customisation selection box: `tl_customisation` and `br_customisation`.
+pub fn set_box(root: &mut Node, tl: [f64; 3], br: [f64; 3]) -> Result<()> {
+    for (name, p) in [("tl_customisation", tl), ("br_customisation", br)] {
+        let e = find_mut(root, name).ok_or_else(|| err(format!("the scene has no {name}")))?;
+        e.o_mut()?
+            .set("position", Node::Val(vec3([p[0], p[1], p[2], 0.0])));
+    }
+    Ok(())
+}
+
+/// The element ids of a scene by path, to check later that none of the stock ones moved.
+pub fn id_map(root: &Node) -> std::collections::BTreeMap<String, u32> {
+    elements(root)
+        .into_iter()
+        .filter_map(|(p, e)| {
+            let id = e.as_obj()?.get("elementId")?.as_val().and_then(Val::as_u32)?;
+            Some((p, id))
+        })
+        .collect()
+}
+
+/// Gives `e` one animation: a copy of `template`'s first `anims` entry whose asset is `asset`.
+pub fn set_anim(e: &mut Node, template: &Node, asset: &str) -> Result<()> {
+    let list = template
+        .as_obj()
+        .and_then(|o| o.get("anims"))
+        .and_then(Node::as_arr)
+        .ok_or_else(|| err("the template element has no anims"))?;
+    let first = list
+        .items
+        .first()
+        .ok_or_else(|| err("the template element has no animation entry"))?;
+    let mut entry = detached(first);
+    entry.o_mut()?.set("asset", Node::Val(Val::str(asset)));
+    let tag = list.tag;
+    e.o_mut()?.set(
+        "anims",
+        Node::Arr(Arr {
+            items: vec![entry],
+            tag,
+        }),
+    );
+    Ok(())
+}
+
+pub fn children_tag(e: &Node) -> [u8; 4] {
+    e.as_obj()
+        .and_then(|o| o.get("children"))
+        .and_then(Node::as_arr)
+        .map_or(*b"!obj", |a| a.tag)
+}
+
+pub fn clear_list(e: &mut Node, key: &str) -> Result<()> {
+    if let Some(Node::Arr(a)) = e.o_mut()?.get_mut(key) {
+        a.items.clear();
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

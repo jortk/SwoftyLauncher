@@ -164,7 +164,7 @@ fn main() {
 The session when the page opens and a switch is flipped:
 
 ```text
-launcher  {"id":0,"method":"hello","params":{"api":1,"addon":"example.launcher-addon","data_dir":"/home/you/.local/share/swofty/addon-data/example.launcher-addon","cache_dir":"/home/you/.local/share/swofty/cache/addons/example.launcher-addon","profile":{"name":"default","vanilla":false,"enabled":true},"launcher":"1.5.19","host_calls":["addons","install_addon","set_addon_enabled","remove_addon","move_addon","tasks","profile_heads"]}}
+launcher  {"id":0,"method":"hello","params":{"api":1,"addon":"example.launcher-addon","data_dir":"/home/you/.local/share/swofty/addon-data/example.launcher-addon","cache_dir":"/home/you/.local/share/swofty/cache/addons/example.launcher-addon","profile":{"name":"default","vanilla":false,"enabled":true},"launcher":"1.9.29","host_calls":["addons","install_addon","set_addon_enabled","remove_addon","move_addon","tasks","profile_heads","save_dir"]}}
 plugin    {"id":0,"result":{"api":1}}
 launcher  {"id":1,"method":"view","params":{"section":"items"}}
 plugin    {"id":0,"method":"get_state","params":null}
@@ -237,7 +237,7 @@ The smaller helper is in [Your first addon](./first-addon).
 - **[Host calls](./launcher-api/host-calls)**: what the plugin asks the launcher while it handles a call. {#host-calls-the-plugin-sends-back}
   - **[Progress](./launcher-api/host-calls#progress)** and **[state](./launcher-api/host-calls#state)**: `progress`, `get_state`, `set_state`.
   - **[Game files](./launcher-api/host-calls#game-files)**: `game_build_key`, `game_exe_version`, `game_is_stock`, `game_original`, `game_original_lang`.
-  - **[Folders](./launcher-api/host-calls#folders)**: `game_dir`, `addon_game_dir`, `steam_save_dir` (1.0.10).
+  - **[Folders](./launcher-api/host-calls#folders)**: `game_dir`, `addon_game_dir`, `steam_save_dir` (1.0.10), `save_dir` (1.9.29).
   - **[Game status](./launcher-api/host-calls#game-status)**: `game_status` (1.0.10).
   - **[Profile tracks](./launcher-api/host-calls#profile-tracks)** (1.0.12) and **[profile heads](./launcher-api/host-calls#profile-heads)** (1.5.12). {#profile-heads}
   - **[Managing addons](./launcher-api/host-calls#managing-addons)**: `addons`, `install_addon`, `set_addon_enabled`, `remove_addon`, `move_addon` (1.3.0), and `AddonBuilder`.

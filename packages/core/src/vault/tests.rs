@@ -106,6 +106,23 @@ fn refuses_a_file_that_changes_while_it_is_copied() {
 }
 
 #[test]
+fn a_stored_blob_keeps_its_contents_and_leaves_no_temp_file() {
+    let root = tmp("blob-flush");
+    let loc = steam(&root, "1", b"data");
+    let v = vault(&root, &loc);
+    let src = loc.dir.join(DATA);
+    let sha = crate::baseline::sha256_file(&src).unwrap();
+    v.store_blob(&src, &sha).unwrap();
+    assert_eq!(std::fs::read(v.blob(&sha)).unwrap(), std::fs::read(&src).unwrap());
+    let left: Vec<_> = std::fs::read_dir(v.dir.join("blobs"))
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+#[test]
 fn keeps_accounts_apart() {
     let root = tmp("accounts");
     let a = steam(&root, "11", b"a");
@@ -843,4 +860,89 @@ fn a_restore_puts_the_snapshots_careers_back_and_dates_the_files() {
         mtime,
         std::time::UNIX_EPOCH + std::time::Duration::from_secs((T0 + 200) as u64)
     );
+}
+
+#[test]
+fn folder_listing_names_each_file_with_size_and_time() {
+    let dir = tmp("listing");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("savegame@profile#a"), b"12345").unwrap();
+    std::fs::write(dir.join("remotecache.vdf"), b"x").unwrap();
+    let line = folder_listing(&dir);
+    assert!(line.contains("remotecache.vdf 1 bytes 20"), "{line}");
+    assert!(line.contains("savegame@profile#a 5 bytes 20"), "{line}");
+    assert!(line.find("remotecache").unwrap() < line.find("savegame").unwrap());
+    assert!(folder_listing(&dir.join("missing")).contains("could not be read"));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+fn launcher_loc(root: &Path, profile: &str, data: &[u8]) -> Location {
+    let loc = Location::launcher(&root.join("data"), profile);
+    std::fs::create_dir_all(&loc.dir).unwrap();
+    std::fs::write(loc.dir.join(DATA), data).unwrap();
+    std::fs::write(loc.dir.join(INDEX), [7u8; 416]).unwrap();
+    loc
+}
+
+#[test]
+fn a_launcher_vault_lists_only_what_it_restores_and_restores_each() {
+    let root = tmp("launcher-list");
+    let loc = launcher_loc(&root, "2016-2025", &[1u8; 900]);
+    let v = vault(&root, &loc);
+    let a = new(v.snapshot(&loc, Meta::new(Reason::Imported), T0).unwrap());
+    std::fs::write(loc.dir.join(DATA), [2u8; 1200]).unwrap();
+    let b = new(v
+        .snapshot(&loc, Meta::new(Reason::ChangedOutside), T0 + 60)
+        .unwrap());
+    std::fs::write(loc.dir.join(DATA), [3u8; 600]).unwrap();
+    for snap in v.list().unwrap() {
+        assert_eq!(snap.source, v.source);
+        let r = restore(&v, &snap.id, &loc, Running::default(), T0 + 600).unwrap();
+        assert!(r.log_line().contains(&snap.id));
+    }
+    assert!(v.find(&a.id).is_ok() && v.find(&b.id).is_ok());
+}
+
+#[test]
+fn snapshots_copied_between_profiles_restore_into_the_profile_that_lists_them() {
+    let root = tmp("launcher-copied");
+    let from = launcher_loc(&root, "2016-2025", &[1u8; 900]);
+    let vf = vault(&root, &from);
+    let snap = new(vf.snapshot(&from, Meta::new(Reason::AfterSession), T0).unwrap());
+    std::fs::write(from.dir.join(DATA), [2u8; 1200]).unwrap();
+    new(vf
+        .snapshot(&from, Meta::new(Reason::ChangedOutside), T0 + 60)
+        .unwrap());
+
+    let to = launcher_loc(&root, "2016-2025-12", &[9u8; 300]);
+    let vt = vault(&root, &to);
+    copy_dir(&vf.dir, &vt.dir);
+
+    let listed = vt.list().unwrap();
+    assert_eq!(listed.len(), 2);
+    for s in &listed {
+        assert_eq!(
+            s.source, vt.source,
+            "the page keys a version by the vault that lists it"
+        );
+        let open = Vault::open(&root.join("data"), &s.source).unwrap();
+        assert_eq!(open.find(&s.id).unwrap().id, s.id);
+    }
+    let r = restore(&vt, &snap.id, &to, Running::default(), T0 + 600).unwrap();
+    assert!(r.log_line().contains(&snap.id));
+    assert_eq!(std::fs::read(to.dir.join(DATA)).unwrap(), [1u8; 900]);
+    assert_eq!(std::fs::read(from.dir.join(DATA)).unwrap(), [2u8; 1200]);
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        let dest = to.join(e.file_name());
+        match e.file_type().unwrap().is_dir() {
+            true => copy_dir(&e.path(), &dest),
+            false => {
+                std::fs::copy(e.path(), dest).unwrap();
+            }
+        }
+    }
 }

@@ -51,6 +51,28 @@ inline std::string mode_of(std::string_view game_mode)
     return "unknown";
 }
 
+// What kind of game mode the game is in, from a read of the current mode (GameModeContext +0x88): no context read, no
+// mode object or a label that is not listed is unknown, so a hook or a poll that depends on it keeps running.
+enum class ModeKind : int { unknown, time_trial, career, other };
+
+inline ModeKind mode_kind(bool context, bool holder, std::string_view mode)
+{
+    if (!context || !holder || mode.empty() || mode == "unknown")
+        return ModeKind::unknown;
+    if (mode == "time_trial")
+        return ModeKind::time_trial;
+    if (mode == "my_team" || mode == "driver_career")
+        return ModeKind::career;
+    if (mode == "grand_prix" || mode == "split_screen" || mode == "story" || mode == "f1_world")
+        return ModeKind::other;
+    return ModeKind::unknown;
+}
+
+inline const char *mode_kind_name(ModeKind k)
+{
+    return k == ModeKind::time_trial ? "Time Trial" : k == ModeKind::career ? "career" : k == ModeKind::other ? "another game mode" : "unknown";
+}
+
 struct Session {
     std::string type, session;
 };

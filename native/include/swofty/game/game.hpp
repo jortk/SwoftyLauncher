@@ -39,6 +39,12 @@ static_assert(offsetof(DriverCalendar, activities_end) == 0x58);
 static_assert(offsetof(DriverCalendar, driver) == 0xc0);
 static_assert(sizeof(DriverCalendar) == 0xc8);
 
+struct DriverCareerTeamSelectViewModel {
+    uint8_t _pad_0x0[0xf20];
+    uint32_t selected_team_key; // L2 experimental
+};
+static_assert(offsetof(DriverCareerTeamSelectViewModel, selected_team_key) == 0xf20);
+
 struct DriverSecretMeetings {
     uint8_t _pad_0x0[0x10];
     void *current_allocator; // L2 experimental
@@ -147,14 +153,19 @@ static_assert(offsetof(SecretMeeting, reason) == 0x14);
 static_assert(offsetof(SecretMeeting, team) == 0x20);
 static_assert(sizeof(SecretMeeting) == 0x24);
 
+struct TodCurveBinding {
+};
+
 struct TrackDataRecord {
     uint8_t _pad_0x0[0x1];
     uint8_t index; // L2 experimental
     uint8_t _pad_0x2[0xce];
     char *name; // L2 experimental
+    uint8_t _pad_0xd8[0xc30];
 };
 static_assert(offsetof(TrackDataRecord, index) == 0x1);
 static_assert(offsetof(TrackDataRecord, name) == 0xd0);
+static_assert(sizeof(TrackDataRecord) == 0xd08);
 
 struct TrackDataSet {
     uint8_t _pad_0x0[0x8];
@@ -164,26 +175,45 @@ struct TrackDataSet {
     uint32_t mode_mask; // L2 experimental
     uint32_t season_mask; // L2 experimental
     uint32_t format_mask; // L2 experimental
+    uint8_t _pad_0x2c[0x4];
 };
 static_assert(offsetof(TrackDataSet, tracks_begin) == 0x8);
 static_assert(offsetof(TrackDataSet, tracks_end) == 0x10);
 static_assert(offsetof(TrackDataSet, mode_mask) == 0x20);
 static_assert(offsetof(TrackDataSet, season_mask) == 0x24);
 static_assert(offsetof(TrackDataSet, format_mask) == 0x28);
+static_assert(sizeof(TrackDataSet) == 0x30);
 
 struct TrackDataSystem {
-    uint8_t _pad_0x0[0x68];
+    uint8_t _pad_0x0[0x10];
+    void *arena; // L2 experimental
+    uint8_t _pad_0x18[0x10];
+    void *records_begin; // L2 experimental
+    void *records_end; // L2 experimental
+    uint8_t _pad_0x38[0x30];
     TrackDataSet *sets_begin; // L2 experimental
     TrackDataSet *sets_end; // L2 experimental
 };
+static_assert(offsetof(TrackDataSystem, arena) == 0x10);
+static_assert(offsetof(TrackDataSystem, records_begin) == 0x28);
+static_assert(offsetof(TrackDataSystem, records_end) == 0x30);
 static_assert(offsetof(TrackDataSystem, sets_begin) == 0x68);
 static_assert(offsetof(TrackDataSystem, sets_end) == 0x70);
 
 struct TrackDataTrack {
     TrackDataRecord *record; // L2 experimental
-    uint8_t _pad_0x8[0xe8];
+    uint8_t _pad_0x8[0x58];
+    float chance_of_using_softer_preset; // L2 experimental
+    float chance_of_using_harder_preset; // L2 experimental
+    uint8_t _pad_0x68[0x70];
+    uint8_t enforce_pitstops_in_wet_weather; // L2 experimental
+    uint8_t _pad_0xd9[0x7];
+    void *number_of_laps_slot; // L2 experimental
+    uint8_t _pad_0xe8[0x8];
     float fuel_burn_per_lap; // L2 experimental
-    uint8_t _pad_0xf4[0xc];
+    uint8_t _pad_0xf4[0x9];
+    uint8_t is_sprint_weekend; // L2 experimental
+    uint8_t _pad_0xfe[0x2];
     uint8_t race_fuel[156]; // L2 experimental
     uint8_t _pad_0x19c[0x4];
     uint64_t race_fuel_count; // L2 experimental
@@ -192,14 +222,29 @@ struct TrackDataTrack {
     uint8_t _pad_0x1b8[0x4];
     float qualifying_short; // L2 experimental
     float qualifying_full; // L2 experimental
+    uint8_t _pad_0x1c4[0x34];
+    int32_t race_start_time[2]; // L2 experimental
+    uint8_t _pad_0x200[0x1c];
+    float pit_speed_limit; // L2 experimental
+    float pit_stop_time_dry; // L2 experimental
+    uint8_t _pad_0x224[0x6c];
 };
 static_assert(offsetof(TrackDataTrack, record) == 0x0);
+static_assert(offsetof(TrackDataTrack, chance_of_using_softer_preset) == 0x60);
+static_assert(offsetof(TrackDataTrack, chance_of_using_harder_preset) == 0x64);
+static_assert(offsetof(TrackDataTrack, enforce_pitstops_in_wet_weather) == 0xd8);
+static_assert(offsetof(TrackDataTrack, number_of_laps_slot) == 0xe0);
 static_assert(offsetof(TrackDataTrack, fuel_burn_per_lap) == 0xf0);
+static_assert(offsetof(TrackDataTrack, is_sprint_weekend) == 0xfd);
 static_assert(offsetof(TrackDataTrack, race_fuel) == 0x100);
 static_assert(offsetof(TrackDataTrack, race_fuel_count) == 0x1a0);
 static_assert(offsetof(TrackDataTrack, qualifying_one_shot) == 0x1b4);
 static_assert(offsetof(TrackDataTrack, qualifying_short) == 0x1bc);
 static_assert(offsetof(TrackDataTrack, qualifying_full) == 0x1c0);
+static_assert(offsetof(TrackDataTrack, race_start_time) == 0x1f8);
+static_assert(offsetof(TrackDataTrack, pit_speed_limit) == 0x21c);
+static_assert(offsetof(TrackDataTrack, pit_stop_time_dry) == 0x220);
+static_assert(sizeof(TrackDataTrack) == 0x290);
 
 inline constexpr address<"Game_AccelerationDecelerationForcesCameraModifier_OnEnable"> Game_AccelerationDecelerationForcesCameraModifier_OnEnable{}; // L2 experimental
 inline constexpr address<"Game_ActorAssetGroupManager_Update"> Game_ActorAssetGroupManager_Update{}; // L2 experimental
@@ -207,22 +252,57 @@ inline constexpr address<"Game_ActorManager_Initialise"> Game_ActorManager_Initi
 inline constexpr address<"Game_AdaptiveAi_RecordSessionFinished"> Game_AdaptiveAi_RecordSessionFinished{}; // L2 experimental
 inline constexpr address<"Game_AiManager_Initialise"> Game_AiManager_Initialise{}; // L2 experimental
 inline constexpr address<"Game_AiPitDecision_UpdateDroppedPlayerCar"> Game_AiPitDecision_UpdateDroppedPlayerCar{}; // L2 experimental
+using Game_AiRoute_BuildGraph_t = uint64_t(void *ai_manager);
+inline constexpr fn<"Game_AiRoute_BuildGraph", Game_AiRoute_BuildGraph_t> Game_AiRoute_BuildGraph{}; // L2 experimental
+using Game_AiRoute_CompileMarkerChannel_t = void(void *route, uint32_t *out_buf);
+inline constexpr fn<"Game_AiRoute_CompileMarkerChannel", Game_AiRoute_CompileMarkerChannel_t> Game_AiRoute_CompileMarkerChannel{}; // L2 experimental
+inline constexpr address<"Game_Analytics_BakedLiverySponsor_WriteJson"> Game_Analytics_BakedLiverySponsor_WriteJson{}; // L2 experimental
+using Game_Analytics_Json_WriteFloatField_t = void(void *writer, const char *prefix, float value);
+inline constexpr fn<"Game_Analytics_Json_WriteFloatField", Game_Analytics_Json_WriteFloatField_t> Game_Analytics_Json_WriteFloatField{}; // L2 experimental
+using Game_Analytics_Json_WriteStringField_t = void(void *writer, const char *key, const char *value);
+inline constexpr fn<"Game_Analytics_Json_WriteStringField", Game_Analytics_Json_WriteStringField_t> Game_Analytics_Json_WriteStringField{}; // L2 experimental
+using Game_Analytics_RecordMyTeamSecondDriverContract_t = bool(void *analytics, void *contract_event);
+inline constexpr fn<"Game_Analytics_RecordMyTeamSecondDriverContract", Game_Analytics_RecordMyTeamSecondDriverContract_t> Game_Analytics_RecordMyTeamSecondDriverContract{}; // L2 experimental
+inline constexpr address<"Game_Analytics_UnregisterMessageHandlers"> Game_Analytics_UnregisterMessageHandlers{}; // L2 experimental
+using Game_Analytics_WriteBaseCtx_t = void(void *base_ctx, void *json_writer);
+inline constexpr fn<"Game_Analytics_WriteBaseCtx", Game_Analytics_WriteBaseCtx_t> Game_Analytics_WriteBaseCtx{}; // L2 experimental
+using Game_Analytics_WriteCommonHeaderFields_t = void(void *record, void *json_writer, void *ctx);
+inline constexpr fn<"Game_Analytics_WriteCommonHeaderFields", Game_Analytics_WriteCommonHeaderFields_t> Game_Analytics_WriteCommonHeaderFields{}; // L2 experimental
+inline constexpr address<"Game_Analytics_WriteRndUpgradeInfo"> Game_Analytics_WriteRndUpgradeInfo{}; // L2 experimental
 inline constexpr address<"Game_AnimLayers_EvaluateBlend"> Game_AnimLayers_EvaluateBlend{}; // L2 experimental
 inline constexpr address<"Game_AnimLayers_EvaluateFallback"> Game_AnimLayers_EvaluateFallback{}; // L2 experimental
 inline constexpr address<"Game_AnimLayers_EvaluateSingle"> Game_AnimLayers_EvaluateSingle{}; // L2 experimental
 inline constexpr address<"Game_AnimatedDriver_Initialise"> Game_AnimatedDriver_Initialise{}; // L2 experimental
+using Game_Apply_PresetEqualPerformance_t = void(void *game_mode, const char *prefix);
+inline constexpr fn<"Game_Apply_PresetEqualPerformance", Game_Apply_PresetEqualPerformance_t> Game_Apply_PresetEqualPerformance{}; // L2 experimental
+using Game_Apply_PresetSetupMode_t = void(void *game_mode, const char *prefix);
+inline constexpr fn<"Game_Apply_PresetSetupMode", Game_Apply_PresetSetupMode_t> Game_Apply_PresetSetupMode{}; // L2 experimental
+using Game_Apply_PresetTeamName_t = void(void *game_mode, const char *prefix);
+inline constexpr fn<"Game_Apply_PresetTeamName", Game_Apply_PresetTeamName_t> Game_Apply_PresetTeamName{}; // L2 experimental
+using Game_Apply_PresetTimeOfDay_t = void(void *game_mode, const char *prefix);
+inline constexpr fn<"Game_Apply_PresetTimeOfDay", Game_Apply_PresetTimeOfDay_t> Game_Apply_PresetTimeOfDay{}; // L2 experimental
+using Game_Apply_PresetTrackName_t = void(void *game_mode, const char *prefix);
+inline constexpr fn<"Game_Apply_PresetTrackName", Game_Apply_PresetTrackName_t> Game_Apply_PresetTrackName{}; // L2 experimental
+using Game_Apply_PresetWeather_t = void(void *game_mode, const char *prefix);
+inline constexpr fn<"Game_Apply_PresetWeather", Game_Apply_PresetWeather_t> Game_Apply_PresetWeather{}; // L2 experimental
 inline constexpr address<"Game_AudioAutodetect_Initialise"> Game_AudioAutodetect_Initialise{}; // L2 experimental
 inline constexpr address<"Game_AudioEngineBundle_Initialise"> Game_AudioEngineBundle_Initialise{}; // L2 experimental
+inline constexpr address<"Game_AutoResetToTrack_StartTimer"> Game_AutoResetToTrack_StartTimer{}; // L2 experimental
+inline constexpr address<"Game_AutoResetToTrack_Teleport"> Game_AutoResetToTrack_Teleport{}; // L2 experimental
 inline constexpr address<"Game_BenchmarkGameMode_BuildSessionSettings"> Game_BenchmarkGameMode_BuildSessionSettings{}; // L2 experimental
 inline constexpr address<"Game_BetaCode_OnEntered"> Game_BetaCode_OnEntered{}; // L2 experimental
 inline constexpr address<"Game_Breakable_SpawnPieceRenderModel"> Game_Breakable_SpawnPieceRenderModel{}; // L2 experimental
 inline constexpr address<"Game_BroadcastViewVehicleVM_OnActivate"> Game_BroadcastViewVehicleVM_OnActivate{}; // L2 experimental
 inline constexpr address<"Game_BroadcastViewVehicleVM_OnDeactivate"> Game_BroadcastViewVehicleVM_OnDeactivate{}; // L2 experimental
+using Game_Build_PassiveObjectiveKeyName_t = void *(void *out, int index);
+inline constexpr fn<"Game_Build_PassiveObjectiveKeyName", Game_Build_PassiveObjectiveKeyName_t> Game_Build_PassiveObjectiveKeyName{}; // L2 experimental
 inline constexpr address<"Game_BusySpinner_StopAndFadeOutUi"> Game_BusySpinner_StopAndFadeOutUi{}; // L2 experimental
 inline constexpr address<"Game_CameraActor_ProcessPendingCameraChanges"> Game_CameraActor_ProcessPendingCameraChanges{}; // L2 experimental
 inline constexpr address<"Game_CameraActor_SyncClipTarget"> Game_CameraActor_SyncClipTarget{}; // L2 experimental
 inline constexpr address<"Game_CameraCollection_FindByName"> Game_CameraCollection_FindByName{}; // L2 experimental
 inline constexpr address<"Game_CameraCollection_FindByUid"> Game_CameraCollection_FindByUid{}; // L2 experimental
+using Game_CameraHelicopter_Reset_t = void(void *self);
+inline constexpr fn<"Game_CameraHelicopter_Reset", Game_CameraHelicopter_Reset_t> Game_CameraHelicopter_Reset{}; // L2 experimental
 inline constexpr address<"Game_CarCustomisation_ApplyAllCustomisation"> Game_CarCustomisation_ApplyAllCustomisation{}; // L2 experimental
 inline constexpr address<"Game_CarCustomisation_ApplyDriverNumbers"> Game_CarCustomisation_ApplyDriverNumbers{}; // L2 experimental
 inline constexpr address<"Game_CarCustomisation_ApplyLiveryPreview"> Game_CarCustomisation_ApplyLiveryPreview{}; // L2 experimental
@@ -235,6 +315,8 @@ using Game_CareerActivities_RemoveActivity_t = void(void *calendar, const void *
 inline constexpr fn<"Game_CareerActivities_RemoveActivity", Game_CareerActivities_RemoveActivity_t> Game_CareerActivities_RemoveActivity{}; // L2 experimental
 using Game_CareerContinue_HandleCommand_t = uint64_t(void *vm, NeStr **cmd, void *value);
 inline constexpr fn<"Game_CareerContinue_HandleCommand", Game_CareerContinue_HandleCommand_t> Game_CareerContinue_HandleCommand{}; // L2 experimental
+using Game_CareerContinue_StartNewCareer_t = void(void *vm);
+inline constexpr fn<"Game_CareerContinue_StartNewCareer", Game_CareerContinue_StartNewCareer_t> Game_CareerContinue_StartNewCareer{}; // L2 experimental
 inline constexpr address<"Game_CareerEventResourceManager_DeactivateExtraWorld"> Game_CareerEventResourceManager_DeactivateExtraWorld{}; // L2 experimental
 inline constexpr address<"Game_CareerEventResourceManager_ShutdownExtraWorlds"> Game_CareerEventResourceManager_ShutdownExtraWorlds{}; // L2 experimental
 inline constexpr address<"Game_CareerEvent_OnEventKey"> Game_CareerEvent_OnEventKey{}; // L2 experimental
@@ -253,8 +335,12 @@ inline constexpr address<"Game_CareerEventsSequencer_SpawnDriverScene"> Game_Car
 inline constexpr address<"Game_CareerEventsSequencer_TriggerFadeOutForExit"> Game_CareerEventsSequencer_TriggerFadeOutForExit{}; // L2 experimental
 inline constexpr address<"Game_CareerEventsSequencer_UnloadAll"> Game_CareerEventsSequencer_UnloadAll{}; // L2 experimental
 inline constexpr address<"Game_CareerHubRndAreaScript_Initialise"> Game_CareerHubRndAreaScript_Initialise{}; // L2 experimental
+using Game_CareerOnlineDocumentComponent_Initialise_t = uint32_t(void *self, void *ctx, void *components);
+inline constexpr fn<"Game_CareerOnlineDocumentComponent_Initialise", Game_CareerOnlineDocumentComponent_Initialise_t> Game_CareerOnlineDocumentComponent_Initialise{}; // L2 experimental
 using Game_CareerSetup_ResetEntrants_t = void(void *setup);
 inline constexpr fn<"Game_CareerSetup_ResetEntrants", Game_CareerSetup_ResetEntrants_t> Game_CareerSetup_ResetEntrants{}; // L2 experimental
+using Game_CareerWizardAddonDrivers_HandleChoice_t = void(void *vm, uint32_t cmdHash);
+inline constexpr fn<"Game_CareerWizardAddonDrivers_HandleChoice", Game_CareerWizardAddonDrivers_HandleChoice_t> Game_CareerWizardAddonDrivers_HandleChoice{}; // L2 experimental
 using Game_CareerWizard_PushNextStep_t = void(void *wizard);
 inline constexpr fn<"Game_CareerWizard_PushNextStep", Game_CareerWizard_PushNextStep_t> Game_CareerWizard_PushNextStep{}; // L2 experimental
 inline constexpr address<"Game_CareerWizard_ResolveOrExit"> Game_CareerWizard_ResolveOrExit{}; // L2 experimental
@@ -265,6 +351,8 @@ inline constexpr address<"Game_Career_HideDriversOnExit"> Game_Career_HideDriver
 using Game_Career_IsDriverCareerMode_t = bool(const void *championship);
 inline constexpr fn<"Game_Career_IsDriverCareerMode", Game_Career_IsDriverCareerMode_t> Game_Career_IsDriverCareerMode{}; // L2 experimental
 inline constexpr address<"Game_Career_SpawnMainDriverPose"> Game_Career_SpawnMainDriverPose{}; // L2 experimental
+using Game_ChallengeCareer_BuildTrackTiles_t = void(void *vm);
+inline constexpr fn<"Game_ChallengeCareer_BuildTrackTiles", Game_ChallengeCareer_BuildTrackTiles_t> Game_ChallengeCareer_BuildTrackTiles{}; // L2 experimental
 inline constexpr address<"Game_ChallengeEvent_HandleCommand"> Game_ChallengeEvent_HandleCommand{}; // L2 experimental
 inline constexpr address<"Game_ChallengeEvent_OnTabActivated"> Game_ChallengeEvent_OnTabActivated{}; // L2 experimental
 inline constexpr address<"Game_ChallengeEvent_OnTabDeactivated"> Game_ChallengeEvent_OnTabDeactivated{}; // L2 experimental
@@ -274,6 +362,11 @@ inline constexpr address<"Game_Championship_AddSessionDefaultLength"> Game_Champ
 inline constexpr address<"Game_Championship_AddSessionFromDef"> Game_Championship_AddSessionFromDef{}; // L2 experimental
 inline constexpr address<"Game_Championship_AddSessionWithFormat"> Game_Championship_AddSessionWithFormat{}; // L2 experimental
 inline constexpr address<"Game_Championship_ResetSessionsForRestart"> Game_Championship_ResetSessionsForRestart{}; // L2 experimental
+using Game_Championship_VirtualisePendingSessions_t = uint64_t(void *self);
+inline constexpr fn<"Game_Championship_VirtualisePendingSessions", Game_Championship_VirtualisePendingSessions_t> Game_Championship_VirtualisePendingSessions{}; // L2 experimental
+using Game_Check_ReturnToGarageTimeLimit_t = bool(void *self);
+inline constexpr fn<"Game_Check_ReturnToGarageTimeLimit", Game_Check_ReturnToGarageTimeLimit_t> Game_Check_ReturnToGarageTimeLimit{}; // L2 experimental
+inline constexpr address<"Game_Check_TutorialStepTriggerPresent"> Game_Check_TutorialStepTriggerPresent{}; // L2 experimental
 inline constexpr address<"Game_CinematicDirector_SendCinematicData"> Game_CinematicDirector_SendCinematicData{}; // L2 experimental
 inline constexpr address<"Game_CinematicPitStop_Start"> Game_CinematicPitStop_Start{}; // L2 experimental
 inline constexpr address<"Game_CinematicPitStop_Stop"> Game_CinematicPitStop_Stop{}; // L2 experimental
@@ -298,6 +391,8 @@ using Game_CreateSessionDlcSelectTab_HandleCommand_t = char *(void *view_model, 
 inline constexpr fn<"Game_CreateSessionDlcSelectTab_HandleCommand", Game_CreateSessionDlcSelectTab_HandleCommand_t> Game_CreateSessionDlcSelectTab_HandleCommand{}; // L2 experimental
 inline constexpr address<"Game_CreditsSelectVM_OnScreenActivated"> Game_CreditsSelectVM_OnScreenActivated{}; // L2 experimental
 inline constexpr address<"Game_CrewWorkingOnCar_Initialise"> Game_CrewWorkingOnCar_Initialise{}; // L2 experimental
+using Game_Currency_ShowReceivedPopup_t = bool(void *self, int32_t newBalance);
+inline constexpr fn<"Game_Currency_ShowReceivedPopup", Game_Currency_ShowReceivedPopup_t> Game_Currency_ShowReceivedPopup{}; // L2 experimental
 inline constexpr address<"Game_CustomDriverNetworkMessageHandler_AddReplicatedDriver"> Game_CustomDriverNetworkMessageHandler_AddReplicatedDriver{}; // L2 experimental
 inline constexpr address<"Game_CustomDriverNetworkMessageHandler_FindOrCreateDriverStatId"> Game_CustomDriverNetworkMessageHandler_FindOrCreateDriverStatId{}; // L2 experimental
 inline constexpr address<"Game_CustomDriverNetworkMessageHandler_HandleResponse"> Game_CustomDriverNetworkMessageHandler_HandleResponse{}; // L2 experimental
@@ -343,6 +438,10 @@ inline constexpr address<"Game_CutsceneContext_ParseSceneContext"> Game_Cutscene
 inline constexpr address<"Game_CutsceneManager_IsPreparingScenes"> Game_CutsceneManager_IsPreparingScenes{}; // L2 experimental
 inline constexpr address<"Game_CutsceneManager_SyncAssetGroups"> Game_CutsceneManager_SyncAssetGroups{}; // L2 experimental
 inline constexpr address<"Game_CutsceneManager_WaitTextureStreaming"> Game_CutsceneManager_WaitTextureStreaming{}; // L2 experimental
+using Game_DRLSystem_OnMessagePlayerDroppedIn_t = int(void *drl_system, void *msg);
+inline constexpr fn<"Game_DRLSystem_OnMessagePlayerDroppedIn", Game_DRLSystem_OnMessagePlayerDroppedIn_t> Game_DRLSystem_OnMessagePlayerDroppedIn{}; // L2 experimental, DRLSystem::onMessagePlayerDroppedIn.
+using Game_DRLSystem_ResolveDependencies_t = uint32_t(void *self, void *registry, void *systemMap);
+inline constexpr fn<"Game_DRLSystem_ResolveDependencies", Game_DRLSystem_ResolveDependencies_t> Game_DRLSystem_ResolveDependencies{}; // L2 experimental
 using Game_DRS_OnSessionLoad_t = void(void *drs);
 inline constexpr fn<"Game_DRS_OnSessionLoad", Game_DRS_OnSessionLoad_t> Game_DRS_OnSessionLoad{}; // L2 experimental
 inline constexpr address<"Game_DataDrivenCutSceneScript_CreateComponents"> Game_DataDrivenCutSceneScript_CreateComponents{}; // L2 experimental
@@ -361,8 +460,18 @@ inline constexpr address<"Game_DecalGeneration_CacheMaterialHandle"> Game_DecalG
 inline constexpr address<"Game_DecalGeneration_ReadBackCompressed"> Game_DecalGeneration_ReadBackCompressed{}; // L2 experimental
 inline constexpr address<"Game_DecalGeneration_SetDecalComponent"> Game_DecalGeneration_SetDecalComponent{}; // L2 experimental
 inline constexpr address<"Game_DeptEventViewModel_Update"> Game_DeptEventViewModel_Update{}; // L2 experimental
+using Game_DifficultySystem_ApplySettingsToUi_t = void(void *self, int *settings, int flag);
+inline constexpr fn<"Game_DifficultySystem_ApplySettingsToUi", Game_DifficultySystem_ApplySettingsToUi_t> Game_DifficultySystem_ApplySettingsToUi{}; // L2 experimental
+using Game_DriverCareerTeamSelect_OnMessage_t = void(void *vm, const uint32_t *const *name);
+inline constexpr fn<"Game_DriverCareerTeamSelect_OnMessage", Game_DriverCareerTeamSelect_OnMessage_t> Game_DriverCareerTeamSelect_OnMessage{}; // L2 experimental
 inline constexpr address<"Game_DriverCareer_SpawnDriverPair"> Game_DriverCareer_SpawnDriverPair{}; // L2 experimental
 inline constexpr address<"Game_DriverCareer_TeamMateSelectSpawn"> Game_DriverCareer_TeamMateSelectSpawn{}; // L2 experimental
+using Game_DriverContractsMyTeamComponent_OpenContractWindow_t = uint64_t(void *comp);
+inline constexpr fn<"Game_DriverContractsMyTeamComponent_OpenContractWindow", Game_DriverContractsMyTeamComponent_OpenContractWindow_t> Game_DriverContractsMyTeamComponent_OpenContractWindow{}; // L2 experimental
+using Game_DriverContractsMyTeamComponent_ProgressDay_t = void(void *comp);
+inline constexpr fn<"Game_DriverContractsMyTeamComponent_ProgressDay", Game_DriverContractsMyTeamComponent_ProgressDay_t> Game_DriverContractsMyTeamComponent_ProgressDay{}; // L2 experimental
+using Game_DriverContractsMyTeamComponent_SetContractWindowOpenedFlag_t = uint64_t(void *comp);
+inline constexpr fn<"Game_DriverContractsMyTeamComponent_SetContractWindowOpenedFlag", Game_DriverContractsMyTeamComponent_SetContractWindowOpenedFlag_t> Game_DriverContractsMyTeamComponent_SetContractWindowOpenedFlag{}; // L2 experimental
 using Game_DriverContracts_AdvanceSecretMeeting_t = void(void *contracts, uint32_t driver, uint8_t notify);
 inline constexpr fn<"Game_DriverContracts_AdvanceSecretMeeting", Game_DriverContracts_AdvanceSecretMeeting_t> Game_DriverContracts_AdvanceSecretMeeting{}; // L2 experimental
 using Game_DriverContracts_BuildOffers_t = void(void *contracts, uint32_t driver);
@@ -399,6 +508,8 @@ inline constexpr address<"Game_DynamicObjective_GetLapsLeft"> Game_DynamicObject
 inline constexpr address<"Game_DynamicObjective_TryActivatePosition"> Game_DynamicObjective_TryActivatePosition{}; // L2 experimental
 inline constexpr address<"Game_EALoginTask_OnStart"> Game_EALoginTask_OnStart{}; // L2 experimental
 inline constexpr address<"Game_EALoginTask_Update"> Game_EALoginTask_Update{}; // L2 experimental
+using Game_Eca_OnMessageGameModeChanged_t = uint64_t(void *self, void *msg);
+inline constexpr fn<"Game_Eca_OnMessageGameModeChanged", Game_Eca_OnMessageGameModeChanged_t> Game_Eca_OnMessageGameModeChanged{}; // L2 experimental
 using Game_EngineMgmt_AddGridPenalty_t = void(void *engine_management, const uint32_t *driver, uint32_t places, uint32_t reason);
 inline constexpr fn<"Game_EngineMgmt_AddGridPenalty", Game_EngineMgmt_AddGridPenalty_t> Game_EngineMgmt_AddGridPenalty{}; // L2 experimental
 using Game_EngineMgmt_ApplySessionWear_t = void(void *engine_management, uint32_t driver, float amount, uint8_t flag);
@@ -422,7 +533,11 @@ inline constexpr address<"Game_EventObjectives_ShowTargetPosition"> Game_EventOb
 inline constexpr address<"Game_ExcitementEventPair_TraceLog"> Game_ExcitementEventPair_TraceLog{}; // L2 experimental
 inline constexpr address<"Game_F1CGRuleset_ForceFinishAll"> Game_F1CGRuleset_ForceFinishAll{}; // L2 experimental
 inline constexpr address<"Game_F1CGRuleset_OnVehicleStatusRequest"> Game_F1CGRuleset_OnVehicleStatusRequest{}; // L2 experimental
+using Game_F1DataFeedSystem_Init_t = int(void *self, void *serviceProvider, void *componentMap);
+inline constexpr fn<"Game_F1DataFeedSystem_Init", Game_F1DataFeedSystem_Init_t> Game_F1DataFeedSystem_Init{}; // L2 experimental, F1DataFeedSystem
 inline constexpr address<"Game_F1WLoadout_Initialise"> Game_F1WLoadout_Initialise{}; // L2 experimental
+using Game_F1WRankedComponent_Init_t = int(void *self, void *serviceProvider, void *componentMap);
+inline constexpr fn<"Game_F1WRankedComponent_Init", Game_F1WRankedComponent_Init_t> Game_F1WRankedComponent_Init{}; // L2 experimental, F1WRankedComponent
 inline constexpr address<"Game_F1WorldActivityContainer_GoHome"> Game_F1WorldActivityContainer_GoHome{}; // L2 experimental
 inline constexpr address<"Game_F1WorldActivityContainer_OnExit"> Game_F1WorldActivityContainer_OnExit{}; // L2 experimental
 using Game_F1WorldActivityContainer_SelectEntrantList_t = void(void *container, const char *entrant_list);
@@ -432,6 +547,8 @@ inline constexpr address<"Game_F1WorldGoals_OnTabActivated"> Game_F1WorldGoals_O
 inline constexpr address<"Game_F1WorldGoals_OnTabDeactivated"> Game_F1WorldGoals_OnTabDeactivated{}; // L2 experimental
 inline constexpr address<"Game_F1WorldGoals_PopulateGoalList"> Game_F1WorldGoals_PopulateGoalList{}; // L2 experimental
 inline constexpr address<"Game_F1WorldHub_BuildPlayTiles"> Game_F1WorldHub_BuildPlayTiles{}; // L2 experimental
+using Game_F1WorldHub_HandleCommand_t = uint64_t(void *vm, NeStr **cmd, void *value);
+inline constexpr fn<"Game_F1WorldHub_HandleCommand", Game_F1WorldHub_HandleCommand_t> Game_F1WorldHub_HandleCommand{}; // L2 experimental
 inline constexpr address<"Game_F1WorldHub_OnPopupResult"> Game_F1WorldHub_OnPopupResult{}; // L2 experimental
 inline constexpr address<"Game_F1WorldHub_RestoreLastActivity"> Game_F1WorldHub_RestoreLastActivity{}; // L2 experimental
 inline constexpr address<"Game_F1WorldHub_RouteToActivity"> Game_F1WorldHub_RouteToActivity{}; // L2 experimental
@@ -441,6 +558,10 @@ inline constexpr address<"Game_F1WorldScreenVM_Update"> Game_F1WorldScreenVM_Upd
 inline constexpr address<"Game_F1WorldScreen_NavigateEp1_2"> Game_F1WorldScreen_NavigateEp1_2{}; // L2 experimental
 inline constexpr address<"Game_F1WorldScreen_NavigateEp1_4"> Game_F1WorldScreen_NavigateEp1_4{}; // L2 experimental
 inline constexpr address<"Game_F1WorldScreen_RefreshAndNavigate"> Game_F1WorldScreen_RefreshAndNavigate{}; // L2 experimental
+using Game_F1World_ApplySkipOnboarding_t = void(void *self);
+inline constexpr fn<"Game_F1World_ApplySkipOnboarding", Game_F1World_ApplySkipOnboarding_t> Game_F1World_ApplySkipOnboarding{}; // L2 experimental
+using Game_F1World_AssignDefaultFanzoneChoices_t = void(void *self);
+inline constexpr fn<"Game_F1World_AssignDefaultFanzoneChoices", Game_F1World_AssignDefaultFanzoneChoices_t> Game_F1World_AssignDefaultFanzoneChoices{}; // L2 experimental
 inline constexpr address<"Game_F1World_NavigateWithEntryPoint1"> Game_F1World_NavigateWithEntryPoint1{}; // L2 experimental
 inline constexpr address<"Game_F1osHttpTask_Ctor_Vt14583cd40"> Game_F1osHttpTask_Ctor_Vt14583cd40{}; // L2 experimental
 inline constexpr address<"Game_F1osTask_CollectResults_Vt145835c00"> Game_F1osTask_CollectResults_Vt145835c00{}; // L2 experimental
@@ -508,6 +629,11 @@ inline constexpr address<"Game_F1os_LogLargePayload_SessionBrowserGetSessionByID
 inline constexpr address<"Game_F1os_LogLargePayload_SessionBrowserSearchSessions"> Game_F1os_LogLargePayload_SessionBrowserSearchSessions{}; // L2 experimental
 inline constexpr address<"Game_F1os_LogLargePayload_UpgradeCard"> Game_F1os_LogLargePayload_UpgradeCard{}; // L2 experimental
 inline constexpr address<"Game_F1wAction_Destroy_EmptyAction"> Game_F1wAction_Destroy_EmptyAction{}; // L2 experimental
+using Game_FEHomeViewModel_OnUpdate_t = void(FEHomeViewModel *vm, float dt);
+inline constexpr fn<"Game_FEHomeViewModel_OnUpdate", Game_FEHomeViewModel_OnUpdate_t> Game_FEHomeViewModel_OnUpdate{}; // L2 experimental
+inline constexpr address<"Game_FacilityHeads_CollectAssetGroupDescs"> Game_FacilityHeads_CollectAssetGroupDescs{}; // L2 experimental
+inline constexpr address<"Game_FacilityHeads_RegisterCommandMessages"> Game_FacilityHeads_RegisterCommandMessages{}; // L2 experimental
+inline constexpr address<"Game_FacilityHeads_RegisterCommandMessages_2"> Game_FacilityHeads_RegisterCommandMessages_2{}; // L2 experimental
 inline constexpr address<"Game_FakeOption_GetMaxIndex"> Game_FakeOption_GetMaxIndex{}; // L2 experimental
 inline constexpr address<"Game_FakeOption_SetValue"> Game_FakeOption_SetValue{}; // L2 experimental
 inline constexpr address<"Game_FanZoneSeasonResults_Exit"> Game_FanZoneSeasonResults_Exit{}; // L2 experimental
@@ -515,6 +641,9 @@ inline constexpr address<"Game_FanZoneStandingsVM_OnScreenDeactivated"> Game_Fan
 inline constexpr address<"Game_FanZoneStandingsVM_OnSkip"> Game_FanZoneStandingsVM_OnSkip{}; // L2 experimental
 inline constexpr address<"Game_FanZone_BuildStandingsDriverList"> Game_FanZone_BuildStandingsDriverList{}; // L2 experimental
 inline constexpr address<"Game_FanzonesOnboardingVM_FadeIn"> Game_FanzonesOnboardingVM_FadeIn{}; // L2 experimental
+inline constexpr address<"Game_FeaturedEventModeComponent_SetupStartingGrid"> Game_FeaturedEventModeComponent_SetupStartingGrid{}; // L2 experimental, FeaturedEventModeComponent::setupStartingGrid
+using Game_Fill_PerformanceComparison_t = void(void *comparison);
+inline constexpr fn<"Game_Fill_PerformanceComparison", Game_Fill_PerformanceComparison_t> Game_Fill_PerformanceComparison{}; // L2 experimental
 inline constexpr address<"Game_FlowState_EnterBootLogout"> Game_FlowState_EnterBootLogout{}; // L2 experimental
 inline constexpr address<"Game_FormationLapPresentation_BuildTimeline"> Game_FormationLapPresentation_BuildTimeline{}; // L2 experimental
 inline constexpr address<"Game_FreeLookCameraModifier_Update"> Game_FreeLookCameraModifier_Update{}; // L2 experimental
@@ -598,8 +727,12 @@ inline constexpr address<"Game_FrontendSceneSystem_PreloadScene"> Game_FrontendS
 inline constexpr address<"Game_FrontendSceneSystem_ProcessCommand"> Game_FrontendSceneSystem_ProcessCommand{}; // L2 experimental
 inline constexpr address<"Game_FrontendSceneSystem_SetSubscene"> Game_FrontendSceneSystem_SetSubscene{}; // L2 experimental
 inline constexpr address<"Game_FrontendSceneUi_SetMappedDriverVisible"> Game_FrontendSceneUi_SetMappedDriverVisible{}; // L2 experimental
+using Game_FrontendTransitionVM_OnScreenActivated_t = void(void *vm);
+inline constexpr fn<"Game_FrontendTransitionVM_OnScreenActivated", Game_FrontendTransitionVM_OnScreenActivated_t> Game_FrontendTransitionVM_OnScreenActivated{}; // L2 experimental
 inline constexpr address<"Game_FuelDynamicObjective_Activate"> Game_FuelDynamicObjective_Activate{}; // L2 experimental
 inline constexpr address<"Game_FuelDynamicObjective_Activate_2"> Game_FuelDynamicObjective_Activate_2{}; // L2 experimental
+using Game_FullRaceReplaySystem_Init_t = int(void *self, void *serviceProvider, void *componentMap);
+inline constexpr fn<"Game_FullRaceReplaySystem_Init", Game_FullRaceReplaySystem_Init_t> Game_FullRaceReplaySystem_Init{}; // L2 experimental
 inline constexpr address<"Game_GameModes_BuildMode"> Game_GameModes_BuildMode{}; // L2 experimental
 inline constexpr address<"Game_GameReplaySystem_SubscribeRewindTutorial"> Game_GameReplaySystem_SubscribeRewindTutorial{}; // L2 experimental
 inline constexpr address<"Game_GameSessionConfig_Destroy"> Game_GameSessionConfig_Destroy{}; // L2 experimental
@@ -623,9 +756,12 @@ inline constexpr address<"Game_GameSessionMigrationManager_OnMutableRoleChanged"
 inline constexpr address<"Game_GameSessionMigrationManager_SendSelfState"> Game_GameSessionMigrationManager_SendSelfState{}; // L2 experimental
 inline constexpr address<"Game_GameSessionMigrationManager_SetPeerStatus"> Game_GameSessionMigrationManager_SetPeerStatus{}; // L2 experimental
 inline constexpr address<"Game_GameSessionUI_Shutdown"> Game_GameSessionUI_Shutdown{}; // L2 experimental
+using Game_Game_HandleInterruptEvent_t = uint64_t(void *game, const void *event);
+inline constexpr fn<"Game_Game_HandleInterruptEvent", Game_Game_HandleInterruptEvent_t> Game_Game_HandleInterruptEvent{}; // L2 experimental
 inline constexpr address<"Game_Game_OnRetireLocalPlayersMessage"> Game_Game_OnRetireLocalPlayersMessage{}; // L2 experimental
 using Game_Game_SetCurrentGameMode_t = uint64_t(void *mode_context, void *mode);
 inline constexpr fn<"Game_Game_SetCurrentGameMode", Game_Game_SetCurrentGameMode_t> Game_Game_SetCurrentGameMode{}; // L2 experimental
+inline constexpr address<"Game_GarageCrewInstanceLogic_StateSendCarToTrack_P3"> Game_GarageCrewInstanceLogic_StateSendCarToTrack_P3{}; // L2 experimental, GarageCrewInstanceLogic::StateSendCarToTrack_P3
 inline constexpr address<"Game_GarageCrewInstance_PlayOverlaySequence"> Game_GarageCrewInstance_PlayOverlaySequence{}; // L2 experimental
 inline constexpr address<"Game_GarageCrewInstance_PlaySequence"> Game_GarageCrewInstance_PlaySequence{}; // L2 experimental
 inline constexpr address<"Game_GarageModule_Initialise"> Game_GarageModule_Initialise{}; // L2 experimental
@@ -636,8 +772,10 @@ inline constexpr address<"Game_Garage_FadeInAfterReturn"> Game_Garage_FadeInAfte
 inline constexpr address<"Game_Garage_FadeOutForExit"> Game_Garage_FadeOutForExit{}; // L2 experimental
 inline constexpr address<"Game_Garage_LeaveGarageShowHud"> Game_Garage_LeaveGarageShowHud{}; // L2 experimental
 inline constexpr address<"Game_Garage_OnFadedOutInRace"> Game_Garage_OnFadedOutInRace{}; // L2 experimental
+inline constexpr address<"Game_Garage_ReturnVehicleToPitLaneEntry"> Game_Garage_ReturnVehicleToPitLaneEntry{}; // L2 experimental
 using Game_Get_ModelNodeId_t = uint32_t(const char *name);
 inline constexpr fn<"Game_Get_ModelNodeId", Game_Get_ModelNodeId_t> Game_Get_ModelNodeId{}; // L2 experimental
+inline constexpr address<"Game_Get_TutorialStepValue"> Game_Get_TutorialStepValue{}; // L2 experimental
 inline constexpr address<"Game_GettingReadyToRace_Initialise"> Game_GettingReadyToRace_Initialise{}; // L2 experimental
 inline constexpr address<"Game_GhostLapHandler_CancelTasks"> Game_GhostLapHandler_CancelTasks{}; // L2 experimental
 inline constexpr address<"Game_GhostLapHandler_Ctor"> Game_GhostLapHandler_Ctor{}; // L2 experimental
@@ -645,13 +783,9 @@ inline constexpr address<"Game_GhostLapHandler_Dtor"> Game_GhostLapHandler_Dtor{
 inline constexpr address<"Game_GhostLapHandler_EvaluatePerformanceState"> Game_GhostLapHandler_EvaluatePerformanceState{}; // L2 experimental
 inline constexpr address<"Game_GhostLapHandler_FreeSessionRivalStorage"> Game_GhostLapHandler_FreeSessionRivalStorage{}; // L2 experimental
 inline constexpr address<"Game_GhostLapHandler_OnSessionRivalSearchCompleted"> Game_GhostLapHandler_OnSessionRivalSearchCompleted{}; // L2 experimental
-inline constexpr address<"Game_GhostLapHandler_StartLeaderboardEntryWrite"> Game_GhostLapHandler_StartLeaderboardEntryWrite{}; // L2 experimental
-inline constexpr address<"Game_GhostLapHandler_StartRemoteStorageDownload"> Game_GhostLapHandler_StartRemoteStorageDownload{}; // L2 experimental
-inline constexpr address<"Game_GhostLapHandler_StartRemoteStorageUpload"> Game_GhostLapHandler_StartRemoteStorageUpload{}; // L2 experimental
 inline constexpr address<"Game_GhostLapHandler_Update"> Game_GhostLapHandler_Update{}; // L2 experimental
 inline constexpr address<"Game_GhostLapsStorageSystem_Connect"> Game_GhostLapsStorageSystem_Connect{}; // L2 experimental
 inline constexpr address<"Game_GhostLapsStorageSystem_Dtor"> Game_GhostLapsStorageSystem_Dtor{}; // L2 experimental
-inline constexpr address<"Game_GhostLapsStorageSystem_OnSessionEnter"> Game_GhostLapsStorageSystem_OnSessionEnter{}; // L2 experimental
 inline constexpr address<"Game_GhostLapsStorageSystem_OnSessionExit"> Game_GhostLapsStorageSystem_OnSessionExit{}; // L2 experimental
 inline constexpr address<"Game_GhostLapsStorageSystem_OnSessionRestart"> Game_GhostLapsStorageSystem_OnSessionRestart{}; // L2 experimental
 inline constexpr address<"Game_GhostRivalFinder_Finish"> Game_GhostRivalFinder_Finish{}; // L2 experimental
@@ -663,8 +797,16 @@ inline constexpr address<"Game_GridDriverTalkToEngineer_Initialise"> Game_GridDr
 inline constexpr address<"Game_GridLeadEngineer_Initialise"> Game_GridLeadEngineer_Initialise{}; // L2 experimental
 inline constexpr address<"Game_GridPlayerShot_Initialise"> Game_GridPlayerShot_Initialise{}; // L2 experimental
 inline constexpr address<"Game_GridReveal_SetStateLoading"> Game_GridReveal_SetStateLoading{}; // L2 experimental
+using Game_GridRundown_ShouldPlay_t = bool(uint8_t variant, void *a2, void *a3, void *settings_ctx, void *a5);
+inline constexpr fn<"Game_GridRundown_ShouldPlay", Game_GridRundown_ShouldPlay_t> Game_GridRundown_ShouldPlay{}; // L2 experimental
 inline constexpr address<"Game_GridSafetyCarShotGscs_Initialise"> Game_GridSafetyCarShotGscs_Initialise{}; // L2 experimental
 inline constexpr address<"Game_GridSafetyCarShot_Initialise"> Game_GridSafetyCarShot_Initialise{}; // L2 experimental
+inline constexpr address<"Game_GridSetup_DriverBasedGrid"> Game_GridSetup_DriverBasedGrid{}; // L2 experimental
+inline constexpr address<"Game_GridSetup_FindQualiResult"> Game_GridSetup_FindQualiResult{}; // L2 experimental
+inline constexpr address<"Game_GridSetup_FindQualiResult_2"> Game_GridSetup_FindQualiResult_2{}; // L2 experimental
+inline constexpr address<"Game_GridSetup_SetupStartingGrid"> Game_GridSetup_SetupStartingGrid{}; // L2 experimental
+using Game_GridSlot_PlaceVehicle_t = void(void *grid, uint32_t slot, const float *xform, void *a4, float yaw, void *a6, void *a7, void *a8);
+inline constexpr fn<"Game_GridSlot_PlaceVehicle", Game_GridSlot_PlaceVehicle_t> Game_GridSlot_PlaceVehicle{}; // L2 experimental
 inline constexpr address<"Game_HandleUserEntitlementsUpdateTask_OnChildDone"> Game_HandleUserEntitlementsUpdateTask_OnChildDone{}; // L2 experimental
 using Game_Handle_GarageCrewEvent_Thunk_t = uint64_t(void **cars, void *event);
 inline constexpr fn<"Game_Handle_GarageCrewEvent_Thunk", Game_Handle_GarageCrewEvent_Thunk_t> Game_Handle_GarageCrewEvent_Thunk{}; // L2 experimental
@@ -676,11 +818,15 @@ inline constexpr address<"Game_HudDriverCardVM_OnBound"> Game_HudDriverCardVM_On
 inline constexpr address<"Game_HudDriverListVM_OnBound"> Game_HudDriverListVM_OnBound{}; // L2 experimental
 inline constexpr address<"Game_HudFeaturedDriverVM_OnBound"> Game_HudFeaturedDriverVM_OnBound{}; // L2 experimental
 inline constexpr address<"Game_HudFeaturedDriverVM_OnUnbound"> Game_HudFeaturedDriverVM_OnUnbound{}; // L2 experimental
+using Game_HudVM_ResolveSystems_t = uint32_t(void *self, void *registry, void *systemMap);
+inline constexpr fn<"Game_HudVM_ResolveSystems", Game_HudVM_ResolveSystems_t> Game_HudVM_ResolveSystems{}; // L2 experimental
 inline constexpr address<"Game_InCarDriver_EvaluateAnimLayers"> Game_InCarDriver_EvaluateAnimLayers{}; // L2 experimental
 inline constexpr address<"Game_InGameMenuVM_OnReturnToGarage"> Game_InGameMenuVM_OnReturnToGarage{}; // L2 experimental
 inline constexpr address<"Game_InboxTabVM_OnTabActivated"> Game_InboxTabVM_OnTabActivated{}; // L2 experimental
 inline constexpr address<"Game_InboxTabVM_OnTabDeactivated"> Game_InboxTabVM_OnTabDeactivated{}; // L2 experimental
 inline constexpr address<"Game_Input_OnControlSchemeAdded"> Game_Input_OnControlSchemeAdded{}; // L2 experimental
+using Game_InstantRace_SetupTrackList_t = void(void *comp);
+inline constexpr fn<"Game_InstantRace_SetupTrackList", Game_InstantRace_SetupTrackList_t> Game_InstantRace_SetupTrackList{}; // L2 experimental
 inline constexpr address<"Game_InviteManager_ChangeState"> Game_InviteManager_ChangeState{}; // L2 experimental
 inline constexpr address<"Game_InviteManager_Join"> Game_InviteManager_Join{}; // L2 experimental
 inline constexpr address<"Game_InviteManager_OnCareerLoadedSoC"> Game_InviteManager_OnCareerLoadedSoC{}; // L2 experimental
@@ -690,6 +836,11 @@ inline constexpr address<"Game_LapSectors_InitFromTrack"> Game_LapSectors_InitFr
 inline constexpr address<"Game_LeaderboardRowVM_Populate"> Game_LeaderboardRowVM_Populate{}; // L2 experimental
 inline constexpr address<"Game_LiveryAssignVM_OnActivate"> Game_LiveryAssignVM_OnActivate{}; // L2 experimental
 inline constexpr address<"Game_LiveryAssignVM_OnDeactivate"> Game_LiveryAssignVM_OnDeactivate{}; // L2 experimental
+inline constexpr address<"Game_Livery_SetAllowSponsorsAndBadges"> Game_Livery_SetAllowSponsorsAndBadges{}; // L2 experimental
+inline constexpr address<"Game_Load_MyTeamVehicleBases"> Game_Load_MyTeamVehicleBases{}; // L2 experimental
+inline constexpr address<"Game_Load_ShopAndCustomisationLayers"> Game_Load_ShopAndCustomisationLayers{}; // L2 experimental
+using Game_Load_TrackDatabaseFull_t = void(void *records_vec, void *db, void *a3, void *a4, void *a5);
+inline constexpr fn<"Game_Load_TrackDatabaseFull", Game_Load_TrackDatabaseFull_t> Game_Load_TrackDatabaseFull{}; // L2 experimental
 inline constexpr address<"Game_LoadingScreenVM_OnScreenActivated"> Game_LoadingScreenVM_OnScreenActivated{}; // L2 experimental
 inline constexpr address<"Game_MatchingContext_OnPostRaceResultSyncEnter"> Game_MatchingContext_OnPostRaceResultSyncEnter{}; // L2 experimental
 inline constexpr address<"Game_MatchingContext_OnSessionEnter"> Game_MatchingContext_OnSessionEnter{}; // L2 experimental
@@ -704,16 +855,37 @@ inline constexpr address<"Game_MpSeasonCompleteVM_OnActivate"> Game_MpSeasonComp
 inline constexpr address<"Game_MultiVotingManager_CastVote"> Game_MultiVotingManager_CastVote{}; // L2 experimental
 inline constexpr address<"Game_MultiVotingManager_HandleBallot"> Game_MultiVotingManager_HandleBallot{}; // L2 experimental
 inline constexpr address<"Game_MultiVotingManager_HandleStatus"> Game_MultiVotingManager_HandleStatus{}; // L2 experimental
+using Game_MusicOptions_CreateOption_t = void *(void *mgr, uint64_t optionId);
+inline constexpr fn<"Game_MusicOptions_CreateOption", Game_MusicOptions_CreateOption_t> Game_MusicOptions_CreateOption{}; // L2 experimental, EAMusicOptionsManager
+using Game_MyTeamAttributeSet_GetValue_t = float(void *attr_set, uint32_t team_key, void *attr_id);
+inline constexpr fn<"Game_MyTeamAttributeSet_GetValue", Game_MyTeamAttributeSet_GetValue_t> Game_MyTeamAttributeSet_GetValue{}; // L2 experimental
+using Game_MyTeamCarCustomisation_BuildPreviewState_t = void(void *self);
+inline constexpr fn<"Game_MyTeamCarCustomisation_BuildPreviewState", Game_MyTeamCarCustomisation_BuildPreviewState_t> Game_MyTeamCarCustomisation_BuildPreviewState{}; // L2 experimental
+inline constexpr address<"Game_MyTeamCarCustomisation_Enter"> Game_MyTeamCarCustomisation_Enter{}; // L2 experimental
+using Game_MyTeamCarCustomisation_GetVideoWallContext_t = uint64_t(void *self);
+inline constexpr fn<"Game_MyTeamCarCustomisation_GetVideoWallContext", Game_MyTeamCarCustomisation_GetVideoWallContext_t> Game_MyTeamCarCustomisation_GetVideoWallContext{}; // L2 experimental
 inline constexpr address<"Game_MyTeamContract_SetDriversVisible"> Game_MyTeamContract_SetDriversVisible{}; // L2 experimental
 inline constexpr address<"Game_MyTeamContract_ShowDriverComparison"> Game_MyTeamContract_ShowDriverComparison{}; // L2 experimental
+using Game_MyTeamCustomisation_PlayVideoWallVideo_t = uint64_t(void *self, void *a2, void *a3, uint32_t kind);
+inline constexpr fn<"Game_MyTeamCustomisation_PlayVideoWallVideo", Game_MyTeamCustomisation_PlayVideoWallVideo_t> Game_MyTeamCustomisation_PlayVideoWallVideo{}; // L2 experimental
+using Game_MyTeamCustomisation_ResolveVideoTypeByHash_t = uint8_t *(uint8_t *out, int32_t name_hash, void *ctx);
+inline constexpr fn<"Game_MyTeamCustomisation_ResolveVideoTypeByHash", Game_MyTeamCustomisation_ResolveVideoTypeByHash_t> Game_MyTeamCustomisation_ResolveVideoTypeByHash{}; // L2 experimental
 inline constexpr address<"Game_MyTeamCustomisation_SpawnScene"> Game_MyTeamCustomisation_SpawnScene{}; // L2 experimental
 inline constexpr address<"Game_MyTeamDriverMarket_Close"> Game_MyTeamDriverMarket_Close{}; // L2 experimental
 inline constexpr address<"Game_MyTeamDriverMarket_Open"> Game_MyTeamDriverMarket_Open{}; // L2 experimental
 inline constexpr address<"Game_MyTeamHq_SetupSceneForState"> Game_MyTeamHq_SetupSceneForState{}; // L2 experimental
 inline constexpr address<"Game_MyTeamHq_SpawnFoyerCar"> Game_MyTeamHq_SpawnFoyerCar{}; // L2 experimental
 inline constexpr address<"Game_MyTeamHq_SpawnFoyerDrivers"> Game_MyTeamHq_SpawnFoyerDrivers{}; // L2 experimental
+inline constexpr address<"Game_MyTeamIconsDlcRemoved_Handler"> Game_MyTeamIconsDlcRemoved_Handler{}; // L2 experimental
 inline constexpr address<"Game_MyTeamIntroScript_PollAssetsLoaded"> Game_MyTeamIntroScript_PollAssetsLoaded{}; // L2 experimental
 inline constexpr address<"Game_MyTeamIntroScript_PreStart"> Game_MyTeamIntroScript_PreStart{}; // L2 experimental
+using Game_MyTeamIntro_InitMaterialSlotStatics_t = void(void *obj, void *arg);
+inline constexpr fn<"Game_MyTeamIntro_InitMaterialSlotStatics", Game_MyTeamIntro_InitMaterialSlotStatics_t> Game_MyTeamIntro_InitMaterialSlotStatics{}; // L2 experimental
+inline constexpr address<"Game_MyTeamIntro_PreloadFacility"> Game_MyTeamIntro_PreloadFacility{}; // L2 experimental
+inline constexpr address<"Game_MyTeamIntro_RegisterCinematicAssets"> Game_MyTeamIntro_RegisterCinematicAssets{}; // L2 experimental
+inline constexpr address<"Game_MyTeamIntro_ReleaseMaterialSlots"> Game_MyTeamIntro_ReleaseMaterialSlots{}; // L2 experimental
+inline constexpr address<"Game_MyTeamSetup_FlowMain"> Game_MyTeamSetup_FlowMain{}; // L2 experimental
+inline constexpr address<"Game_MyTeamTeamAttributeSet_FindOrCreate"> Game_MyTeamTeamAttributeSet_FindOrCreate{}; // L2 experimental
 inline constexpr address<"Game_NetFormationLap_BroadcastAll"> Game_NetFormationLap_BroadcastAll{}; // L2 experimental
 inline constexpr address<"Game_NetFormationLap_HandleSessionState"> Game_NetFormationLap_HandleSessionState{}; // L2 experimental
 inline constexpr address<"Game_NetFormationLap_SendToConnection"> Game_NetFormationLap_SendToConnection{}; // L2 experimental
@@ -746,17 +918,18 @@ inline constexpr address<"Game_NetworkReady_OnUnpauseSendSuperReady"> Game_Netwo
 inline constexpr address<"Game_NetworkReady_OnUnreadyMessage"> Game_NetworkReady_OnUnreadyMessage{}; // L2 experimental
 inline constexpr address<"Game_NetworkReady_SendSuperReady"> Game_NetworkReady_SendSuperReady{}; // L2 experimental
 inline constexpr address<"Game_NetworkReady_SetRelevantSet"> Game_NetworkReady_SetRelevantSet{}; // L2 experimental
-inline constexpr address<"Game_NetworkSubsystem_ChangeMPMode"> Game_NetworkSubsystem_ChangeMPMode{}; // L2 experimental, NetworkSubsystem::changeMPMode
 inline constexpr address<"Game_NetworkSubsystem_SelectTitleConfig"> Game_NetworkSubsystem_SelectTitleConfig{}; // L2 experimental
 inline constexpr address<"Game_NetworkUI_StartRankedDivisionSearch"> Game_NetworkUI_StartRankedDivisionSearch{}; // L2 experimental
 inline constexpr address<"Game_NetworkUI_StartRankedRematching"> Game_NetworkUI_StartRankedRematching{}; // L2 experimental
 inline constexpr address<"Game_Network_ApplyInitialPitAndGridState"> Game_Network_ApplyInitialPitAndGridState{}; // L2 experimental
+inline constexpr address<"Game_Network_ApplyingCustomGrid"> Game_Network_ApplyingCustomGrid{}; // L2 experimental
 using Game_Network_CategoryOptionUsing_t = void(void *self);
 inline constexpr fn<"Game_Network_CategoryOptionUsing", Game_Network_CategoryOptionUsing_t> Game_Network_CategoryOptionUsing{}; // L2 experimental
 using Game_Network_SendingRedFlagVehicleStatusUpdate_t = void(void *red_flag_state, const double *dt);
 inline constexpr fn<"Game_Network_SendingRedFlagVehicleStatusUpdate", Game_Network_SendingRedFlagVehicleStatusUpdate_t> Game_Network_SendingRedFlagVehicleStatusUpdate{}; // L2 experimental
 using Game_Network_SetScenario_t = void(void *session, uint8_t stat_id, const void *spec);
 inline constexpr fn<"Game_Network_SetScenario", Game_Network_SetScenario_t> Game_Network_SetScenario{}; // L2 experimental
+inline constexpr address<"Game_Network_TrackSetMatched"> Game_Network_TrackSetMatched{}; // L2 experimental
 inline constexpr address<"Game_Objective_CheckFinishPosition"> Game_Objective_CheckFinishPosition{}; // L2 experimental
 inline constexpr address<"Game_Objective_CheckOvertakeTarget"> Game_Objective_CheckOvertakeTarget{}; // L2 experimental
 inline constexpr address<"Game_Objective_CheckPositionTarget"> Game_Objective_CheckPositionTarget{}; // L2 experimental
@@ -766,6 +939,8 @@ inline constexpr address<"Game_OnlineCareer_OnFirstRequestResult"> Game_OnlineCa
 inline constexpr address<"Game_OnlineCareer_OnSecondRequestResult"> Game_OnlineCareer_OnSecondRequestResult{}; // L2 experimental
 inline constexpr address<"Game_OnlineDocumentComponent_Create"> Game_OnlineDocumentComponent_Create{}; // L2 experimental
 inline constexpr address<"Game_OnlineDocumentSubComponent_Ctor"> Game_OnlineDocumentSubComponent_Ctor{}; // L2 experimental
+using Game_OnlineLogInTask_Init_t = int(void *self, void *serviceProvider, void *componentMap);
+inline constexpr fn<"Game_OnlineLogInTask_Init", Game_OnlineLogInTask_Init_t> Game_OnlineLogInTask_Init{}; // L2 experimental, OnlineServerLogInTask
 inline constexpr address<"Game_OnlineRole_HandleSessionDataRequest"> Game_OnlineRole_HandleSessionDataRequest{}; // L2 experimental
 inline constexpr address<"Game_OnlineRole_OnConnectionVerified"> Game_OnlineRole_OnConnectionVerified{}; // L2 experimental
 inline constexpr address<"Game_OnlineServerLogInTask_FinishWithState"> Game_OnlineServerLogInTask_FinishWithState{}; // L2 experimental
@@ -796,17 +971,48 @@ inline constexpr address<"Game_Particles_RestoreLongLivedParticles"> Game_Partic
 inline constexpr address<"Game_Particles_RestoreParticleSlot"> Game_Particles_RestoreParticleSlot{}; // L2 experimental
 inline constexpr address<"Game_Particles_StoreParticleSlot"> Game_Particles_StoreParticleSlot{}; // L2 experimental
 inline constexpr address<"Game_Particles_UpdateEmitters"> Game_Particles_UpdateEmitters{}; // L2 experimental
+inline constexpr address<"Game_PassiveObjectives_MyTeamAttributeModifier"> Game_PassiveObjectives_MyTeamAttributeModifier{}; // L2 experimental
+using Game_PauseAvailabilityVM_OnActivate_t = void(void *vm);
+inline constexpr fn<"Game_PauseAvailabilityVM_OnActivate", Game_PauseAvailabilityVM_OnActivate_t> Game_PauseAvailabilityVM_OnActivate{}; // L2 experimental
 inline constexpr address<"Game_PelvisHeightModifier_Init"> Game_PelvisHeightModifier_Init{}; // L2 experimental
 inline constexpr address<"Game_PhotoModeHelper_CaptureFrame"> Game_PhotoModeHelper_CaptureFrame{}; // L2 experimental
+using Game_PhotoMode_InitDependencies_t = int(void *self, void *serviceProvider);
+inline constexpr fn<"Game_PhotoMode_InitDependencies", Game_PhotoMode_InitDependencies_t> Game_PhotoMode_InitDependencies{}; // L2 experimental
 inline constexpr address<"Game_PitBoxCarActor_Update"> Game_PitBoxCarActor_Update{}; // L2 experimental
 inline constexpr address<"Game_PitCrewActor_Update"> Game_PitCrewActor_Update{}; // L2 experimental
 inline constexpr address<"Game_PitDriveThrough_OnNoAnimFadeOut"> Game_PitDriveThrough_OnNoAnimFadeOut{}; // L2 experimental
+inline constexpr address<"Game_PitLaneSystem_Multiplayer_handlePitLaneEventMessage"> Game_PitLaneSystem_Multiplayer_handlePitLaneEventMessage{}; // L2 experimental, PitLaneSystem::multiplayer_handlePitLaneEventMessage
+inline constexpr address<"Game_PitLane_EnterControlRelease"> Game_PitLane_EnterControlRelease{}; // L2 experimental
+inline constexpr address<"Game_PitLane_EnterLimitZone"> Game_PitLane_EnterLimitZone{}; // L2 experimental
+inline constexpr address<"Game_PitLane_ExitControlRelease"> Game_PitLane_ExitControlRelease{}; // L2 experimental
+inline constexpr address<"Game_PitLane_ExitLimitZone"> Game_PitLane_ExitLimitZone{}; // L2 experimental
+inline constexpr address<"Game_PitLane_HandleEnterPitBox"> Game_PitLane_HandleEnterPitBox{}; // L2 experimental
+inline constexpr address<"Game_PitLane_HoldInGarage"> Game_PitLane_HoldInGarage{}; // L2 experimental
+inline constexpr address<"Game_PitLane_HoldInPitBox"> Game_PitLane_HoldInPitBox{}; // L2 experimental
+inline constexpr address<"Game_PitLane_IllegalPitEntry"> Game_PitLane_IllegalPitEntry{}; // L2 experimental
 using Game_PitLane_MoveDownSpline_t = void(void *pitlane, uint8_t car, void *teleport_req, bool alt_spline, float dt, bool p6, bool blend, bool p8, bool p9);
 inline constexpr fn<"Game_PitLane_MoveDownSpline", Game_PitLane_MoveDownSpline_t> Game_PitLane_MoveDownSpline{}; // L2 experimental
+inline constexpr address<"Game_PitLane_OnGarageCrewMessage"> Game_PitLane_OnGarageCrewMessage{}; // L2 experimental
 using Game_PitLane_PutVehicleInPitBox_t = void(void *pitlane, uint8_t vehicle);
 inline constexpr fn<"Game_PitLane_PutVehicleInPitBox", Game_PitLane_PutVehicleInPitBox_t> Game_PitLane_PutVehicleInPitBox{}; // L2 experimental
+inline constexpr address<"Game_PitLane_ResetCarToTrack"> Game_PitLane_ResetCarToTrack{}; // L2 experimental
+inline constexpr address<"Game_PitLane_SetCrewReady"> Game_PitLane_SetCrewReady{}; // L2 experimental
+inline constexpr address<"Game_PitLane_SetDoPracticePitStop"> Game_PitLane_SetDoPracticePitStop{}; // L2 experimental
+inline constexpr address<"Game_PitLane_SetDoPracticePitStop_2"> Game_PitLane_SetDoPracticePitStop_2{}; // L2 experimental
+inline constexpr address<"Game_PitLane_VehicleEntering"> Game_PitLane_VehicleEntering{}; // L2 experimental
 inline constexpr address<"Game_PitLane_VehicleEnteringInternal"> Game_PitLane_VehicleEnteringInternal{}; // L2 experimental
+inline constexpr address<"Game_PitLane_VehicleExiting"> Game_PitLane_VehicleExiting{}; // L2 experimental
+inline constexpr address<"Game_PitStopActionObserver_SetTransitionSequence"> Game_PitStopActionObserver_SetTransitionSequence{}; // L2 experimental, PitStopActionObserver::setTransitionSequence
+inline constexpr address<"Game_PitStopInstance_PlaySequence"> Game_PitStopInstance_PlaySequence{}; // L2 experimental, PitStopInstance::playSequence
+inline constexpr address<"Game_PitStopLogic_ChangeState"> Game_PitStopLogic_ChangeState{}; // L2 experimental
+inline constexpr address<"Game_PitStopLogic_NeSequenceClipTargetImpl"> Game_PitStopLogic_NeSequenceClipTargetImpl{}; // L2 experimental, PitStopLogic::NeSequenceClipTargetImpl
+inline constexpr address<"Game_PitStopLogic_SetTransition"> Game_PitStopLogic_SetTransition{}; // L2 experimental
+inline constexpr address<"Game_PitStopLogic_StateInGarage"> Game_PitStopLogic_StateInGarage{}; // L2 experimental
+inline constexpr address<"Game_PitStopLogic_StateJobComplete"> Game_PitStopLogic_StateJobComplete{}; // L2 experimental
+inline constexpr address<"Game_Pitlane_Multiplayer_resetToTrack"> Game_Pitlane_Multiplayer_resetToTrack{}; // L2 experimental
 inline constexpr address<"Game_Pitlane_Multiplayer_teleportToGarage"> Game_Pitlane_Multiplayer_teleportToGarage{}; // L2 experimental
+inline constexpr address<"Game_Pitlane_Multiplayer_triggerGarageDriveOut"> Game_Pitlane_Multiplayer_triggerGarageDriveOut{}; // L2 experimental
+inline constexpr address<"Game_Pitlane_Multiplayer_vehicleEnteringPitLane"> Game_Pitlane_Multiplayer_vehicleEnteringPitLane{}; // L2 experimental
 using Game_Pitlane_SetVehicleStatus_t = void(void *self, uint8_t vehicle, uint32_t status);
 inline constexpr fn<"Game_Pitlane_SetVehicleStatus", Game_Pitlane_SetVehicleStatus_t> Game_Pitlane_SetVehicleStatus{}; // L2 experimental
 inline constexpr address<"Game_PitstopCutScene_Initialise"> Game_PitstopCutScene_Initialise{}; // L2 experimental
@@ -871,8 +1077,21 @@ inline constexpr address<"Game_RankedDivision_StartSearch"> Game_RankedDivision_
 inline constexpr address<"Game_RankedDivision_UpdateSearchAvailability"> Game_RankedDivision_UpdateSearchAvailability{}; // L2 experimental
 inline constexpr address<"Game_RankedMatchingProcessor_CreateSession"> Game_RankedMatchingProcessor_CreateSession{}; // L2 experimental
 inline constexpr address<"Game_RankedMatchingProcessor_Search"> Game_RankedMatchingProcessor_Search{}; // L2 experimental
+using Game_Read_GridConfig_t = void(void *placement);
+inline constexpr fn<"Game_Read_GridConfig", Game_Read_GridConfig_t> Game_Read_GridConfig{}; // L2 experimental
+using Game_Read_QualifyingConfig_t = void(void *track_data_system);
+inline constexpr fn<"Game_Read_QualifyingConfig", Game_Read_QualifyingConfig_t> Game_Read_QualifyingConfig{}; // L2 experimental
+inline constexpr address<"Game_Read_RendererTrackInformationSystemConfig"> Game_Read_RendererTrackInformationSystemConfig{}; // L2 experimental
+using Game_Read_StoryForcedTitleUpdateValueSetting_t = bool(void *ctx);
+inline constexpr fn<"Game_Read_StoryForcedTitleUpdateValueSetting", Game_Read_StoryForcedTitleUpdateValueSetting_t> Game_Read_StoryForcedTitleUpdateValueSetting{}; // L2 experimental
+using Game_Read_TrackInfoConfig_t = void(void *self);
+inline constexpr fn<"Game_Read_TrackInfoConfig", Game_Read_TrackInfoConfig_t> Game_Read_TrackInfoConfig{}; // L2 experimental
+using Game_Read_UIMovieBuildSetting_t = uint64_t(void *self);
+inline constexpr fn<"Game_Read_UIMovieBuildSetting", Game_Read_UIMovieBuildSetting_t> Game_Read_UIMovieBuildSetting{}; // L2 experimental
 using Game_Refresh_PerformanceComparison_t = void(void *comparison);
 inline constexpr fn<"Game_Refresh_PerformanceComparison", Game_Refresh_PerformanceComparison_t> Game_Refresh_PerformanceComparison{}; // L2 experimental
+using Game_RendererModule_Initialise_t = int(void *module);
+inline constexpr fn<"Game_RendererModule_Initialise", Game_RendererModule_Initialise_t> Game_RendererModule_Initialise{}; // L2 experimental
 inline constexpr address<"Game_Renderer_CreateRenderPasses"> Game_Renderer_CreateRenderPasses{}; // L2 experimental
 inline constexpr address<"Game_RepairTimes_FadeIn"> Game_RepairTimes_FadeIn{}; // L2 experimental
 inline constexpr address<"Game_RepairTimes_FadeOut"> Game_RepairTimes_FadeOut{}; // L2 experimental
@@ -882,6 +1101,8 @@ inline constexpr address<"Game_ReplayBuffer_WriteStats"> Game_ReplayBuffer_Write
 inline constexpr address<"Game_ReplayFile_ReadFooter"> Game_ReplayFile_ReadFooter{}; // L2 experimental
 inline constexpr address<"Game_ReplaySystem_LoadMidSessionData"> Game_ReplaySystem_LoadMidSessionData{}; // L2 experimental
 inline constexpr address<"Game_ReplaySystem_LoadSnapshotFile"> Game_ReplaySystem_LoadSnapshotFile{}; // L2 experimental
+using Game_ReplaySystem_ReadDbSettings_t = void(void *sys);
+inline constexpr fn<"Game_ReplaySystem_ReadDbSettings", Game_ReplaySystem_ReadDbSettings_t> Game_ReplaySystem_ReadDbSettings{}; // L2 experimental
 inline constexpr address<"Game_ReplaySystem_SaveMidSessionData"> Game_ReplaySystem_SaveMidSessionData{}; // L2 experimental
 inline constexpr address<"Game_Replay_LoadSavedReplayJob"> Game_Replay_LoadSavedReplayJob{}; // L2 experimental
 inline constexpr address<"Game_Replay_RestoreMainModuleBuffers"> Game_Replay_RestoreMainModuleBuffers{}; // L2 experimental
@@ -890,6 +1111,7 @@ inline constexpr address<"Game_ResultsContainerVM_OnDeactivate"> Game_ResultsCon
 inline constexpr address<"Game_RetrieveConsumableEntitlementsTask_Ctor"> Game_RetrieveConsumableEntitlementsTask_Ctor{}; // L2 experimental
 inline constexpr address<"Game_RetrieveConsumableEntitlementsTask_RequestSteamPrices"> Game_RetrieveConsumableEntitlementsTask_RequestSteamPrices{}; // L2 experimental
 inline constexpr address<"Game_RewardSequence_PlayCutscene"> Game_RewardSequence_PlayCutscene{}; // L2 experimental
+inline constexpr address<"Game_RndPropScene_Spawn"> Game_RndPropScene_Spawn{}; // L2 experimental
 using Game_Rnd_CalcUpgradeTypeProgress_t = float(void *const *instances, uint8_t type, uint8_t state, const void *meta);
 inline constexpr fn<"Game_Rnd_CalcUpgradeTypeProgress", Game_Rnd_CalcUpgradeTypeProgress_t> Game_Rnd_CalcUpgradeTypeProgress{}; // L2 experimental
 using Game_Rnd_FillVehicleUpgrades_t = void(void *component, uint8_t car, uint8_t a3, uint8_t a4);
@@ -899,6 +1121,7 @@ inline constexpr address<"Game_RttTaskManager_OnTaskComplete"> Game_RttTaskManag
 inline constexpr address<"Game_RttTaskManager_ProcessCompletedTasks"> Game_RttTaskManager_ProcessCompletedTasks{}; // L2 experimental
 inline constexpr address<"Game_RttTaskManager_QueueTask"> Game_RttTaskManager_QueueTask{}; // L2 experimental
 inline constexpr address<"Game_RttTaskManager_StartTask"> Game_RttTaskManager_StartTask{}; // L2 experimental
+inline constexpr address<"Game_SSL_FetchKeyMaterial"> Game_SSL_FetchKeyMaterial{}; // L2 experimental
 using Game_SaveData_DeserialiseContainer_t = int *(SaveDataContainer *self, int *result, void *bag, uint8_t reset_on_error, uint64_t groups);
 inline constexpr fn<"Game_SaveData_DeserialiseContainer", Game_SaveData_DeserialiseContainer_t> Game_SaveData_DeserialiseContainer{}; // L3 stable
 using Game_SaveData_SerialiseContainer_t = int *(SaveDataContainer *self, int *result, void *bag, uint64_t groups);
@@ -917,6 +1140,8 @@ inline constexpr address<"Game_SceneManagerSpawn_MergeScene"> Game_SceneManagerS
 using Game_SceneManagerSpawn_SpawnScene_t = void *(void *mgr, const uint8_t *opts, void *scene, const float *mtx44, void *ov_a, void *ov_b, uint64_t p7);
 inline constexpr fn<"Game_SceneManagerSpawn_SpawnScene", Game_SceneManagerSpawn_SpawnScene_t> Game_SceneManagerSpawn_SpawnScene{}; // L2 experimental
 inline constexpr address<"Game_SceneManager_DestroyScene"> Game_SceneManager_DestroyScene{}; // L2 experimental
+using Game_Scene_UpdateInstanceTransformsBatch_t = void(void *scene, uint8_t actor_update_flag);
+inline constexpr fn<"Game_Scene_UpdateInstanceTransformsBatch", Game_Scene_UpdateInstanceTransformsBatch_t> Game_Scene_UpdateInstanceTransformsBatch{}; // L2 experimental
 inline constexpr address<"Game_ScoreBreakdownVM_OnActivate"> Game_ScoreBreakdownVM_OnActivate{}; // L2 experimental
 inline constexpr address<"Game_ScoreBreakdownVM_OnDeactivate"> Game_ScoreBreakdownVM_OnDeactivate{}; // L2 experimental
 inline constexpr address<"Game_SeasonDocument_CloseDocument"> Game_SeasonDocument_CloseDocument{}; // L2 experimental
@@ -948,6 +1173,7 @@ inline constexpr address<"Game_SettingsControlsScreenViewModel_ApplyFilterRebuil
 inline constexpr address<"Game_SettingsControlsScreenViewModel_RebindAxis"> Game_SettingsControlsScreenViewModel_RebindAxis{}; // L2 experimental
 inline constexpr address<"Game_SettingsTabbingBaseViewModel_ApplyFilterRebuildCategories"> Game_SettingsTabbingBaseViewModel_ApplyFilterRebuildCategories{}; // L2 experimental
 inline constexpr address<"Game_SettingsTabbingBaseViewModel_ApplyFilterRefresh"> Game_SettingsTabbingBaseViewModel_ApplyFilterRefresh{}; // L2 experimental
+inline constexpr address<"Game_ShaderPackage_RegisterSponsorScreenEffects"> Game_ShaderPackage_RegisterSponsorScreenEffects{}; // L2 experimental
 inline constexpr address<"Game_Showroom_HideInfoPanel"> Game_Showroom_HideInfoPanel{}; // L2 experimental
 inline constexpr address<"Game_Showroom_ShowInfoPanel"> Game_Showroom_ShowInfoPanel{}; // L2 experimental
 inline constexpr address<"Game_SillySeasonScript_PollAssetsLoaded"> Game_SillySeasonScript_PollAssetsLoaded{}; // L2 experimental
@@ -957,6 +1183,9 @@ inline constexpr address<"Game_SocialHubFriendsVM_OnFriendSelected"> Game_Social
 inline constexpr address<"Game_SocialHubFriendsVM_OnInviteResult"> Game_SocialHubFriendsVM_OnInviteResult{}; // L2 experimental
 inline constexpr address<"Game_SocialNotifications_Update"> Game_SocialNotifications_Update{}; // L2 experimental
 inline constexpr address<"Game_Social_OnFriendSearchDone"> Game_Social_OnFriendSearchDone{}; // L2 experimental
+inline constexpr address<"Game_Sort_SponsorEntries_AdjustHeap"> Game_Sort_SponsorEntries_AdjustHeap{}; // L2 experimental
+inline constexpr address<"Game_Sort_SponsorEntries_Introsort"> Game_Sort_SponsorEntries_Introsort{}; // L2 experimental
+inline constexpr address<"Game_Sort_SponsorEntries_MedianPivot"> Game_Sort_SponsorEntries_MedianPivot{}; // L2 experimental
 inline constexpr address<"Game_SpecialistsCutSceneScript_Initialise"> Game_SpecialistsCutSceneScript_Initialise{}; // L2 experimental
 inline constexpr address<"Game_SpecialistsRewards_Initialise"> Game_SpecialistsRewards_Initialise{}; // L2 experimental
 using Game_SpeechSystem_PostLine_t = void(void *speech, void *line, uint8_t retrigger);
@@ -967,6 +1196,8 @@ inline constexpr address<"Game_StabilisationCameraModifier_OnEnable"> Game_Stabi
 inline constexpr address<"Game_StatEvent_OnLapCompleted"> Game_StatEvent_OnLapCompleted{}; // L2 experimental
 inline constexpr address<"Game_StatEvent_OnRaceFinished"> Game_StatEvent_OnRaceFinished{}; // L2 experimental
 inline constexpr address<"Game_StatEvent_OnSectorCompleted"> Game_StatEvent_OnSectorCompleted{}; // L2 experimental
+inline constexpr address<"Game_StatEvent_SubscribeMessageHandlers"> Game_StatEvent_SubscribeMessageHandlers{}; // L2 experimental
+inline constexpr address<"Game_StatEvent_UnsubscribeMessageHandlers"> Game_StatEvent_UnsubscribeMessageHandlers{}; // L2 experimental
 inline constexpr address<"Game_StatEvent_WriteCompleteF1WRace"> Game_StatEvent_WriteCompleteF1WRace{}; // L2 experimental
 inline constexpr address<"Game_StatEvent_WriteF1WeekendFinished"> Game_StatEvent_WriteF1WeekendFinished{}; // L2 experimental
 inline constexpr address<"Game_StatEvent_WriteFacilityUpgraded"> Game_StatEvent_WriteFacilityUpgraded{}; // L2 experimental
@@ -976,6 +1207,8 @@ inline constexpr address<"Game_StatEvent_WriteRacesFinished"> Game_StatEvent_Wri
 inline constexpr address<"Game_StatEvent_WriteResourcesPoints"> Game_StatEvent_WriteResourcesPoints{}; // L2 experimental
 inline constexpr address<"Game_StatEvent_WriteRnDAndFacilityUpgrades"> Game_StatEvent_WriteRnDAndFacilityUpgrades{}; // L2 experimental
 inline constexpr address<"Game_StateSession_OnStateExit"> Game_StateSession_OnStateExit{}; // L2 experimental
+inline constexpr address<"Game_Store_SubscribeMessages"> Game_Store_SubscribeMessages{}; // L2 experimental
+inline constexpr address<"Game_Store_UnsubscribeMessages"> Game_Store_UnsubscribeMessages{}; // L2 experimental
 inline constexpr address<"Game_StoryHubCall_HandleInput"> Game_StoryHubCall_HandleInput{}; // L2 experimental
 inline constexpr address<"Game_StoryHubCall_HangUp"> Game_StoryHubCall_HangUp{}; // L2 experimental
 inline constexpr address<"Game_StoryHubCall_SetPaused"> Game_StoryHubCall_SetPaused{}; // L2 experimental
@@ -1015,10 +1248,16 @@ inline constexpr fn<"Game_Teleport_Vehicle", Game_Teleport_Vehicle_t> Game_Telep
 inline constexpr address<"Game_TerminalDamage_Initialise"> Game_TerminalDamage_Initialise{}; // L2 experimental
 inline constexpr address<"Game_ThrustmasterLcd_UpdateSectors"> Game_ThrustmasterLcd_UpdateSectors{}; // L2 experimental
 inline constexpr address<"Game_Thrustmaster_SetWheelRange"> Game_Thrustmaster_SetWheelRange{}; // L2 experimental
+using Game_TileList_PushChildSelection_Thunk_t = void(void *widget, void *child);
+inline constexpr fn<"Game_TileList_PushChildSelection_Thunk", Game_TileList_PushChildSelection_Thunk_t> Game_TileList_PushChildSelection_Thunk{}; // L2 experimental
 inline constexpr address<"Game_TimeAttackGates_CreateGateModel"> Game_TimeAttackGates_CreateGateModel{}; // L2 experimental
+using Game_TimeManager_OnResetFixedTimeStep_t = int(void *ctx, const void *msg);
+inline constexpr fn<"Game_TimeManager_OnResetFixedTimeStep", Game_TimeManager_OnResetFixedTimeStep_t> Game_TimeManager_OnResetFixedTimeStep{}; // L2 experimental
 inline constexpr address<"Game_TimeOfDayDebug_Update"> Game_TimeOfDayDebug_Update{}; // L2 experimental
 inline constexpr address<"Game_TimeTrialMode_Shutdown"> Game_TimeTrialMode_Shutdown{}; // L2 experimental
 inline constexpr address<"Game_TimingBoard_FormatPositionText"> Game_TimingBoard_FormatPositionText{}; // L2 experimental
+using Game_TitleScreenVM_OnScreenActivated_t = void(void *vm);
+inline constexpr fn<"Game_TitleScreenVM_OnScreenActivated", Game_TitleScreenVM_OnScreenActivated_t> Game_TitleScreenVM_OnScreenActivated{}; // L2 experimental
 inline constexpr address<"Game_TodData_FindParam"> Game_TodData_FindParam{}; // L2 experimental
 inline constexpr address<"Game_TodData_FindScenarioParam"> Game_TodData_FindScenarioParam{}; // L2 experimental
 inline constexpr address<"Game_TodParamBlock_SetScenario"> Game_TodParamBlock_SetScenario{}; // L2 experimental
@@ -1034,7 +1273,11 @@ inline constexpr address<"Game_TrackSpaceTracker_Reset"> Game_TrackSpaceTracker_
 inline constexpr address<"Game_TrackSpace_GetDistanceAtPos"> Game_TrackSpace_GetDistanceAtPos{}; // L2 experimental
 inline constexpr address<"Game_TrackSpace_LoadXml"> Game_TrackSpace_LoadXml{}; // L2 experimental
 inline constexpr address<"Game_TrackSpace_RangeOverlaps"> Game_TrackSpace_RangeOverlaps{}; // L2 experimental
+using Game_TrackSpline_FindSegmentAtDistance_t = void *(void *spline, float distance);
+inline constexpr fn<"Game_TrackSpline_FindSegmentAtDistance", Game_TrackSpline_FindSegmentAtDistance_t> Game_TrackSpline_FindSegmentAtDistance{}; // L2 experimental
 inline constexpr address<"Game_TrackSpline_ResolveRouteEnds"> Game_TrackSpline_ResolveRouteEnds{}; // L2 experimental
+inline constexpr address<"Game_TransactionSystem_OnRequestPurchaseComplete_A"> Game_TransactionSystem_OnRequestPurchaseComplete_A{}; // L2 experimental, game::GameTransactionSystem::onRequestPurchaseComplete(PurchaseError)
+inline constexpr address<"Game_TransactionSystem_OnRequestPurchaseComplete_B"> Game_TransactionSystem_OnRequestPurchaseComplete_B{}; // L2 experimental, game::GameTransactionSystem::onRequestPurchaseComplete(PurchaseError))
 inline constexpr address<"Game_TrophyCabinetTabVM_OnActivate"> Game_TrophyCabinetTabVM_OnActivate{}; // L2 experimental
 using Game_TyreAllocationComponent_SetPresetChoiceForHumanDriver_t = void(void *component, uint32_t preset, int local_player);
 inline constexpr fn<"Game_TyreAllocationComponent_SetPresetChoiceForHumanDriver", Game_TyreAllocationComponent_SetPresetChoiceForHumanDriver_t> Game_TyreAllocationComponent_SetPresetChoiceForHumanDriver{}; // L2 experimental, TyreAllocationComponent::setPresetChoiceForHumanDriver
@@ -1045,6 +1288,14 @@ inline constexpr address<"Game_UDPPreferences_OnLocalPreferenceChange"> Game_UDP
 inline constexpr address<"Game_UDPPreferences_OnLocalShowPlayerNameChange"> Game_UDPPreferences_OnLocalShowPlayerNameChange{}; // L2 experimental
 inline constexpr address<"Game_UIConnectionManager_ShowConnectionLostPopup"> Game_UIConnectionManager_ShowConnectionLostPopup{}; // L2 experimental
 inline constexpr address<"Game_UIThumbnailSystem_FindDriverCustomisationWill"> Game_UIThumbnailSystem_FindDriverCustomisationWill{}; // L2 experimental
+using Game_UITrack_Apply_DevContractTrack_t = void(void *self, void *cfg);
+inline constexpr fn<"Game_UITrack_Apply_DevContractTrack", Game_UITrack_Apply_DevContractTrack_t> Game_UITrack_Apply_DevContractTrack{}; // L2 experimental
+using Game_UITrack_FindTrackInfoWithFallback_t = void(void *contract, const char *track_name);
+inline constexpr fn<"Game_UITrack_FindTrackInfoWithFallback", Game_UITrack_FindTrackInfoWithFallback_t> Game_UITrack_FindTrackInfoWithFallback{}; // L2 experimental
+using Game_UITrack_Select_DefaultTrack_t = void(void *self, void *cfg);
+inline constexpr fn<"Game_UITrack_Select_DefaultTrack", Game_UITrack_Select_DefaultTrack_t> Game_UITrack_Select_DefaultTrack{}; // L2 experimental
+inline constexpr address<"Game_UI_BroadcastGridRundownViewModel"> Game_UI_BroadcastGridRundownViewModel{}; // L2 experimental
+inline constexpr address<"Game_UI_BroadcastGridRundownViewModel_2"> Game_UI_BroadcastGridRundownViewModel_2{}; // L2 experimental
 inline constexpr address<"Game_UiMessageScreen_Destructor"> Game_UiMessageScreen_Destructor{}; // L2 experimental
 inline constexpr address<"Game_VehicleAntiStallSystem_GetStateByPlayerId"> Game_VehicleAntiStallSystem_GetStateByPlayerId{}; // L2 experimental
 inline constexpr address<"Game_VehicleAntiStallSystem_IsLaunchPending"> Game_VehicleAntiStallSystem_IsLaunchPending{}; // L2 experimental
@@ -1052,11 +1303,16 @@ inline constexpr address<"Game_VehicleAntiStallSystem_IsStalled"> Game_VehicleAn
 inline constexpr address<"Game_VehicleAntiStallSystem_IsStartPromptActive"> Game_VehicleAntiStallSystem_IsStartPromptActive{}; // L2 experimental
 inline constexpr address<"Game_VehicleCustomisationReplicationManager_AddReplicatedPlayer"> Game_VehicleCustomisationReplicationManager_AddReplicatedPlayer{}; // L2 experimental
 inline constexpr address<"Game_VehicleLapProgress_CommitNetLapDelta"> Game_VehicleLapProgress_CommitNetLapDelta{}; // L2 experimental
+inline constexpr address<"Game_VehiclePitlaneManager_ApplyVehicleRemotePitStatusInternal"> Game_VehiclePitlaneManager_ApplyVehicleRemotePitStatusInternal{}; // L2 experimental, VehiclePitlaneManager::applyVehicleRemotePitStatusInternal
+using Game_VehiclePlacementSystem_Connect_t = uint32_t(void *self, void *owner, void *registry);
+inline constexpr fn<"Game_VehiclePlacementSystem_Connect", Game_VehiclePlacementSystem_Connect_t> Game_VehiclePlacementSystem_Connect{}; // L2 experimental
+inline constexpr address<"Game_VehiclePlacementSystem_HandleEncodedGridMessage"> Game_VehiclePlacementSystem_HandleEncodedGridMessage{}; // L2 experimental, VehiclePlacementSystem::handleEncodedGridMessage
 inline constexpr address<"Game_VehicleProgressManager_AddVehicleSync"> Game_VehicleProgressManager_AddVehicleSync{}; // L2 experimental
 inline constexpr address<"Game_VehicleProgressManager_RefreshAuthority"> Game_VehicleProgressManager_RefreshAuthority{}; // L2 experimental
 inline constexpr address<"Game_VehicleProgressSystem_EraseNetProgressRecords"> Game_VehicleProgressSystem_EraseNetProgressRecords{}; // L2 experimental
 inline constexpr address<"Game_VehicleProgressSystem_GetDistanceData"> Game_VehicleProgressSystem_GetDistanceData{}; // L2 experimental
 inline constexpr address<"Game_VehicleProgressSystem_GetLapProgress"> Game_VehicleProgressSystem_GetLapProgress{}; // L2 experimental
+inline constexpr address<"Game_VehicleProgressSystem_OnVehiclePlacedOnGrid"> Game_VehicleProgressSystem_OnVehiclePlacedOnGrid{}; // L2 experimental, VehicleProgressSystem::onVehiclePlacedOnGrid
 inline constexpr address<"Game_VehicleProgressSystem_OnVehicleRemoved"> Game_VehicleProgressSystem_OnVehicleRemoved{}; // L2 experimental
 inline constexpr address<"Game_VehicleProgressSystem_SendOnHostMigration"> Game_VehicleProgressSystem_SendOnHostMigration{}; // L2 experimental
 inline constexpr address<"Game_VehicleProgressSystem_SendProgressToConnection"> Game_VehicleProgressSystem_SendProgressToConnection{}; // L2 experimental
@@ -1064,9 +1320,13 @@ inline constexpr address<"Game_VehicleProgressSystem_SubscribeAndClearNet"> Game
 inline constexpr address<"Game_VehicleRaceStart_SendRaceStartMessages"> Game_VehicleRaceStart_SendRaceStartMessages{}; // L2 experimental
 inline constexpr address<"Game_VendorA_Initialise"> Game_VendorA_Initialise{}; // L2 experimental
 inline constexpr address<"Game_VfxManager_Initialise"> Game_VfxManager_Initialise{}; // L2 experimental
+using Game_Vfx_UpdateWheelTyreInstance_t = void(void *studio, uint8_t vehicle_id, uint32_t wheel, void *tyre_vis, void *tyre_asset, const void *wheel_params);
+inline constexpr fn<"Game_Vfx_UpdateWheelTyreInstance", Game_Vfx_UpdateWheelTyreInstance_t> Game_Vfx_UpdateWheelTyreInstance{}; // L2 experimental
 inline constexpr address<"Game_VictoryVO_DetectWinnerAndNotify"> Game_VictoryVO_DetectWinnerAndNotify{}; // L2 experimental
 inline constexpr address<"Game_VictoryVO_OnSpeechFinished"> Game_VictoryVO_OnSpeechFinished{}; // L2 experimental
 inline constexpr address<"Game_VictoryVO_PlayVictoryVO"> Game_VictoryVO_PlayVictoryVO{}; // L2 experimental
+using Game_VideoExportModule_Initialise_t = int(void *module);
+inline constexpr fn<"Game_VideoExportModule_Initialise", Game_VideoExportModule_Initialise_t> Game_VideoExportModule_Initialise{}; // L2 experimental
 inline constexpr address<"Game_VirtualHelpPageVM_OnActivate"> Game_VirtualHelpPageVM_OnActivate{}; // L2 experimental
 inline constexpr address<"Game_VirtualHelpPageVM_OnDeactivate"> Game_VirtualHelpPageVM_OnDeactivate{}; // L2 experimental
 inline constexpr address<"Game_VirtualPerformance_Initialise"> Game_VirtualPerformance_Initialise{}; // L2 experimental
@@ -1079,6 +1339,9 @@ inline constexpr address<"Game_VotingManager_SetStatus"> Game_VotingManager_SetS
 inline constexpr address<"Game_WonDriverChampionship_Initialise"> Game_WonDriverChampionship_Initialise{}; // L2 experimental
 inline constexpr address<"Game_WonDriverChampionship_Initialise_2"> Game_WonDriverChampionship_Initialise_2{}; // L2 experimental
 inline constexpr address<"Game_WrinkleModifierMorphRig_Parse"> Game_WrinkleModifierMorphRig_Parse{}; // L2 experimental
+using Game_Write_AnalyticsJsonObject_t = void *(void *out, void *ctx, int64_t rec, int64_t writer);
+inline constexpr fn<"Game_Write_AnalyticsJsonObject", Game_Write_AnalyticsJsonObject_t> Game_Write_AnalyticsJsonObject{}; // L2 experimental
+inline constexpr data<"g_Game_F1WorldEntryPoint", uint32_t> g_Game_F1WorldEntryPoint{}; // L2 experimental
 inline constexpr data<"g_Game_FlowLinkStay", uint32_t> g_Game_FlowLinkStay{}; // L2 experimental
 inline constexpr data<"g_Game_Manager", void *> g_Game_Manager{}; // L2 experimental
 inline constexpr data<"g_Game_MessageBus", void *> g_Game_MessageBus{}; // L2 experimental
@@ -1089,10 +1352,17 @@ inline constexpr data<"g_Game_Scenarios", void *> g_Game_Scenarios{}; // L2 expe
 inline constexpr data<"g_Game_TrackLength", float> g_Game_TrackLength{}; // L2 experimental
 inline constexpr data<"g_Game_VehicleRecordManager", void *> g_Game_VehicleRecordManager{}; // L2 experimental
 inline constexpr data<"g_Game_VehicleStateRoot", void *> g_Game_VehicleStateRoot{}; // L2 experimental
+inline constexpr data<"g_Game_WeatherSurfaceState", void*> g_Game_WeatherSurfaceState{}; // L2 experimental
 inline constexpr data<"k_Game_TrackListComponentDesc", void *> k_Game_TrackListComponentDesc{}; // L2 experimental, TrackListComponent
 inline constexpr site<"site_Game_AcclimPenalty_Entry"> site_Game_AcclimPenalty_Entry{}; // L2 experimental
 inline constexpr site<"site_Game_AcclimPenalty_Return"> site_Game_AcclimPenalty_Return{}; // L2 experimental
 inline constexpr call<"site_Game_CareerContinue_DriverSlotTitle"> site_Game_CareerContinue_DriverSlotTitle{}; // L2 experimental
+inline constexpr site<"site_Game_CareerEventsSequencerFirstRecord"> site_Game_CareerEventsSequencerFirstRecord{}; // L2 experimental
+inline constexpr site<"site_Game_CareerEventsSequencerPlayerDriver"> site_Game_CareerEventsSequencerPlayerDriver{}; // L2 experimental
+inline constexpr site<"site_Game_CareerEventsSequencerPlayerDriverJoin"> site_Game_CareerEventsSequencerPlayerDriverJoin{}; // L2 experimental
+inline constexpr site<"site_Game_CareerEventsSequencerRecordsJoin"> site_Game_CareerEventsSequencerRecordsJoin{}; // L2 experimental
+inline constexpr site<"site_Game_CareerEventsSequencerTeamMateDriver"> site_Game_CareerEventsSequencerTeamMateDriver{}; // L2 experimental
+inline constexpr site<"site_Game_CareerEventsSequencerTeamMateDriverJoin"> site_Game_CareerEventsSequencerTeamMateDriverJoin{}; // L2 experimental
 inline constexpr site<"site_Game_CareerWizardConfirm_NextRoute"> site_Game_CareerWizardConfirm_NextRoute{}; // L2 experimental
 inline constexpr site<"site_Game_CareerWizard_BackRoute"> site_Game_CareerWizard_BackRoute{}; // L2 experimental
 inline constexpr call<"site_Game_DriverSelectHeader_BuildTabs"> site_Game_DriverSelectHeader_BuildTabs{}; // L2 experimental
@@ -1102,11 +1372,22 @@ inline constexpr site<"site_Game_DriverSelect_NumberResult"> site_Game_DriverSel
 inline constexpr call<"site_Game_DriverSelect_TeamLogoFormat"> site_Game_DriverSelect_TeamLogoFormat{}; // L2 experimental
 inline constexpr site<"site_Game_ErsNewLap_NextVehicle"> site_Game_ErsNewLap_NextVehicle{}; // L2 experimental
 inline constexpr site<"site_Game_ErsNewLap_VehicleLookup"> site_Game_ErsNewLap_VehicleLookup{}; // L2 experimental
+inline constexpr site<"site_Game_GarageCrew_SceneRead"> site_Game_GarageCrew_SceneRead{}; // L2 experimental
+inline constexpr site<"site_Game_GarageCrew_SceneTest"> site_Game_GarageCrew_SceneTest{}; // L2 experimental
 inline constexpr site<"site_Game_GarageCrew_SpawnVector"> site_Game_GarageCrew_SpawnVector{}; // L2 experimental
 inline constexpr site<"site_Game_GarageSetups_EntryStep"> site_Game_GarageSetups_EntryStep{}; // L2 experimental
 inline constexpr site<"site_Game_GarageSetups_NotFound"> site_Game_GarageSetups_NotFound{}; // L2 experimental
+inline constexpr site<"site_Game_GhostlapTrace_RivalLogBoard"> site_Game_GhostlapTrace_RivalLogBoard{}; // L2 experimental
+inline constexpr site<"site_Game_GhostlapTrace_RivalLogDone"> site_Game_GhostlapTrace_RivalLogDone{}; // L2 experimental
+inline constexpr site<"site_Game_GrandPrixContinueVm_F1wCarCheck"> site_Game_GrandPrixContinueVm_F1wCarCheck{}; // L2 experimental
+inline constexpr site<"site_Game_GrandPrixContinueVm_F1wWarningCheck"> site_Game_GrandPrixContinueVm_F1wWarningCheck{}; // L2 experimental
+inline constexpr site<"site_Game_MyTeamVehicleBases_AiConfigLoad"> site_Game_MyTeamVehicleBases_AiConfigLoad{}; // L2 experimental
+inline constexpr site<"site_Game_MyTeamVehicleBases_NextBase"> site_Game_MyTeamVehicleBases_NextBase{}; // L2 experimental
+inline constexpr site<"site_Game_MyTeamVehicleBases_SaveRecord"> site_Game_MyTeamVehicleBases_SaveRecord{}; // L2 experimental
 inline constexpr site<"site_Game_PitLane_BoxPoseFalse"> site_Game_PitLane_BoxPoseFalse{}; // L2 experimental
 inline constexpr site<"site_Game_PitLane_BoxSlotRead"> site_Game_PitLane_BoxSlotRead{}; // L2 experimental
+inline constexpr site<"site_Game_PitStops_CrewTemplateRead"> site_Game_PitStops_CrewTemplateRead{}; // L2 experimental
+inline constexpr site<"site_Game_PitStops_CrewTemplateSkip"> site_Game_PitStops_CrewTemplateSkip{}; // L2 experimental
 inline constexpr site<"site_Game_SaveData_ContainersChildren"> site_Game_SaveData_ContainersChildren{}; // L3 stable
 inline constexpr site<"site_Game_SaveData_ContainersCount"> site_Game_SaveData_ContainersCount{}; // L3 stable
 inline constexpr site<"site_Game_SaveData_ContainersDone"> site_Game_SaveData_ContainersDone{}; // L2 experimental
@@ -1114,10 +1395,21 @@ inline constexpr site<"site_Game_SaveData_UnclaimedChild"> site_Game_SaveData_Un
 inline constexpr site<"site_Game_SaveSlot_Selected"> site_Game_SaveSlot_Selected{}; // L2 experimental
 inline constexpr site<"site_Game_TeamSelect_NumberResult"> site_Game_TeamSelect_NumberResult{}; // L2 experimental
 inline constexpr call<"site_Game_TeamSelect_TeamLogoFormat"> site_Game_TeamSelect_TeamLogoFormat{}; // L2 experimental
+inline constexpr site<"site_Game_TheatreList_EntryStep"> site_Game_TheatreList_EntryStep{}; // L2 experimental
+inline constexpr site<"site_Game_TheatreList_EntryStepAlt"> site_Game_TheatreList_EntryStepAlt{}; // L2 experimental
+inline constexpr site<"site_Game_TheatreList_NoSlot"> site_Game_TheatreList_NoSlot{}; // L2 experimental
+inline constexpr site<"site_Game_TheatreList_NoSlotAlt"> site_Game_TheatreList_NoSlotAlt{}; // L2 experimental
+inline constexpr site<"site_Game_TheatreRows_RowOffset"> site_Game_TheatreRows_RowOffset{}; // L2 experimental
 inline constexpr site<"site_Game_ThrustmasterLcd_EntrantRecord"> site_Game_ThrustmasterLcd_EntrantRecord{}; // L2 experimental
 inline constexpr site<"site_Game_ThrustmasterLcd_SectorTail"> site_Game_ThrustmasterLcd_SectorTail{}; // L2 experimental
+inline constexpr site<"site_Game_TileListSelect_ChildNext"> site_Game_TileListSelect_ChildNext{}; // L2 experimental
+inline constexpr site<"site_Game_TileListSelect_ChildStep"> site_Game_TileListSelect_ChildStep{}; // L2 experimental
 inline constexpr site<"site_Game_TimeTrialLeaderboard_BoardRead"> site_Game_TimeTrialLeaderboard_BoardRead{}; // L2 experimental
 inline constexpr site<"site_Game_TimeTrialLeaderboard_BoardsDone"> site_Game_TimeTrialLeaderboard_BoardsDone{}; // L2 experimental
+inline constexpr site<"site_Game_TimeTrial_SetReferenceListBoard"> site_Game_TimeTrial_SetReferenceListBoard{}; // L2 experimental
+inline constexpr site<"site_Game_TimeTrial_SetReferenceLogBoard"> site_Game_TimeTrial_SetReferenceLogBoard{}; // L2 experimental
+inline constexpr site<"site_Game_TimeTrial_SetReferenceLogDone"> site_Game_TimeTrial_SetReferenceLogDone{}; // L2 experimental
+inline constexpr site<"site_Game_TimeTrial_SetReferenceNoList"> site_Game_TimeTrial_SetReferenceNoList{}; // L2 experimental
 inline constexpr vtable<"vt_Game_CareerDLCSelectViewModel", 19> vt_Game_CareerDLCSelectViewModel{}; // L2 experimental
 inline constexpr vtable<"vt_Game_CareerWizardSettingsSelectViewModel", 19> vt_Game_CareerWizardSettingsSelectViewModel{}; // L2 experimental, CareerWizardSettingsSelectViewModel.
 inline constexpr vtable<"vt_Game_DriverCareerDriverSelectViewModel", 22> vt_Game_DriverCareerDriverSelectViewModel{}; // L2 experimental

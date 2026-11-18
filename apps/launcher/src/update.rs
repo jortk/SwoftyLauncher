@@ -2,11 +2,12 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::notices::{Notification, Notify};
+use crate::scale::px;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable, WindowExt, h_flex, v_flex};
+use gpui_kit::component::{Icon, Sizable, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use semver::Version;
@@ -19,12 +20,14 @@ use crate::play_bar::link;
 use crate::sections::{Reporter, Shared};
 use crate::shell::{PlayState, Shell};
 use crate::theme::Palette;
+use swofty_i18n::{tr, trf};
 
 const TICK: Duration = Duration::from_secs(5);
 const RESTART_DELAY: Duration = Duration::from_millis(1500);
 pub(crate) const BUILDING: &str =
     "Swofty is still building your mods. Update when it finishes, or cancel the build.";
 pub const BUTTON_WIDTH: f32 = 204.;
+const MOVE_DOCS: &str = "https://f1.swofty.net/guide/installation#moving-your-addons-and-saves";
 
 pub struct Updates {
     pub copy: Result<Install, String>,
@@ -96,18 +99,22 @@ impl Updates {
         self.addon.choose(&update::current_version(), None)
     }
 
+    pub fn runs_from_release(&self) -> bool {
+        !matches!(&self.copy, Err(reason) if reason.contains(NOT_RELEASE_FOLDER))
+    }
+
     fn waiting_notice(&self) -> Option<String> {
         let target = self
             .launcher_offer()
             .and_then(Release::version)
             .unwrap_or_else(update::current_version);
         let c = self.addon.waiting(&target, self.addon_installed.as_ref())?;
-        Some(format!(
-            "{} {} needs Swofty Launcher {} and installs once that launcher is out. You have {}.",
-            managed::NAME,
-            c.version,
-            c.needs.as_ref()?,
-            update::current_version()
+        Some(trf!(
+            "{addon} {version} needs Swofty Launcher {needs} and installs once that launcher is out. You have {current}.",
+            addon = managed::NAME,
+            version = c.version,
+            needs = c.needs.as_ref()?,
+            current = update::current_version()
         ))
     }
 
@@ -131,6 +138,17 @@ fn log_change(part: Part, before: &Option<String>, after: &Option<String>) {
         eprintln!("swofty-launcher: {} update check: {e}", part.name());
     }
 }
+
+fn blocked_text(version: &Version, reason: &str) -> String {
+    trf!(
+        "Swofty Launcher {version} is available. {reason}. You have {current}.",
+        version = version,
+        reason = sentence(reason),
+        current = update::current_version()
+    )
+}
+
+pub(crate) const NOT_RELEASE_FOLDER: &str = "does not run from a release folder";
 
 pub(crate) fn sentence(text: &str) -> String {
     let mut chars = text.chars();
@@ -161,6 +179,7 @@ impl Shell {
         if u.checking
             || matches!(u.phase, Phase::Installing | Phase::Restarting)
             || !(addon_due || launcher_due)
+            || self.data_move_locked()
         {
             return;
         }
@@ -264,6 +283,7 @@ impl Shell {
             PlayState::Running
                 | PlayState::Elsewhere(_)
                 | PlayState::Launching
+                | PlayState::Preparing
                 | PlayState::Restoring
                 | PlayState::Detecting
                 | PlayState::Checking
@@ -274,14 +294,14 @@ impl Shell {
 
     fn start_updates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.play_state(), PlayState::Building) {
-            window.push_notification(Notification::error(BUILDING), cx);
+            window.notify(Notification::error(BUILDING), cx);
             return;
         }
         if matches!(
             self.play_state(),
-            PlayState::Running | PlayState::Elsewhere(_) | PlayState::Launching
+            PlayState::Running | PlayState::Elsewhere(_) | PlayState::Launching | PlayState::Preparing
         ) {
-            window.push_notification(Notification::error("Close F1 25 before updating."), cx);
+            window.notify(Notification::error(tr("Close F1 25 before updating.")), cx);
             return;
         }
         let plan = self.updates.plan();
@@ -294,7 +314,7 @@ impl Shell {
             this.update_in(cx, |s, window, cx| {
                 if let Some(e) = s.finish_updates(ran, cx) {
                     crate::app_log::action("update").failed(&e);
-                    window.push_notification(Notification::error(e).title("Update failed"), cx);
+                    window.notify(Notification::error(e).title(tr("Update failed")), cx);
                 }
             })
             .ok();
@@ -346,7 +366,7 @@ impl Shell {
             return None;
         }
         u.phase = match &error {
-            Some(e) => Phase::Failed(format!("Update failed: {e}")),
+            Some(e) => Phase::Failed(trf!("Update failed: {e}", e = e)),
             None => Phase::Idle,
         };
         if ran.addon().is_some() {
@@ -394,8 +414,9 @@ impl Shell {
         let mut command = match exe {
             Ok(exe) => std::process::Command::new(exe),
             Err(e) => {
-                self.updates.phase = Phase::Failed(format!(
-                    "Updated, but could not restart: {e}. Close and reopen the launcher."
+                self.updates.phase = Phase::Failed(trf!(
+                    "Updated, but could not restart: {e}. Close and reopen the launcher.",
+                    e = e
                 ));
                 cx.notify();
                 return;
@@ -410,8 +431,11 @@ impl Shell {
             Ok(_) => cx.quit(),
             Err(e) => {
                 self.updates.phase = Phase::Failed(match Block::of(Path::new(command.get_program()), &e) {
-                    Some(b) => format!("Updated, but could not restart: {}", b.text()),
-                    None => format!("Updated, but could not restart: {e}. Close and reopen the launcher."),
+                    Some(b) => trf!("Updated, but could not restart: {e}", e = b.text()),
+                    None => trf!(
+                        "Updated, but could not restart: {e}. Close and reopen the launcher.",
+                        e = e
+                    ),
                 });
                 cx.notify();
             }
@@ -448,9 +472,9 @@ impl Shell {
                 let notes = plan.steps().first().map(|(_, r)| r.notes_url());
                 Some(
                     row.child(dot(p.accent))
-                        .child(text(format!(
-                            "Update required: {}. The launcher restarts afterwards.",
-                            changes.join(" and ")
+                        .child(text(trf!(
+                            "Update required: {changes}. The launcher restarts afterwards.",
+                            changes = changes.join(" and ")
                         )))
                         .when_some(notes, |d, notes| {
                             d.child(
@@ -462,15 +486,18 @@ impl Shell {
                 )
             }
             Gate::Installing => Some(row.child(dot(p.warning)).child(text(match u.restarts {
-                true => format!(
-                    "Updating {}. Keep the launcher open; it restarts when it's done.",
-                    updater::describe(&u.plan().versions())
+                true => trf!(
+                    "Updating {versions}. Keep the launcher open; it restarts when it's done.",
+                    versions = updater::describe(&u.plan().versions())
                 ),
-                false => format!("Updating {}.", updater::describe(&u.plan().versions())),
+                false => trf!(
+                    "Updating {versions}.",
+                    versions = updater::describe(&u.plan().versions())
+                ),
             }))),
-            Gate::Restarting => Some(row.child(dot(p.success)).child(text(format!(
-                "Updated {}. Restarting the launcher…",
-                updater::describe(&u.restarting)
+            Gate::Restarting => Some(row.child(dot(p.success)).child(text(trf!(
+                "Updated {versions}. Restarting the launcher…",
+                versions = updater::describe(&u.restarting)
             )))),
             Gate::Retry | Gate::Play => {
                 let Phase::Failed(error) = &u.phase else {
@@ -527,8 +554,8 @@ impl Shell {
             Gate::Installing => (
                 IconName::LoaderCircle,
                 match progress {
-                    Some(done) => format!("Updating {:.0}%", done * 100.),
-                    None => "Updating…".into(),
+                    Some(done) => trf!("Updating {percent}", percent = crate::format::percent(done)),
+                    None => tr("Updating…").into(),
                 },
                 detail,
                 p.elevated,
@@ -617,8 +644,18 @@ impl Shell {
             .into_any_element()
     }
 
+    pub(crate) fn launcher_notices(&self) -> Vec<String> {
+        if !self.update_check || !self.updates.runs_from_release() {
+            return Vec::new();
+        }
+        match self.updates.blocked_notice() {
+            Some((version, _, reason)) => vec![blocked_text(&version, reason)],
+            None => self.updates.waiting_notice().into_iter().collect(),
+        }
+    }
+
     pub(crate) fn update_bar(&self, p: Palette) -> Option<impl IntoElement> {
-        if !self.update_check {
+        if !self.update_check || !self.updates.runs_from_release() {
             return None;
         }
         let bar = h_flex()
@@ -628,8 +665,6 @@ impl Shell {
             .py(px(8.))
             .gap(px(12.))
             .bg(p.surface)
-            .border_t_1()
-            .border_color(p.border_variant)
             .text_size(px(13.));
         let Some((version, tag, reason)) = self.updates.blocked_notice() else {
             let notice = self.updates.waiting_notice()?;
@@ -640,22 +675,71 @@ impl Shell {
             );
         };
         let notes = update::notes_url(&tag);
+        let fix = reason == update::DATA_IN_INSTALL;
         Some(
             bar.child(
                 Icon::new(IconName::CircleArrowUp)
                     .size(px(16.))
                     .text_color(p.accent),
             )
-            .child(div().flex_1().min_w_0().truncate().child(format!(
-                "Swofty Launcher {version} is available. {}. You have {}.",
-                sentence(reason),
-                update::current_version()
-            )))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(blocked_text(&version, reason)),
+            )
+            .when(fix, |d| {
+                d.child(
+                    link("update-move-data", "Moving your addons and saves", p)
+                        .flex_shrink_0()
+                        .on_click(|_, _, cx| cx.open_url(MOVE_DOCS)),
+                )
+            })
             .child(
                 link("update-release", "Release page", p)
                     .flex_shrink_0()
                     .on_click(move |_, _, cx| cx.open_url(&notes)),
             ),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::prelude::v1::test;
+
+    fn blocked() -> Updates {
+        let mut u = Updates::new();
+        u.copy = Err(update::DATA_IN_INSTALL.into());
+        u.launcher.tag = Some("v999.0.0".into());
+        u
+    }
+
+    #[test]
+    fn a_data_folder_inside_the_install_shows_one_notice_and_no_update() {
+        let u = blocked();
+        let (version, tag, reason) = u.blocked_notice().unwrap();
+        assert_eq!(version, Version::new(999, 0, 0));
+        assert_eq!(tag, "v999.0.0");
+        assert_eq!(reason, update::DATA_IN_INSTALL);
+        assert!(u.plan().is_empty());
+        assert_eq!(updater::gate(&u.phase, !u.plan().is_empty(), false), Gate::Play);
+    }
+
+    #[test]
+    fn a_source_build_is_not_a_release_copy_but_a_data_conflict_is() {
+        let mut u = blocked();
+        assert!(u.runs_from_release());
+        u.copy = Err("this copy does not run from a release folder".into());
+        assert!(!u.runs_from_release());
+    }
+
+    #[test]
+    fn no_notice_when_the_launcher_is_current() {
+        let mut u = blocked();
+        u.launcher.tag = Some("v0.0.1".into());
+        assert!(u.blocked_notice().is_none());
     }
 }

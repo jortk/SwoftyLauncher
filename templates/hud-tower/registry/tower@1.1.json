@@ -1,0 +1,139 @@
+{
+  "hud.element": {
+    "tower": {
+      "$comment": "A 30-row standings tower on the track-position board, the replay screen and the spectator screen. Leaves are view_model_data.mytower_*; write them from native code (swofty/hud_leaves.hpp) or bind the game's own values as the header does.",
+      "screen": "standings",
+      "show": { "view_model": "view_model_data.mytower_show" },
+      "also": {
+        "replay":    { "show": { "view_model": "view_model_data.mytower_on" }, "hide": ["trial"] },
+        "spectator": { "show": { "view_model": "view_model_data.mytower_on" }, "hide": ["trial"] }
+      },
+      "sprites": {
+        "hdr":   { "png": "art/hdr.png",   "bounds": [0, 0, 300, 24] },
+        "strip": { "png": "art/strip.png", "bounds": [0, 0, 300, 21.6] },
+        "me":    { "png": "art/me.png",    "bounds": [0, 0, 300, 21.6] },
+        "bar":   { "png": "art/bar.png",   "bounds": [0, 4.2, 1.8, 17.4] },
+        "card":  { "png": "art/card.png",  "bounds": [0, 0, 300, 21.6] },
+        "sep":   { "png": "art/sep.png",   "bounds": [0, 20.8, 300, 21.6] },
+        "fia":   { "texture": "eaid://ui_package/art/osd/textures/message_system/ms_fia_logo.tif", "fit": [13.3, 13.3], "tint": "#000000" }
+      },
+      "elements": [
+        { "kind": "stack", "id": "stack", "dir": "down", "gap": 0, "children": [
+          { "kind": "group", "id": "top", "visible": { "view_model": "view_model_data.mytower_hdr" }, "children": [
+            { "kind": "sprite", "id": "hdr", "sprite": "hdr", "layer": 20 },
+            { "kind": "group", "id": "notes", "hidden": true, "children": [
+              { "kind": "text", "id": "notes_t", "style": "OSD_17_regular", "align": "left", "box": 200, "cap_height": 6.5, "at": [8.8, 10],
+                "literal": "mytower" } ] },
+            { "kind": "unit", "id": "logo", "unit": "series_logo", "at": [13.8, 12], "size": 33.3,
+              "texture": { "screen": "series_logo" } },
+            { "kind": "sprite", "id": "fia", "sprite": "fia", "layer": 24, "at": [38, 5.3],
+              "visible": { "view_model": "view_model_data.mytower_sc" } },
+            { "kind": "stack", "id": "lapstk", "dir": "left", "gap": 2, "at": [296, 16.4], "children": [
+              { "kind": "text", "id": "laps", "style": "OSD_24_regular", "align": "right", "box": 30, "cap_height": 9.8,
+                "value": { "path": "#session.number_of_laps", "ty": "si32" } },
+              { "kind": "text", "id": "slash", "style": "OSD_24_regular", "align": "centre", "box": 8, "cap_height": 9.8, "literal": "/" },
+              { "kind": "text", "id": "lapn", "style": "OSD_30_bold", "align": "right", "box": 30, "cap_height": 12.5,
+                "value": { "view_model": "view_model_data.mytower_lap" } },
+              { "kind": "text", "id": "lapw", "style": "OSD_24_regular", "align": "right", "box": 40, "cap_height": 9.8,
+                "literal_id": "lng_lap" }
+            ] },
+            { "kind": "centre", "id": "stc", "at": [150, 16.4], "visible": { "view_model": "view_model_data.mytower_timed" }, "children": [
+              { "kind": "text", "id": "sess", "style": "OSD_24_regular", "align": "right", "box": 80, "cap_height": 9.8, "at": [-4, 0],
+                "value": { "view_model": "view_model_data.mytower_sess" } },
+              { "kind": "text", "id": "clk", "style": "OSD_26_bold", "align": "left", "box": 60, "cap_height": 10.8, "at": [4, 0],
+                "value": { "session": "time_remaining_str" } }
+            ] }
+          ] },
+          { "kind": "stack", "id": "flags", "dir": "down", "gap": 0, "children": [
+            { "kind": "group", "id": "chq", "visible": { "view_model": "view_model_data.mytower_chq" }, "children": [
+              { "kind": "sprite", "id": "chq_bg", "sprite": "card", "layer": 20, "colour": "#e6e6e6ff" } ] },
+            { "kind": "group", "id": "nchq", "visible": { "view_model": "view_model_data.mytower_chq", "not": true, "default": true }, "children": [
+              { "kind": "group", "id": "red", "visible": { "view_model": "view_model_data.mytower_red" }, "children": [
+                { "kind": "sprite", "id": "red_bg", "sprite": "card", "layer": 20, "colour": "#d8262cff" },
+                { "kind": "sprite", "id": "red_fia", "sprite": "fia", "layer": 24, "at": [6, 4.2] } ] },
+              { "kind": "group", "id": "nred", "visible": { "view_model": "view_model_data.mytower_red", "not": true, "default": true }, "children": [
+                { "kind": "group", "id": "sc", "visible": { "view_model": "view_model_data.mytower_sc" }, "children": [
+                  { "kind": "sprite", "id": "sc_bg", "sprite": "card", "layer": 20, "colour": "#f2c233ff" },
+                  { "kind": "sprite", "id": "sc_fia", "sprite": "fia", "layer": 24, "at": [6, 4.2] },
+                  { "kind": "text", "id": "sc_t", "style": "OSD_24_bold", "align": "left", "box": 120, "cap_height": 9.8, "at": [24, 15],
+                    "literal": "SAFETY CAR", "colour": "#101010ff" } ] },
+                { "kind": "group", "id": "nsc", "visible": { "view_model": "view_model_data.mytower_sc", "not": true, "default": true }, "children": [
+                  { "kind": "group", "id": "yel", "visible": { "view_model": "view_model_data.mytower_yel" }, "children": [
+                    { "kind": "sprite", "id": "yel_bg", "sprite": "card", "layer": 20, "colour": "#f2d13bff" },
+                    { "kind": "stack", "id": "ys", "dir": "right", "gap": 3, "at": [8, 15], "children": [
+                      { "kind": "text", "id": "ys_w", "style": "OSD_24_bold", "align": "left", "box": 60, "cap_height": 9.8,
+                        "literal_id": "lng_sector", "colour": "#101010ff" },
+                      { "kind": "text", "id": "ys_n", "style": "OSD_24_bold", "align": "left", "box": 12, "cap_height": 9.8,
+                        "value": { "view_model": "view_model_data.mytower_ysec" }, "colour": "#101010ff" } ] } ] } ] } ] } ] }
+          ] },
+          { "kind": "group", "id": "rows", "children": [
+            { "kind": "group", "id": "r", "repeat": { "count": 30, "var": "N", "pitch": [0, 21.635] },
+              "visible": { "view_model": "view_model_data.mytower_r{NN}_on" },
+              "children": [
+                { "kind": "sprite", "id": "s", "sprite": "strip", "layer": 20 },
+                { "kind": "sprite", "id": "sl", "sprite": "sep", "layer": 21 },
+                { "kind": "sprite", "id": "me", "sprite": "me", "layer": 22,
+                  "visible": { "view_model": "view_model_data.mytower_r{NN}_me" } },
+                { "kind": "text", "id": "pos", "style": "OSD_19_regular", "align": "centre", "box": 15, "cap_height": 9.8, "at": [8.8, 14.6],
+                  "value": { "view_model": "view_model_data.mytower_r{NN}_pos" } },
+                { "kind": "group", "id": "v", "repeat": { "count": 30, "var": "V" },
+                  "visible": { "view_model": "view_model_data.mytower_r{NN}_c{VV}" },
+                  "children": [
+                    { "kind": "sprite", "id": "bar", "sprite": "bar", "layer": 30, "at": [20, 0],
+                      "tint": { "session_car": "nub_colour", "slot_var": "V", "default": "#00000000" } },
+                    { "kind": "text", "id": "code", "style": "OSD_24_bold", "align": "left", "box": 40.8, "cap_height": 12.5,
+                      "wrap": "clampwidth", "at": [23.7, 14.6],
+                      "value": { "session_car": "driver.name_code", "slot_var": "V" } } ] },
+                { "kind": "unit", "id": "lg", "unit": "team_logo", "at": [84, 10.8], "size": 14.1,
+                  "visible": { "view_model": "view_model_data.mytower_r{NN}_bdg" },
+                  "texture": { "view_model": "view_model_data.mytower_r{NN}_badge" } },
+                { "kind": "text", "id": "gap", "style": "OSD_24_regular", "align": "right", "box": 80, "cap_height": 9.8, "at": [294, 14.6],
+                  "value": { "view_model": "view_model_data.mytower_r{NN}_gap" } },
+                { "kind": "text", "id": "pb", "style": "OSD_24_regular", "align": "right", "box": 80, "cap_height": 9.8, "at": [294, 14.6],
+                  "colour": "#58d654ff", "visible": { "view_model": "view_model_data.mytower_r{NN}_pb" },
+                  "value": { "view_model": "view_model_data.mytower_r{NN}_gap" } }
+              ] }
+          ] },
+          { "kind": "group", "id": "trial", "children": [
+            { "kind": "sprite", "id": "trial_bg", "sprite": "strip", "layer": 20 },
+            { "kind": "text", "id": "trial_t", "style": "OSD_24_bold", "align": "left", "box": 120, "cap_height": 9.8, "at": [8.8, 14.6],
+              "literal": "TIME TRIAL" },
+            { "kind": "text", "id": "trial_gap", "style": "OSD_24_regular", "align": "right", "box": 80, "cap_height": 9.8, "at": [294, 14.6],
+              "value": { "path": "#view_model_data.hud.content.lap_times.pill_0.gap_text", "ty": "text" } }
+          ] }
+        ] }
+      ],
+      "decisions": [
+        { "id": "tt", "type": "mvcd", "on": { "path": "#view_model_data.hud.content.lap_times.pill_0.active" },
+          "states": { "1": ["trial"], "0": [] } }
+      ],
+      "clock": {
+        "output": "view_model_data.mytower_clock",
+        "start": { "view_model": "view_model_data.mytower_timed" }
+      },
+      "stock_nodes": [
+        { "template": "hud_lap_counter.osd_visibility_option",
+          "scene": "eaid://ui_package/art/osd/components/lap_counter/lap_counter.idf",
+          "hide": ["car_category_logo", "session_icon", "centre_lap_value", "separator_bg", "separator_bg_top", "centre_formation"],
+          "wrap": ["edge_base", "edge_border", "lap_bg", "lockup"],
+          "while": { "view_model": "view_model_data.mytower_show" } },
+        { "template": "hud_left_notification_dynamic.osd_visibility_option.left_notification.left_message",
+          "hide": ["boundless"],
+          "while": { "view_model": "view_model_data.mytower_show" } }
+      ],
+      "editor": {
+        "rows": 5,
+        "preview": {
+          "view_model_data.mytower_hdr": true, "view_model_data.mytower_lap": "10", "session.number_of_laps": "71",
+          "view_model_data.mytower_r00_on": true, "view_model_data.mytower_r00_pos": "10", "view_model_data.mytower_r00_c00": true, "view_model_data.mytower_r00_gap": "+1.2",
+          "view_model_data.mytower_r01_on": true, "view_model_data.mytower_r01_pos": "11", "view_model_data.mytower_r01_c01": true, "view_model_data.mytower_r01_gap": "+0.9",
+          "view_model_data.mytower_r02_on": true, "view_model_data.mytower_r02_pos": "12", "view_model_data.mytower_r02_me": true, "view_model_data.mytower_r02_c02": true, "view_model_data.mytower_r02_gap": "+0.5",
+          "view_model_data.mytower_r03_on": true, "view_model_data.mytower_r03_pos": "13", "view_model_data.mytower_r03_c03": true, "view_model_data.mytower_r03_gap": "+1.4",
+          "view_model_data.mytower_r04_on": true, "view_model_data.mytower_r04_pos": "14", "view_model_data.mytower_r04_c04": true, "view_model_data.mytower_r04_gap": "+0.7",
+          "session_car.driver.name_code.0": "DRV", "session_car.driver.name_code.1": "DRV", "session_car.driver.name_code.2": "DRV",
+          "session_car.driver.name_code.3": "DRV", "session_car.driver.name_code.4": "DRV"
+        }
+      }
+    }
+  }
+}

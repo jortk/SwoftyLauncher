@@ -1,0 +1,48 @@
+name: Native Windows
+
+on:
+  pull_request:
+    paths:
+      - native/src/core/hooks/**
+      - native/src/core/mem_pages.cpp
+      - native/test/mem_pages_test.cpp
+      - native/test/mem_addon_test.cpp
+      - native/test/mem_addon_core.cpp
+      - native/test/run_mem_pages_test.sh
+      - native/test/hooks/**
+      - native/test/run_guard_test.sh
+      - packages/sdk/include/swofty/mem.hpp
+      - .github/workflows/native-windows.yml
+  push:
+    branches: [main, "perf/guarded-reads-*", "perf/mem-page-cache"]
+    paths:
+      - native/src/core/hooks/**
+      - native/src/core/mem_pages.cpp
+      - native/test/mem_pages_test.cpp
+      - native/test/mem_addon_test.cpp
+      - native/test/mem_addon_core.cpp
+      - native/test/run_mem_pages_test.sh
+      - native/test/hooks/**
+      - native/test/run_guard_test.sh
+      - packages/sdk/include/swofty/mem.hpp
+      - .github/workflows/native-windows.yml
+  workflow_dispatch:
+
+jobs:
+  guard:
+    name: Guard tests on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+          use-cache: false
+      - name: Guard tests
+        shell: bash
+        run: bash native/test/run_guard_test.sh
+      - name: Memory page checks
+        if: always()
+        shell: bash
+        run: bash native/test/run_mem_pages_test.sh

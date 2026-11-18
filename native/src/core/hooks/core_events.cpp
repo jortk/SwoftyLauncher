@@ -2,6 +2,7 @@
 #include <swofty/systems/ai.hpp>
 #include <swofty/systems/cars.hpp>
 #include <swofty/systems/content.hpp>
+#include <swofty/systems/laps.hpp>
 #include <swofty/systems/sessions.hpp>
 #include <swofty/systems/sounds.hpp>
 #include <swofty/systems/spectator.hpp>
@@ -61,6 +62,8 @@ static_assert(declared<ca::ControllersRebuilt>(SWOFTY_POINT_NOTIFY));
 static_assert(declared<swofty::ai::events::ControllerUpdate>(SWOFTY_POINT_CANCEL));
 static_assert(declared<swofty::sessions::events::PlayerControl>(SWOFTY_POINT_CANCEL));
 static_assert(declared<swofty::sessions::events::Lap>(SWOFTY_POINT_NOTIFY));
+static_assert(declared<swofty::laps::events::Sealing>(SWOFTY_POINT_MODIFY));
+static_assert(declared<swofty::laps::events::Recorded>(SWOFTY_POINT_NOTIFY));
 static_assert(declared<swofty::spectator::events::HudVisible>(SWOFTY_POINT_MODIFY));
 static_assert(declared<so::BundleResolve>(SWOFTY_POINT_MODIFY));
 static_assert(sizeof(ce::Loaded) == sizeof(Shell) && sizeof(ce::Created) == sizeof(Shell));
@@ -147,6 +150,17 @@ bool session_lap(uint32_t car)
 {
     swofty::sessions::events::Lap e{};
     e.car = swofty::cars::live::Car(car);
+    return fire(e);
+}
+
+bool laps_sealing(swofty::laps::events::Sealing &payload) { return fire(payload); }
+
+bool laps_recorded(const char *path, int32_t time_ms, int32_t valid)
+{
+    swofty::laps::events::Recorded e{};
+    e.path_str = path;
+    e.time_ms = time_ms;
+    e.valid = valid;
     return fire(e);
 }
 

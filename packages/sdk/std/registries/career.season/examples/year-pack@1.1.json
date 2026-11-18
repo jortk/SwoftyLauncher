@@ -1,0 +1,19 @@
+{
+  "career.season": {
+    "2008": {
+      "year": 2008,
+      "box": "mod.season-2008/f1_2008",
+      "calendar": "mod.season-2008/2008",
+      "teams": [
+        {
+          "slot": 1,
+          "team": "mod.season-2008/mclaren",
+          "seats": [
+            "game/lewis_hamilton",
+            "mod.season-2008/heikki_kovalainen"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "example.native-charts",
+  "name": "Native Charts Example",
+  "version": "0.1.0",
+  "author": "Swofty Contributors",
+  "description": "Generic native chart controls with a chart-capability fallback.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "compat": {
+    "game": "f1_25"
+  },
+  "launcher": {
+    "program": {
+      "windows": "bin/native_charts.exe",
+      "linux": "bin/native_charts"
+    },
+    "sections": [
+      {
+        "id": "charts",
+        "title": "Native Charts",
+        "icon": "activity"
+      }
+    ]
+  }
+}

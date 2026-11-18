@@ -29,11 +29,18 @@ static_assert(offsetof(GdbValueMap, mask) == 0x30);
 static_assert(offsetof(GdbValueMap, max_num_elements_allowed) == 0x38);
 static_assert(sizeof(GdbValueMap) == 0x48);
 
+inline constexpr address<"Gdb_Check_DuplicateShortId"> Gdb_Check_DuplicateShortId{}; // L2 experimental
+using Gdb_Define_RewardsTableColumns_t = void(void *self, void *schema);
+inline constexpr fn<"Gdb_Define_RewardsTableColumns", Gdb_Define_RewardsTableColumns_t> Gdb_Define_RewardsTableColumns{}; // L2 experimental
 inline constexpr address<"Gdb_FindMetadata"> Gdb_FindMetadata{}; // L2 experimental
 using Gdb_HashMap_Rehash_t = void(GdbValueMap *map, uint64_t num_buckets);
 inline constexpr fn<"Gdb_HashMap_Rehash", Gdb_HashMap_Rehash_t> Gdb_HashMap_Rehash{}; // L2 experimental
+inline constexpr address<"Gdb_Index_TutorialStepTable"> Gdb_Index_TutorialStepTable{}; // L2 experimental
 using Gdb_Load_GameDatabase_t = GdbDatabase *(GdbDatabase *db, void *cfg);
 inline constexpr fn<"Gdb_Load_GameDatabase", Gdb_Load_GameDatabase_t> Gdb_Load_GameDatabase{}; // L2 experimental
+inline constexpr address<"Gdb_Load_SponsorGoalDefinitions"> Gdb_Load_SponsorGoalDefinitions{}; // L2 experimental
+inline constexpr address<"Gdb_Load_SponsorRewardDefinitions"> Gdb_Load_SponsorRewardDefinitions{}; // L2 experimental
+inline constexpr address<"Gdb_Load_SponsorSlotDefinitions"> Gdb_Load_SponsorSlotDefinitions{}; // L2 experimental
 using Gdb_Lookup_Key_t = void **(const char *path);
 inline constexpr fn<"Gdb_Lookup_Key", Gdb_Lookup_Key_t> Gdb_Lookup_Key{}; // L2 experimental
 inline constexpr data<"g_Gdb_Database", GdbDatabase *> g_Gdb_Database{}; // L2 experimental

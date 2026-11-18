@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use swofty_formats::pkg::{Node, Pkg, Val, Value};
 
 use super::node::*;
+use super::rows;
 use crate::Result;
 use crate::manifest::{Binds, CareerSetup, OptionType};
 use crate::settings::{SessionAddon, SessionMap, SessionMod, SessionOption};
@@ -18,6 +19,16 @@ const SETTINGS_ICON: &str = "ui_package/art/textures/options/o_category/";
 /// Columns of tiles ADDON SETTINGS keeps on screen; past them the row
 /// scrolls by hiding the column at the other edge, which the stacker closes up.
 const VISIBLE_COLUMNS: usize = 3;
+/// Rows ADDON SETTINGS shows whole, each under its label, with the next one in part under them; past
+/// them the rows scroll by hiding the row and label at the other edge, which the block's stacker closes
+/// up.
+const HOME_ROWS: usize = 2;
+/// The row the page tiles go in.
+const PAGES_ROW: &str = "More";
+/// The home's one block, which stacks its rows.
+const HOME_BLOCK: &str = "col_0";
+/// The screen title's element, which the title's parts name first.
+const TITLE: &str = "screen_title";
 /// Rows an addon's page keeps on screen: what fits the settings page's clipping window. Past
 /// them the page scrolls by hiding the row at the other edge, which the list's stacker closes up.
 const VISIBLE_ROWS: usize = 18;
@@ -31,7 +42,8 @@ const PAGE_FIRST: &str = "page_first";
 pub struct TileStyle {
     pub rows: usize,
     pub slot: fn(usize) -> &'static str,
-    pub icon: fn(Kind) -> Icon,
+    /// A tile's icon, from its kind, its id and whether it is a track.
+    pub icon: fn(Kind, &str, bool) -> Icon,
     pub attach: &'static [&'static str],
     pub hide_divider: bool,
     pub by_gap: bool,
@@ -47,12 +59,7 @@ pub enum Icon {
 pub const TILES: TileStyle = TileStyle {
     rows: 3,
     slot: |_| "1a",
-    icon: |k| match k {
-        Kind::Addon => Icon::Ref("#overrides.icons.session.settings"),
-        Kind::Map | Kind::Mod => {
-            Icon::Path("eaid://ui_package/art/textures/custom_track_select/race_completed_icon.tif")
-        }
-    },
+    icon: |k, id, track| Icon::Ref(super::icons::of(k, id, track)),
     attach: &["title_1", "stacker_title"],
     hide_divider: true,
     by_gap: true,
@@ -92,6 +99,12 @@ pub struct Entry<'a> {
     pub version: &'a str,
     pub description: &'a str,
     pub id: &'a str,
+    /// A track addon or a track package's page.
+    pub track: bool,
+    /// The track packages an addon brings, shown on its page.
+    pub maps: Vec<&'a SessionMap>,
+    /// The row it is listed in: its launcher folder, or Addons, Tracks or Mods.
+    pub folder: &'a str,
     pub options: Vec<Opt<'a>>,
     /// Every option of the addon, hidden ones too, for its career setup page.
     pub all: Vec<Opt<'a>>,
@@ -122,6 +135,36 @@ impl Entry<'_> {
     fn upper(&self) -> String {
         self.name.to_uppercase()
     }
+}
+
+/// The game's strings hold at most 255 bytes: a longer one is cut at a character and ends with "…".
+fn fit(s: String) -> String {
+    fit_to(s, 255)
+}
+
+fn fit_to(s: String, max: usize) -> String {
+    if s.len() <= max {
+        return s;
+    }
+    let mut end = max - '…'.len_utf8();
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", s[..end].trim_end())
+}
+
+const RESTART_NOTE: &str = "Applies after a restart.";
+
+fn with_note(text: &str, note: &str) -> String {
+    let text = text.trim();
+    if note.is_empty() {
+        return fit(text.to_owned());
+    }
+    if text.is_empty() {
+        return fit(note.to_owned());
+    }
+    let room = 255usize.saturating_sub(note.len() + 1);
+    format!("{} {note}", fit_to(text.to_owned(), room))
 }
 
 pub fn home_screen(page: usize) -> String {
@@ -166,12 +209,16 @@ enum Slot {
     Prev,
 }
 
-fn home_columns(page: &HomePage, rows: usize) -> Vec<Vec<Slot>> {
-    let ids: Vec<usize> = page.tiles.clone().collect();
-    let mut cols: Vec<Vec<Slot>> = ids
-        .chunks(rows)
-        .map(|c| c.iter().map(|&i| Slot::Entry(i)).collect())
-        .collect();
+/// A home page's rows: each run of entries of one folder, then the page tiles under More.
+fn home_rows(flow: &[Entry], page: &HomePage) -> Vec<(String, Vec<Slot>)> {
+    let mut rows: Vec<(String, Vec<Slot>)> = Vec::new();
+    for i in page.tiles.clone() {
+        let folder = flow.get(i).map_or(LOOSE_ADDONS, |e| e.folder);
+        match rows.last_mut() {
+            Some((name, slots)) if name == folder => slots.push(Slot::Entry(i)),
+            _ => rows.push((folder.to_owned(), vec![Slot::Entry(i)])),
+        }
+    }
     let nav: Vec<Slot> = [
         (page.next.is_some(), Slot::Next),
         (page.prev.is_some(), Slot::Prev),
@@ -180,9 +227,20 @@ fn home_columns(page: &HomePage, rows: usize) -> Vec<Vec<Slot>> {
     .filter_map(|(on, s)| on.then_some(s))
     .collect();
     if !nav.is_empty() {
-        cols.push(nav);
+        rows.push((PAGES_ROW.to_owned(), nav));
     }
-    cols
+    rows
+}
+
+/// Signals that scroll `items`, in stack order, so `to` shows with as many before it as `visible`
+/// leaves room for: the ones before those hide, the rest that scrolling ever hides show.
+fn scroll_to(items: &[String], to: usize, visible: usize, from: &str) -> Vec<Node> {
+    let hidden = (to + 1).saturating_sub(visible);
+    items[..items.len().saturating_sub(visible)]
+        .iter()
+        .enumerate()
+        .map(|(i, p)| sig(p, if i < hidden { "hide" } else { "show" }, from))
+        .collect()
 }
 
 pub fn entries<'a>(
@@ -220,12 +278,17 @@ pub fn entries<'a>(
             version: &m.version,
             description: &m.description,
             id: &m.id,
+            track: m.track,
+            maps: maps.iter().filter(|mp| mp.addon == m.id).collect(),
+            folder: m.folder.as_deref().unwrap_or(LOOSE_ADDONS),
             options,
             all,
             setup: m.career_setup.as_ref(),
         });
     }
-    for (j, mp) in maps.iter().enumerate() {
+    // A track package an enabled addon brings is on that addon's tile; the rest get their own.
+    let brought = |mp: &SessionMap| addons.iter().any(|a| a.enabled && a.id == mp.addon);
+    for (j, mp) in maps.iter().enumerate().filter(|(_, mp)| !brought(mp)) {
         out.push(Entry {
             kind: Kind::Map,
             index: j,
@@ -235,6 +298,9 @@ pub fn entries<'a>(
             version: &mp.version,
             description: &mp.description,
             id: &mp.code,
+            track: true,
+            maps: Vec::new(),
+            folder: LOOSE_TRACKS,
             options: Vec::new(),
             all: Vec::new(),
             setup: None,
@@ -250,11 +316,34 @@ pub fn entries<'a>(
             version: &md.version,
             description: &md.description,
             id: &md.id,
+            track: false,
+            maps: Vec::new(),
+            folder: LOOSE_MODS,
             options: Vec::new(),
             all: Vec::new(),
             setup: None,
         });
     }
+    by_folder(out)
+}
+
+/// The rows of entries that are in no folder: addons, track packages and mods. A launcher folder of
+/// the same name, as the Tracks category's, takes them in.
+const LOOSE_ADDONS: &str = "Addons";
+const LOOSE_TRACKS: &str = "Tracks";
+const LOOSE_MODS: &str = "Mods";
+
+/// Entries grouped by folder, the folders in the order their first entry comes, each folder's
+/// entries in the order they come.
+fn by_folder(entries: Vec<Entry>) -> Vec<Entry> {
+    let mut folders: Vec<&str> = Vec::new();
+    for e in &entries {
+        if !folders.contains(&e.folder) {
+            folders.push(e.folder);
+        }
+    }
+    let mut out = entries;
+    out.sort_by_key(|e| folders.iter().position(|f| *f == e.folder));
     out
 }
 
@@ -278,6 +367,46 @@ fn wrap_text(text: &str, width: usize) -> String {
         out.push(line);
     }
     out.join("\n")
+}
+
+/// Lines a tile has for its title, details and description.
+const TILE_LINES: usize = 6;
+/// Characters of a tile's title, tag included, to a line.
+const TITLE_WIDTH: usize = 30;
+
+/// The lines a tile's title takes, as `tagged` writes it: its text and tag, the tag's markup left out.
+fn title_lines(title: &str) -> usize {
+    let plain = match title.split_once("  {s:") {
+        Some((text, rest)) => format!(
+            "{text}  {}",
+            rest.split_once('}')
+                .map_or(rest, |(_, t)| t)
+                .trim_end_matches("{/s}")
+        ),
+        None => title.to_owned(),
+    };
+    wrap_text(&plain, TITLE_WIDTH).lines().count().max(1)
+}
+
+/// The first `max` lines of `wrapped`, the last ending with "..." in `width` when lines were left
+/// out, a word at a time.
+fn clip_lines(wrapped: &str, max: usize, width: usize) -> String {
+    const MORE: &str = "...";
+    let lines: Vec<&str> = wrapped.lines().collect();
+    if lines.len() <= max {
+        return wrapped.to_owned();
+    }
+    let mut kept: Vec<String> = lines[..max].iter().map(|l| (*l).to_owned()).collect();
+    let last = kept.last_mut().expect("max is at least one");
+    let mut words: Vec<&str> = last.split(' ').collect();
+    while words.len() > 1 && words.join(" ").chars().count() + MORE.len() > width {
+        words.pop();
+    }
+    *last = format!(
+        "{}{MORE}",
+        words.join(" ").trim_end_matches([',', '.', ';', ':', ' '])
+    );
+    kept.join("\n")
 }
 
 fn label_case(s: &str) -> String {
@@ -386,12 +515,12 @@ fn adjust_tip(fr: &mut Frame) -> Result<()> {
 }
 
 fn panel(src: &Sources, sname: &str, e: &Entry, first_title: &str, first_body: &str) -> Result<[Node; 2]> {
-    let body = [e.details(), e.description.to_owned()]
+    let body = fit([e.details(), e.description.to_owned()]
         .into_iter()
         .filter(|x| !x.is_empty())
         .collect::<Vec<_>>()
-        .join("\n");
-    let upper = e.upper();
+        .join("\n"));
+    let upper = fit(e.upper());
     let mut cat = instance(
         src.t("settings_edit_description_category")?,
         sname,
@@ -437,14 +566,46 @@ enum RowKind<'a> {
 }
 
 fn addon_rows<'a>(e: &'a Entry<'a>) -> Vec<Row<'a>> {
+    let mut rows = track_rows(e);
+    rows.extend(option_rows(e));
+    rows
+}
+
+// A track addon's track packages: their codes, to pick in any mode.
+fn track_rows<'a>(e: &Entry) -> Vec<Row<'a>> {
+    let several = e.maps.len() > 1;
+    e.maps
+        .iter()
+        .enumerate()
+        .map(|(j, mp)| {
+            let label = match several {
+                true => format!("Track Code: {}", mp.name),
+                false => "Track Code".to_owned(),
+            };
+            Row {
+                key: format!("row_code_{j}"),
+                kind: RowKind::Info(mp.code.clone()),
+                title: fit(label.to_uppercase()),
+                label: fit(label),
+                body: "Pick this track in any mode to race on it.".into(),
+            }
+        })
+        .collect()
+}
+
+fn option_rows<'a>(e: &'a Entry<'a>) -> Vec<Row<'a>> {
     if e.options.is_empty() {
+        let none = match e.maps.is_empty() {
+            true => "This addon has no options.",
+            false => "",
+        };
         return vec![
             Row {
                 key: "row_id".into(),
                 kind: RowKind::Info(e.id.into()),
                 label: "Addon ID".into(),
                 title: "ADDON ID".into(),
-                body: "This addon has no options.".into(),
+                body: none.into(),
             },
             Row {
                 key: "row_version".into(),
@@ -459,11 +620,7 @@ fn addon_rows<'a>(e: &'a Entry<'a>) -> Vec<Row<'a>> {
         .iter()
         .map(|opt| {
             let o = opt.o;
-            let restart = if o.binds == Binds::Db {
-                " Applies after a restart."
-            } else {
-                ""
-            };
+            let restart = if o.binds == Binds::Db { RESTART_NOTE } else { "" };
             Row {
                 key: format!("row_{}", opt.k),
                 kind: if o.kind == OptionType::Slider {
@@ -471,9 +628,9 @@ fn addon_rows<'a>(e: &'a Entry<'a>) -> Vec<Row<'a>> {
                 } else {
                     RowKind::Toggle(opt)
                 },
-                label: label_case(&o.label),
-                title: o.label.to_uppercase(),
-                body: format!("{}{restart}", o.description).trim().to_owned(),
+                label: fit(label_case(&o.label)),
+                title: fit(o.label.to_uppercase()),
+                body: with_note(&o.description, restart),
             }
         })
         .collect()
@@ -543,7 +700,7 @@ fn build_page(src: &Sources, e: &Entry, rows: &[Row], adjustable: bool) -> Resul
         fr.tooltips.slot_mut(CHILDREN)?.retain(|x| x.name() != "select");
     }
     let mut kids = vec![
-        src.title(sname, "settings_edit_screen", &e.upper())?,
+        src.title(sname, "settings_edit_screen", &fit(e.upper()))?,
         hidden("hide_filter", &["filter"]),
         hidden("hide_scroll_bar", &["scroll_bar"]),
     ];
@@ -558,7 +715,7 @@ fn build_page(src: &Sources, e: &Entry, rows: &[Row], adjustable: bool) -> Resul
                     src.t("settings_edit_toggle")?,
                     sname,
                     key,
-                    &[("toggle.label", &r.label), ("toggle.value", value)],
+                    &[("toggle.label", &r.label), ("toggle.value", &fit(value.clone()))],
                     true,
                 )?;
                 let tg = t.child_mut("toggle")?;
@@ -577,7 +734,10 @@ fn build_page(src: &Sources, e: &Entry, rows: &[Row], adjustable: bool) -> Resul
                     src.t("settings_edit_slider")?,
                     sname,
                     key,
-                    &[("slider.label", &r.label), ("slider.value", &cur.text)],
+                    &[
+                        ("slider.label", &r.label),
+                        ("slider.value", &fit(cur.text.clone())),
+                    ],
                     true,
                 )?;
                 let vals = o
@@ -619,7 +779,10 @@ fn build_page(src: &Sources, e: &Entry, rows: &[Row], adjustable: bool) -> Resul
                     src.t("settings_edit_toggle")?,
                     sname,
                     key,
-                    &[("toggle.label", &r.label), ("toggle.value", &cur.text)],
+                    &[
+                        ("toggle.label", &r.label),
+                        ("toggle.value", &fit(cur.text.clone())),
+                    ],
                     true,
                 )?;
                 let tg = t.child_mut("toggle")?;
@@ -764,13 +927,22 @@ fn vm_page(scr: &mut Node, e: &Entry) -> Result<()> {
 }
 
 fn tile(src: &Sources, style: &TileStyle, parent: &str, name: &str, row: usize, e: &Entry) -> Result<Node> {
-    let title = tagged(&e.upper(), e.kind.tag(), TAG_STYLE);
+    let title = tagged(&fit_to(e.upper(), 200), e.kind.tag(), TAG_STYLE);
+    let description = fit(e.description.to_owned());
     let text = TileText {
         title: &title,
-        by: &e.details(),
-        description: e.description,
+        by: &fit(e.details()),
+        description: &description,
     };
-    tile_with(src, style, parent, name, row, (style.icon)(e.kind), &text)
+    tile_with(
+        src,
+        style,
+        parent,
+        name,
+        row,
+        (style.icon)(e.kind, e.id, e.track),
+        &text,
+    )
 }
 
 struct TileText<'a> {
@@ -811,10 +983,17 @@ fn tile_with(
         }
     }
     let (by, description) = match style.wrap {
-        Some((by_width, desc_width)) => (
-            wrap_text(text.by, by_width),
-            wrap_text(text.description, desc_width),
-        ),
+        Some((by_width, desc_width)) => {
+            let by = wrap_text(text.by, by_width);
+            let room = TILE_LINES
+                .saturating_sub(title_lines(text.title))
+                .saturating_sub(by.lines().count())
+                .max(1);
+            (
+                by,
+                clip_lines(&wrap_text(text.description, desc_width), room, desc_width),
+            )
+        }
         None => (text.by.to_owned(), text.description.to_owned()),
     };
     let gap = if style.by_gap && !by.is_empty() && !description.is_empty() {
@@ -859,8 +1038,41 @@ fn tile_with(
 struct HomeTile {
     path: String,
     name: String,
-    column: usize,
+    row: usize,
+    col: usize,
     writes: Option<String>,
+}
+
+/// Drops the first step of the layout of `n`'s children and their children when it is `step`: a node
+/// attached to a scene element by its own component names that scene's elements alone.
+fn drop_first_step(n: &mut Node, step: &str) -> Result<()> {
+    let Some(path) = n.a_mut()?[LAYOUT].a_mut()?.first_mut() else {
+        return Ok(());
+    };
+    let steps = path.a_mut()?;
+    let first = steps
+        .first()
+        .and_then(|s| s.as_obj())
+        .and_then(|o| o.str_at("debugName").ok());
+    if first == Some(step) && steps.len() > 1 {
+        steps.remove(0);
+    }
+    Ok(())
+}
+
+/// Gives `n` the component scene at `path`, as a block's o_block or a tile's o_category.
+fn set_component(n: &mut Node, path: &str) -> Result<()> {
+    let path = path.strip_suffix(".idf").unwrap_or(path);
+    let name = path.rsplit('/').next().unwrap_or(path);
+    n.a_mut()?[COMPONENT] = arr(vec![obj(vec![
+        (
+            "componentId",
+            Node::Val(Val::raw(*b"ui64", component_id(path).to_le_bytes())),
+        ),
+        ("debugName", s(path)),
+        ("name", s(name)),
+    ])]);
+    Ok(())
 }
 
 fn page_tile(
@@ -889,7 +1101,15 @@ fn page_tile(
         by: &format!("Page {} of {}", to + 1, page.pages),
         description: &description,
     };
-    tile_with(src, style, parent, name, row, (style.icon)(Kind::Addon), &text)
+    tile_with(
+        src,
+        style,
+        parent,
+        name,
+        row,
+        (style.icon)(Kind::Addon, "", false),
+        &text,
+    )
 }
 
 fn home_title(page: &HomePage) -> String {
@@ -922,15 +1142,41 @@ fn build_home(src: &Sources, style: &TileStyle, flow: &[Entry], page: &HomePage)
     for n in ["filter", "side_panel", "scroll_bar", "scroll_bar_panel"] {
         kids.push(hidden(&format!("hide_{n}"), &[n]));
     }
-    let layout = home_columns(page, style.rows);
-    let mut cols: Vec<Vec<String>> = Vec::new();
+    let rows = home_rows(flow, page);
+    let block_path = format!("{home}.{HOME_BLOCK}");
+    let mut block = instance(src.t("settings_home_block")?, home, HOME_BLOCK, &[], true)?;
+    block.slot_mut(CHILDREN)?.clear();
+    let mut row_nodes = Vec::new();
+    let mut label_nodes = Vec::new();
+    let mut tiles: Vec<Vec<String>> = Vec::new();
     let mut keyed = Vec::new();
-    for (c, slots) in layout.iter().enumerate() {
-        let bname = format!("col_{c}");
-        let mut block = instance(src.t("settings_home_block")?, home, &bname, &[], true)?;
-        let parent = format!("{home}.{bname}");
-        let mut col = Vec::new();
-        for (r, slot) in slots.iter().enumerate() {
+    for (r, (label, slots)) in rows.iter().enumerate() {
+        let rname = format!("row_{r}");
+        let rpath = format!("{block_path}.{rname}");
+        let mut row = instance(src.t("settings_home_block")?, &block_path, &rname, &[], true)?;
+        row.slot_mut(CHILDREN)?.clear();
+        row.a_mut()?[LAYOUT] = layout_path(&[rows::STACKER]);
+        set_component(&mut row, rows::O_ROW)?;
+        // The folder's name over its row: a copy of the screen title that the block stacks as an
+        // item of its own, as the career content select stacks its Built In and Addons labels.
+        let lname = format!("label_{r}");
+        let mut name = src.title(home, "settings_home_screen", &fit(label.to_uppercase()))?;
+        rename_refs(
+            &mut name,
+            &format!("{home}.screen_title"),
+            &format!("{block_path}.{lname}"),
+        );
+        rename(&mut name, &lname)?;
+        name.a_mut()?[LAYOUT] = layout_path(&[rows::STACKER]);
+        set_component(&mut name, rows::TITLE_SCENE)?;
+        for c in name.slot_mut(CHILDREN)? {
+            if c.is_node() {
+                drop_first_step(c, TITLE)?;
+            }
+        }
+        label_nodes.push(name);
+        let mut paths = Vec::new();
+        for (c, slot) in slots.iter().enumerate() {
             let (mut t, tname, route, writes) = match *slot {
                 Slot::Entry(i) => {
                     let e = flow.get(i).ok_or_else(|| {
@@ -940,7 +1186,7 @@ fn build_home(src: &Sources, style: &TileStyle, flow: &[Entry], page: &HomePage)
                         ))
                     })?;
                     let tname = format!("t{i}");
-                    let t = tile(src, style, &parent, &tname, r, e)?;
+                    let t = tile(src, style, &rpath, &tname, c, e)?;
                     (
                         t,
                         tname.clone(),
@@ -949,19 +1195,19 @@ fn build_home(src: &Sources, style: &TileStyle, flow: &[Entry], page: &HomePage)
                     )
                 }
                 Slot::Next => (
-                    page_tile(src, style, &parent, r, flow, page, *slot)?,
+                    page_tile(src, style, &rpath, c, flow, page, *slot)?,
                     NEXT_PAGE.to_owned(),
                     NEXT_PAGE.to_owned(),
                     PAGE_FIRST.to_owned(),
                 ),
                 Slot::Prev => (
-                    page_tile(src, style, &parent, r, flow, page, *slot)?,
+                    page_tile(src, style, &rpath, c, flow, page, *slot)?,
                     PREV_PAGE.to_owned(),
                     PREV_PAGE.to_owned(),
                     NEXT_PAGE.to_owned(),
                 ),
             };
-            let path = format!("{parent}.{tname}");
+            let path = format!("{rpath}.{tname}");
             add_events(
                 &mut t,
                 vec![event(
@@ -978,55 +1224,77 @@ fn build_home(src: &Sources, style: &TileStyle, flow: &[Entry], page: &HomePage)
                     ],
                 )],
             )?;
-            block.slot_mut(CHILDREN)?.push(t);
-            col.push(path.clone());
+            row.slot_mut(CHILDREN)?.push(t);
+            paths.push(path.clone());
             keyed.push(HomeTile {
                 path,
                 name: tname,
-                column: c,
+                row: r,
+                col: c,
                 writes: Some(writes),
             });
         }
-        cols.push(col);
-        kids.push(block);
+        tiles.push(paths);
+        row_nodes.push(row);
     }
-    let first_block = kids.len() - cols.len();
-    let scrolls = cols.len() > VISIBLE_COLUMNS;
-    let column = |c: usize| format!("{home}.col_{c}");
-    for (ci, col) in cols.iter().enumerate() {
-        for (ri, path) in col.iter().enumerate() {
+    let row_paths: Vec<String> = (0..rows.len()).map(|r| format!("{block_path}.row_{r}")).collect();
+    let label_paths: Vec<String> = (0..rows.len())
+        .map(|r| format!("{block_path}.label_{r}"))
+        .collect();
+    for (r, row_tiles) in tiles.iter().enumerate() {
+        for (c, path) in row_tiles.iter().enumerate() {
             let mut evs = Vec::new();
-            if ri > 0 {
-                evs.push(event("navUp", vec![sig(&col[ri - 1], "focus", "navUp")]));
-            }
-            if ri + 1 < col.len() {
-                evs.push(event("navDown", vec![sig(&col[ri + 1], "focus", "navDown")]));
-            }
-            if ci > 0 {
-                let left = &cols[ci - 1];
-                let mut sigs = vec![sig(&left[ri.min(left.len() - 1)], "focus", "navLeft")];
-                if scrolls {
-                    sigs.push(sig(&column(ci - 1), "show", "navLeft"));
+            if c > 0 {
+                let mut sigs = vec![sig(&row_tiles[c - 1], "focus", "navLeft")];
+                if row_tiles.len() > VISIBLE_COLUMNS {
+                    sigs.push(sig(&row_tiles[c - 1], "show", "navLeft"));
                 }
                 evs.push(event("navLeft", sigs));
             }
-            if ci + 1 < cols.len() {
-                let right = &cols[ci + 1];
-                let mut sigs = vec![sig(&right[ri.min(right.len() - 1)], "focus", "navRight")];
-                if scrolls && ci + 1 >= VISIBLE_COLUMNS {
-                    sigs.push(sig(&column(ci + 1 - VISIBLE_COLUMNS), "hide", "navRight"));
+            if c + 1 < row_tiles.len() {
+                let mut sigs = vec![sig(&row_tiles[c + 1], "focus", "navRight")];
+                if row_tiles.len() > VISIBLE_COLUMNS && c + 1 >= VISIBLE_COLUMNS {
+                    sigs.push(sig(&row_tiles[c + 1 - VISIBLE_COLUMNS], "hide", "navRight"));
                 }
                 evs.push(event("navRight", sigs));
             }
+            // Up and down land on the same column, or the row's last tile, with that row
+            // scrolled to show it.
+            if r > 0 {
+                let above = &tiles[r - 1];
+                let to = c.min(above.len() - 1);
+                let mut sigs = scroll_to(above, to, VISIBLE_COLUMNS, "navUp");
+                if rows.len() > HOME_ROWS {
+                    sigs.push(sig(&label_paths[r - 1], "show", "navUp"));
+                    sigs.push(sig(&row_paths[r - 1], "show", "navUp"));
+                }
+                sigs.push(sig(&above[to], "focus", "navUp"));
+                evs.push(event("navUp", sigs));
+            }
+            if r + 1 < tiles.len() {
+                let below = &tiles[r + 1];
+                let to = c.min(below.len() - 1);
+                let mut sigs = scroll_to(below, to, VISIBLE_COLUMNS, "navDown");
+                if rows.len() > HOME_ROWS && r + 1 >= HOME_ROWS {
+                    sigs.push(sig(&label_paths[r + 1 - HOME_ROWS], "hide", "navDown"));
+                    sigs.push(sig(&row_paths[r + 1 - HOME_ROWS], "hide", "navDown"));
+                }
+                sigs.push(sig(&below[to], "focus", "navDown"));
+                evs.push(event("navDown", sigs));
+            }
             let tname = &path[path.rfind('.').map_or(0, |d| d + 1)..];
-            let t = &mut kids[first_block + ci].slot_mut(CHILDREN)?;
-            let tile = t
+            let tile = row_nodes[r]
+                .slot_mut(CHILDREN)?
                 .iter_mut()
                 .find(|x| x.is_node() && x.name() == tname)
                 .ok_or_else(|| err(format!("tile {tname} went missing")))?;
             add_events(tile, evs)?;
         }
     }
+    for (label, row) in label_nodes.into_iter().zip(row_nodes) {
+        block.slot_mut(CHILDREN)?.extend([label, row]);
+    }
+    kids.push(block);
     let first_path = keyed
         .first()
         .map(|k| k.path.clone())
@@ -1035,23 +1303,25 @@ fn build_home(src: &Sources, style: &TileStyle, flow: &[Entry], page: &HomePage)
         keyed.push(HomeTile {
             path: first_path.clone(),
             name: PAGE_FIRST.to_owned(),
-            column: 0,
+            row: 0,
+            col: 0,
             writes: None,
         });
     }
     let first = first_path[home.len() + 1..].to_owned();
-    finish_home(scr, fr, kids, &keyed, cols.len(), &first)
+    finish_home(scr, fr, kids, &keyed, &[row_paths, label_paths], &tiles, &first)
 }
 
-/// The home screen's tiles are `keyed` in `columns` columns. A tile press stores the tile's
-/// `writes` in the state's `last`, and an open of the screen focuses the tile whose name `last`
-/// holds, with the row scrolled to show it.
+/// The home screen's tiles are `keyed`, in the rows and labels at `row_paths` whose tiles are `tiles`. A tile
+/// press stores the tile's `writes` in the state's `last`, and an open of the screen focuses the tile
+/// whose name `last` holds, with the rows and its row scrolled to show it.
 fn finish_home(
     scr: Node,
     fr: Frame,
     mut kids: Vec<Node>,
     keyed: &[HomeTile],
-    columns: usize,
+    row_paths: &[Vec<String>; 2],
+    tiles: &[Vec<String>],
     first: &str,
 ) -> Result<Node> {
     let home = scr.name().to_owned();
@@ -1077,14 +1347,13 @@ fn finish_home(
         keyed
             .iter()
             .map(|k| {
-                let mut sigs = Vec::new();
-                if columns > VISIBLE_COLUMNS {
-                    let shown = k.column.saturating_sub(VISIBLE_COLUMNS - 1);
-                    sigs.extend((0..columns).map(|c| {
-                        let pin = if c < shown { "hide" } else { "show" };
-                        sig(&format!("{home}.col_{c}"), pin, &k.name)
-                    }));
-                }
+                // The screen opens with every row and tile showing: only the rows and the
+                // tile's own row scroll.
+                let mut sigs: Vec<Node> = row_paths
+                    .iter()
+                    .flat_map(|paths| scroll_to(paths, k.row, HOME_ROWS, &k.name))
+                    .collect();
+                sigs.extend(scroll_to(&tiles[k.row], k.col, VISIBLE_COLUMNS, &k.name));
                 sigs.push(sig(&k.path, "focus", &k.name));
                 event(&k.name, sigs)
             })
@@ -1154,6 +1423,9 @@ pub fn build_options_page(src: &Sources, e: &Entry, screen: &str) -> Result<Vec<
         version: e.version,
         description: e.description,
         id: e.id,
+        track: e.track,
+        maps: e.maps.clone(),
+        folder: e.folder,
         options: e
             .options
             .iter()
@@ -1199,6 +1471,9 @@ fn setup_entry<'a>(e: &Entry<'a>, setup: &'a CareerSetup) -> Entry<'a> {
         version: e.version,
         description: e.description,
         id: e.id,
+        track: e.track,
+        maps: e.maps.clone(),
+        folder: e.folder,
         options: setup
             .options
             .iter()
@@ -1296,7 +1571,7 @@ pub fn build_setup_home(src: &Sources, e: &Entry, setup: &CareerSetup) -> Result
         &right,
         "options",
         0,
-        (TILES.icon)(Kind::Addon),
+        (TILES.icon)(Kind::Addon, e.id, e.track),
         &text,
     )?;
     add_events(
@@ -1383,10 +1658,98 @@ pub fn state_entries(flow: &[Entry]) -> Result<Vec<(String, Node)>> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_description_past_the_tile_s_lines_ends_with_dots() {
+        let desc = "Istanbul Park (Turkish Grand Prix) as track istanbul, with its own names in all 11 languages. Track v2.72 by Apoc & SK.";
+        let wrapped = wrap_text(desc, 32);
+        assert_eq!(wrapped.lines().count(), 5);
+        let cut = clip_lines(&wrapped, 4, 32);
+        let lines: Vec<&str> = cut.lines().collect();
+        assert_eq!(lines.len(), 4);
+        assert!(lines[3].ends_with("..."), "{cut}");
+        assert!(lines.iter().all(|l| l.chars().count() <= 32), "{cut}");
+        assert_eq!(clip_lines("short", 4, 32), "short");
+        assert_eq!(title_lines(&tagged("ISTANBUL PARK", "ADDON", TAG_STYLE)), 1);
+        assert_eq!(
+            title_lines(&tagged("SIMPLIFIED FOR SWOFTY", "ADDON", TAG_STYLE)),
+            1
+        );
+        assert_eq!(
+            title_lines(&tagged(
+                "AUTODROMO INTERNAZIONALE DEL MUGELLO",
+                "ADDON",
+                TAG_STYLE
+            )),
+            2
+        );
+    }
+
+    #[test]
+    fn a_long_description_is_cut_to_fit_the_games_strings() {
+        let long = format!("by Swofty, v0.4.0\n{}", "é".repeat(200));
+        let cut = fit(long);
+        assert!(cut.len() <= 255, "{}", cut.len());
+        assert!(cut.ends_with('…'));
+        assert_eq!(fit("short".into()), "short");
+    }
+
+    #[test]
+    fn a_restart_note_is_kept_when_the_description_is_long() {
+        let note = RESTART_NOTE;
+        let long = "x".repeat(248);
+        let body = with_note(&long, note);
+        assert!(body.len() <= 255, "{}", body.len());
+        assert!(body.ends_with(note));
+        assert!(body.contains('…'));
+    }
+
+    #[test]
+    fn a_description_that_exactly_fits_is_not_cut() {
+        let text = "y".repeat(255 - RESTART_NOTE.len() - 1);
+        let body = with_note(&text, RESTART_NOTE);
+        assert_eq!(body.len(), 255);
+        assert_eq!(body, format!("{text} {RESTART_NOTE}"));
+        assert_eq!(
+            with_note("Short.", RESTART_NOTE),
+            "Short. Applies after a restart."
+        );
+    }
+
+    #[test]
+    fn a_restart_note_survives_multibyte_text_at_the_boundary() {
+        for n in 100..140 {
+            let text = format!("{}{}", "a".repeat(n % 3), "é🏁".repeat(n));
+            let body = with_note(&text, RESTART_NOTE);
+            assert!(body.len() <= 255, "{n}: {}", body.len());
+            assert!(body.ends_with(RESTART_NOTE));
+        }
+    }
+
+    #[test]
+    fn an_empty_description_keeps_only_the_note() {
+        assert_eq!(with_note("", RESTART_NOTE), RESTART_NOTE);
+        assert_eq!(with_note("  ", ""), "");
+        assert!(with_note(&"z".repeat(400), "").len() <= 255);
+    }
+
+    #[test]
+    fn a_long_folder_name_is_cut_to_fit_the_games_strings() {
+        let name = format!("{}ü🏁", "é".repeat(300)).to_uppercase();
+        let cut = fit(name.clone());
+        assert!(name.len() > 255);
+        assert!(cut.len() <= 255, "{}", cut.len());
+        assert!(cut.ends_with('…'));
+        let emoji = fit("🏁".repeat(100));
+        assert!(emoji.len() <= 255 && emoji.ends_with('…'));
+        let tagged_title = tagged(&fit_to(name, 200), "ADDON", TAG_STYLE);
+        assert!(tagged_title.len() <= 255, "{}", tagged_title.len());
+    }
+
     fn map(code: &str, name: &str) -> SessionMap {
         SessionMap {
             code: code.into(),
             name: name.into(),
+            addon: String::new(),
             version: "1.0".into(),
             author: "a".into(),
             description: String::new(),
@@ -1440,59 +1803,124 @@ mod tests {
         assert_eq!(home_plan(0)[0].screen, HOME);
     }
 
-    #[test]
-    fn a_short_list_keeps_one_home_screen_without_page_tiles() {
-        let plan = home_plan(24);
-        assert_eq!((plan[0].prev.as_ref(), plan[0].next.as_ref()), (None, None));
-        let cols = home_columns(&plan[0], TILES.rows);
-        assert_eq!(cols.len(), 8);
-        assert!(cols.iter().flatten().all(|s| matches!(s, Slot::Entry(_))));
-        let ids: Vec<usize> = cols
+    fn foldered(id: &str, folder: Option<&str>) -> SessionAddon {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "name": id, "version": "1.0.0", "author": "t", "enabled": true,
+            "locked": false, "enable_commands": ["", ""], "folder": folder
+        }))
+        .unwrap()
+    }
+
+    fn slot_ids(slots: &[Slot]) -> Vec<usize> {
+        slots
             .iter()
-            .flatten()
             .map(|s| match s {
                 Slot::Entry(i) => *i,
-                _ => unreachable!(),
+                _ => usize::MAX,
             })
-            .collect();
-        assert_eq!(ids, (0..24).collect::<Vec<_>>());
+            .collect()
     }
 
     #[test]
-    fn page_tiles_take_a_column_after_the_page_s_tiles() {
-        let plan = home_plan(70);
-        let cols: Vec<Vec<Vec<Slot>>> = plan.iter().map(|h| home_columns(h, TILES.rows)).collect();
-        assert_eq!(cols[0].len(), 9);
-        assert_eq!(cols[0][8], [Slot::Next]);
-        assert_eq!(cols[1][8], [Slot::Next, Slot::Prev]);
-        assert_eq!(cols[2].len(), 9);
-        assert_eq!(cols[2][7], [Slot::Entry(69)]);
-        assert_eq!(cols[2][8], [Slot::Prev]);
-        assert_eq!(cols[1][0], [Slot::Entry(24), Slot::Entry(25), Slot::Entry(26)]);
+    fn the_home_lists_a_row_per_folder_in_the_order_the_folders_come() {
+        let addons = [
+            foldered("swofty.core", Some("Built In")),
+            foldered("a", Some("Cars")),
+            foldered("b", None),
+            foldered("c", Some("Cars")),
+            foldered("track.x", Some("Tracks")),
+        ];
+        let maps = [map("imola", "Imola")];
+        let mods = [a_mod("ts.sauber", "Sauber")];
+        let flow = entries(&addons, &maps, &mods);
+        let ids: Vec<&str> = flow.iter().map(|e| e.id).collect();
+        assert_eq!(
+            ids,
+            ["swofty.core", "a", "c", "b", "track.x", "imola", "ts.sauber"],
+            "a folder's addons sit together, loose track packages join Tracks"
+        );
+        let plan = home_plan(flow.len());
+        let rows = home_rows(&flow, &plan[0]);
+        let shape: Vec<(&str, Vec<usize>)> = rows.iter().map(|(f, s)| (f.as_str(), slot_ids(s))).collect();
+        assert_eq!(
+            shape,
+            [
+                ("Built In", vec![0]),
+                ("Cars", vec![1, 2]),
+                (LOOSE_ADDONS, vec![3]),
+                ("Tracks", vec![4, 5]),
+                (LOOSE_MODS, vec![6]),
+            ]
+        );
     }
 
     #[test]
-    fn no_home_screen_grows_past_its_page_whatever_the_addon_count() {
+    fn page_tiles_take_a_row_after_the_page_s_tiles() {
+        let addons: Vec<SessionAddon> = (0..70).map(|i| foldered(&format!("a{i}"), None)).collect();
+        let flow = entries(&addons, &[], &[]);
+        let plan = home_plan(flow.len());
+        let rows: Vec<Vec<(String, Vec<Slot>)>> = plan.iter().map(|h| home_rows(&flow, h)).collect();
+        assert_eq!(rows[0].len(), 2);
+        assert_eq!(slot_ids(&rows[0][0].1), (0..24).collect::<Vec<_>>());
+        assert_eq!(rows[0][1], (PAGES_ROW.to_owned(), vec![Slot::Next]));
+        assert_eq!(rows[1][1].1, [Slot::Next, Slot::Prev]);
+        assert_eq!(rows[2][1].1, [Slot::Prev]);
+        assert_eq!(slot_ids(&rows[2][0].1), (48..70).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn only_what_scrolling_hides_gets_scroll_signals() {
+        let items: Vec<String> = (0..5).map(|i| format!("t{i}")).collect();
+        let pins = |to| -> Vec<(String, String)> {
+            scroll_to(&items, to, 3, "e")
+                .iter()
+                .map(|n| {
+                    let o = n.o().unwrap();
+                    (
+                        o.str_at("to_object_name").unwrap().to_owned(),
+                        o.str_at("to_pin_name").unwrap().to_owned(),
+                    )
+                })
+                .collect()
+        };
+        let pair = |t: &str, p: &str| (t.to_owned(), p.to_owned());
+        assert_eq!(pins(1), [pair("t0", "show"), pair("t1", "show")]);
+        assert_eq!(pins(3), [pair("t0", "hide"), pair("t1", "show")]);
+        assert_eq!(pins(4), [pair("t0", "hide"), pair("t1", "hide")]);
+        assert!(
+            scroll_to(&items[..3], 2, 3, "e").is_empty(),
+            "a row that fits never scrolls"
+        );
+    }
+
+    #[test]
+    fn no_home_screen_grows_past_its_page_whatever_the_addon_count_or_folders() {
         for n in [1, 23, 24, 25, 60, 64, 72, 150, 500] {
-            let plan = home_plan(n);
-            assert_eq!(plan.len(), n.div_ceil(HOME_PAGE_TILES).max(1), "{n}");
-            assert_eq!(plan.iter().map(|h| h.tiles.len()).sum::<usize>(), n, "{n}");
-            for h in &plan {
-                let cols = home_columns(h, TILES.rows);
-                let tiles: usize = cols.iter().map(Vec::len).sum();
-                assert!(
-                    tiles <= HOME_PAGE_TILES + 2,
-                    "{n}: {} has {tiles} tiles",
-                    h.screen
-                );
-                assert!(
-                    cols.len() <= HOME_PAGE_TILES / TILES.rows + 1,
-                    "{n}: {} has {} columns",
-                    h.screen,
-                    cols.len()
-                );
-                let restore_signals = (tiles + 1) * (cols.len() + 1);
-                assert!(restore_signals <= 27 * 10, "{n}: {restore_signals}");
+            for per_folder in [1, 2, 3, 4, 24] {
+                let addons: Vec<SessionAddon> = (0..n)
+                    .map(|i| foldered(&format!("a{i}"), Some(&format!("f{}", i / per_folder))))
+                    .collect();
+                let flow = entries(&addons, &[], &[]);
+                let plan = home_plan(n);
+                assert_eq!(plan.len(), n.div_ceil(HOME_PAGE_TILES).max(1), "{n}");
+                assert_eq!(plan.iter().map(|h| h.tiles.len()).sum::<usize>(), n, "{n}");
+                for h in &plan {
+                    let rows = home_rows(&flow, h);
+                    let lens: Vec<usize> = rows.iter().map(|(_, s)| s.len()).collect();
+                    let tiles: usize = lens.iter().sum();
+                    assert!(
+                        tiles <= HOME_PAGE_TILES + 2,
+                        "{n}: {} has {tiles} tiles",
+                        h.screen
+                    );
+                    // Each restore event scrolls the rows and its tile's row, then focuses.
+                    let scrolled = rows.len().saturating_sub(HOME_ROWS);
+                    let restore_signals: usize = lens
+                        .iter()
+                        .map(|len| len * (scrolled + len.saturating_sub(VISIBLE_COLUMNS) + 1))
+                        .sum();
+                    assert!(restore_signals <= 27 * 24, "{n}/{per_folder}: {restore_signals}");
+                }
             }
         }
     }
@@ -1518,5 +1946,45 @@ mod tests {
         assert_eq!(Kind::Mod.tag(), "MOD");
         assert_eq!((flow[1].name, flow[1].id), ("Sauber", "ts.sauber"));
         assert!(flow[1].options.is_empty());
+    }
+
+    fn track_addon(id: &str, enabled: bool) -> SessionAddon {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "name": "Mugello", "version": "0.58.1", "author": "t", "enabled": enabled,
+            "locked": false, "enable_commands": ["", ""]
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_track_an_addon_brings_is_on_that_addons_tile_only() {
+        let mut brought = map("mugello", "Mugello");
+        brought.addon = "track.mugello".into();
+        let mut off = map("istanbul", "Istanbul Park");
+        off.addon = "ts.istanbul".into();
+        let loose = map("imola", "Imola");
+        let maps = [brought, off, loose];
+        let addons = [
+            track_addon("track.mugello", true),
+            track_addon("ts.istanbul", false),
+        ];
+        let flow = entries(&addons, &maps, &[]);
+        let shape: Vec<(Kind, &str)> = flow.iter().map(|e| (e.kind, e.screen.as_str())).collect();
+        assert_eq!(
+            shape,
+            [
+                (Kind::Addon, "swofty_addon_0"),
+                (Kind::Map, "swofty_map_1"),
+                (Kind::Map, "swofty_map_2"),
+            ],
+            "the enabled addon's track has no tile of its own; a disabled addon's and a loose one keep theirs"
+        );
+        let codes: Vec<&str> = flow[0].maps.iter().map(|m| m.code.as_str()).collect();
+        assert_eq!(codes, ["mugello"]);
+        let rows = addon_rows(&flow[0]);
+        let keys: Vec<&str> = rows.iter().map(|r| r.key.as_str()).collect();
+        assert_eq!(keys, ["row_code_0", "row_id", "row_version"]);
+        assert!(matches!(&rows[0].kind, RowKind::Info(code) if code == "mugello"));
+        assert_eq!(rows[1].body, "", "a track addon's page has more than its id");
     }
 }

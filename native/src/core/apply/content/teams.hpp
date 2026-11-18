@@ -431,6 +431,22 @@ inline void lower_logo_images(const std::string &team, const std::string &donor,
     }
 }
 
+struct TowerBadge {
+    bool image = false;
+    std::string stock, key;
+};
+
+inline TowerBadge tower_badge(const Value *logo, const std::string &label)
+{
+    TowerBadge b;
+    b.image = logo && (has_file(*logo, "hud") || has_file(*logo, "broadcast"));
+    if (logo && !b.image)
+        b.stock = !stock_key(*logo, "hud").empty() ? stock_key(*logo, "hud") : stock_key(*logo, "broadcast");
+    b.image = b.image || (b.stock.empty() && has_any_file(logo));
+    b.key = b.image ? label : b.stock;
+    return b;
+}
+
 inline void lower_team(const std::string &id, const Value &rec, const Lookup &lookup, const Read &read,
                        const TeamRefs &refs, Plan &plan, const StatIds &stat = {})
 {
@@ -488,15 +504,21 @@ inline void lower_team(const std::string &id, const Value &rec, const Lookup &lo
     put_colour("team_wear_secondary_colour", w["secondary"]);
     put_colour("team_wear_tertiary_colour", w["tertiary"]);
     auto sid = stat_of(stat, TEAM_IDS, id, pin_of(rec));
+    if ((!sid && stat) || (sid && *sid > TEAM_STAT_MAX)) {
+        plan.lines.push_back("team.identity " + id + ": " +
+                             (sid ? "stat id " + std::to_string(*sid) : std::string("no stat id")) + " is outside 0-" +
+                             std::to_string(TEAM_STAT_MAX) +
+                             ", which is all the game keeps for a team; the team is left out, and so is every entrant list that uses it");
+        plan.refused++;
+        return;
+    }
     if (sid)
         set["stat_id"] = Value(std::to_string(*sid));
     const Value *logo = rec["logo"].is_string() ? lookup("team.logo", std::string(rec["logo"].as_string())) : nullptr;
-    bool tower_image = logo && (has_file(*logo, "hud") || has_file(*logo, "broadcast"));
-    std::string tower_stock;
-    if (logo && !tower_image)
-        tower_stock = !stock_key(*logo, "hud").empty() ? stock_key(*logo, "hud") : stock_key(*logo, "broadcast");
-    tower_image = tower_image || (tower_stock.empty() && has_any_file(logo));
-    std::string tower_key = tower_image ? label : tower_stock;
+    TowerBadge badge = tower_badge(logo, label);
+    bool tower_image = badge.image;
+    std::string tower_stock = badge.stock;
+    std::string tower_key = badge.key;
     put("timing_tower_texture_path", tower_key);
     push_row(plan, TEAMS, team_at(donor), std::move(set));
     std::size_t sides = 0;
@@ -518,14 +540,19 @@ inline void lower_team(const std::string &id, const Value &rec, const Lookup &lo
                           : tower_stock.empty() ? std::string() : ", timing tower badge " + tower_stock));
 }
 
-inline void lower_vehicle_team(const Value &rec, const Read &read, Plan &plan)
+inline void lower_vehicle_team(const Value &rec, const Read &read, Plan &plan, const std::string &identity = {},
+                               const std::string &tower_key = {})
 {
     if (!rec["team_from"].is_string() || !rec["label"].is_string())
         return;
     std::string from(rec["team_from"].as_string()), label(rec["label"].as_string());
     if (from == label || !read(team_at(from) + "._metadata_") || read(team_at(label) + "._metadata_"))
         return;
-    push_row(plan, TEAMS, team_at(from), Value::object({{"_metadata_", label}}));
+    Value set = Value::object({{"_metadata_", label}});
+    bool tower = !tower_key.empty() && read(team_at(from) + ".timing_tower_texture_path");
+    if (tower)
+        set["timing_tower_texture_path"] = Value(tower_key);
+    push_row(plan, TEAMS, team_at(from), std::move(set));
     std::size_t sides = 0;
     for (auto &s : SIDE_TABLES)
         sides += copy_side(plan, s, read, from, label);
@@ -545,7 +572,8 @@ inline void lower_vehicle_team(const Value &rec, const Read &read, Plan &plan)
             plan.logos.push_back(std::move(img));
         }
     plan.lines.push_back("vehicle team " + label + ": row copied from " + from + " with " + std::to_string(sides) +
-                         " side row(s)");
+                         " side row(s)" +
+                         (tower ? ", timing tower badge " + tower_key + " from " + identity : std::string()));
 }
 
 inline void lower_pit_times(const std::string &id, const Value &rec, const Lookup &lookup, const Read &read,

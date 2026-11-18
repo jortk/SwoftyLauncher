@@ -4,6 +4,7 @@ launcher's packages/core/src/activation/row_keys.txt.gz (the same lines: `@shape
 table). Run it after that file changes."""
 
 import gzip
+import os
 import json
 from pathlib import Path
 
@@ -21,7 +22,8 @@ ROOTS = ["audio.audio_bundle_settings.audio_bundle_settings_N", "car_setup.prese
          "entrants.drivers.driver_N", "driver_statistics.driver_statistics.DriverStatisticsHolder_N",
          "engine_management.driver_wear_rates.driver_wear_rate_N",
          "entrants.teams.team_N", "pit_lane.pit_times.team_pit_times_N", "bank.initial_team_cash.InitialTeamCash_N",
-         "showroom.teams_history.team_history_N"]
+         "showroom.teams_history.team_history_N", "leaderboards.leaderboard_descriptor_N",
+         "game_setup.session_standings.session_standing_preset_N"]
 CATALOG = HERE.parents[4] / "tools" / "gamedb" / "catalog" / "keys.tsv.gz"
 CATALOGUED = ["facilities.facilities.Facilities_N.team_developments.TeamDevelopment_N",
               "driver_market.driver_market.DataGroup_N.team_driver_rating_range_requirements."
@@ -53,7 +55,7 @@ def catalogued():
 
 
 EXTRA = {
-    "entrants.drivers.driver_N": (HERE.parents[4] / "addons" / "classicseasons" / "classic-seasons-2019" / "db" / "season.json",
+    "entrants.drivers.driver_N": (Path(os.environ.get("SWOFTY_ADDON_REPOS") or HERE.parents[4].parent) / "classic-seasons" / "classic-seasons-2019" / "db" / "season.json",
                                   "entrants.drivers.driver"),
 }
 

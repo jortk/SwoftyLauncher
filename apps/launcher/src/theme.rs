@@ -22,6 +22,11 @@ pub struct Palette {
     pub success: Hsla,
     pub warning: Hsla,
     pub error: Hsla,
+    pub tab_home: Hsla,
+    pub tab_library: Hsla,
+    pub tab_discover: Hsla,
+    pub tab_trial: Hsla,
+    pub tab_support: Hsla,
 }
 
 impl Global for Palette {}
@@ -51,6 +56,11 @@ impl Palette {
             success: hex(0x6bcf86),
             warning: hex(0xe3b43e),
             error: hex(0xf06d78),
+            tab_home: hex(0x7ba6ff),
+            tab_library: hex(0xf4b942),
+            tab_discover: hex(0x4fd1b4),
+            tab_trial: hex(0xf27b6b),
+            tab_support: hex(0xe64980),
         }
     }
 }
@@ -125,6 +135,7 @@ pub fn init(cx: &mut App) {
         t.notification.margins.bottom = px(crate::play_bar::HEIGHT + 16.);
     });
     cx.set_global(p);
+    cx.set_global(crate::notices::Notices::default());
 }
 
 /// Room a column keeps clear of the scrollbar thumb at its right edge.

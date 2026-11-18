@@ -17,6 +17,16 @@ pub fn valid_name(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
+/// A command line reads a name that starts with `-` as a flag, so new profiles
+/// can't have one. Profiles named that way before keep working.
+pub fn reads_as_flag(name: &str) -> bool {
+    name.starts_with('-')
+}
+
+pub fn valid_new_name(name: &str) -> bool {
+    valid_name(name) && !reads_as_flag(name)
+}
+
 /// Fields a newer launcher wrote are kept in `unknown` and written back unchanged.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Profile {
@@ -36,6 +46,9 @@ pub struct Profile {
     /// on Steam's saves.
     #[serde(default = "enabled", skip_serializing_if = "is_true")]
     pub launcher_saves: bool,
+    /// The active shader config (`personal:<slug>` or `addon:<id>/<file stem>`); `None` is shaders off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shader: Option<String>,
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     pub unknown: BTreeMap<String, serde_json::Value>,
 }
@@ -68,6 +81,7 @@ impl Profile {
             applied: BTreeMap::new(),
             state: BTreeMap::new(),
             launcher_saves: true,
+            shader: None,
             unknown: BTreeMap::new(),
         };
         p.normalise();
@@ -84,6 +98,7 @@ impl Profile {
             applied: BTreeMap::new(),
             state: BTreeMap::new(),
             launcher_saves: true,
+            shader: None,
             unknown: BTreeMap::new(),
         }
     }
@@ -130,6 +145,44 @@ impl Profile {
             .map(|m| m.id.as_str())
     }
 
+    /// Gives this copy of the profile the host's load order and option values of `overrides` for one session's
+    /// build; it is never saved. Returns the addons it ordered and the option values it set.
+    pub fn lend(&mut self, overrides: &crate::row_ids::Overrides) -> (usize, usize) {
+        if self.is_vanilla() {
+            return (0, 0);
+        }
+        let takes = |m: &ProfileAddon| m.id != CORE_ID && overrides.order.contains(&m.id);
+        let held: Vec<String> = self
+            .addons
+            .iter()
+            .filter(|m| takes(m))
+            .map(|m| m.id.clone())
+            .collect();
+        let arranged = overrides.arranged(&held);
+        let mut entries: Vec<Option<ProfileAddon>> = Vec::new();
+        for id in &arranged {
+            entries.push(self.addons.iter().find(|m| &m.id == id).cloned());
+        }
+        let mut next = entries.into_iter().flatten();
+        for slot in self.addons.iter_mut().filter(|m| takes(m)) {
+            if let Some(entry) = next.next() {
+                *slot = entry;
+            }
+        }
+        let mut values = 0;
+        for (addon, options) in &overrides.options {
+            if !self.addons.iter().any(|m| &m.id == addon) {
+                continue;
+            }
+            let mine = self.options.entry(addon.clone()).or_default();
+            for (id, value) in options {
+                mine.insert(id.clone(), value.clone());
+                values += 1;
+            }
+        }
+        (arranged.len(), values)
+    }
+
     /// Moves `id` by `delta` places among the profile's addons, which is its
     /// place in the load order; the core addon stays first.
     pub fn move_addon(&mut self, id: &str, delta: isize) -> crate::Result<()> {
@@ -174,6 +227,38 @@ impl Profile {
                 unknown: BTreeMap::new(),
             }),
         }
+        Ok(())
+    }
+
+    /// Whether `id` is one of the profile's addons, on or off. The Addons page
+    /// lists only these.
+    pub fn has(&self, id: &str) -> bool {
+        self.addons.iter().any(|m| m.id == id)
+    }
+
+    /// Adds `id` to the profile, off, at the end of the load order; an addon it
+    /// already has stays as it is.
+    pub fn add_addon(&mut self, id: &str) -> crate::Result<()> {
+        if self.has(id) {
+            return Ok(());
+        }
+        self.set_enabled(id, false)
+    }
+
+    /// Takes `id` out of the profile; it stays installed for the others. Its
+    /// settings are kept, so adding it back restores them.
+    pub fn remove_addon(&mut self, id: &str) -> crate::Result<()> {
+        if self.is_vanilla() {
+            return Err(crate::Error::Other(format!(
+                "{VANILLA} is built in and cannot be changed"
+            )));
+        }
+        if id == CORE_ID {
+            return Err(crate::Error::Other(format!(
+                "{CORE_ID} is built in and cannot be removed"
+            )));
+        }
+        self.addons.retain(|m| m.id != id);
         Ok(())
     }
 
@@ -273,6 +358,28 @@ fn stored(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_lent_profile_takes_the_hosts_order_and_options_and_leaves_the_rest() {
+        let mut p: Profile = serde_json::from_str(
+            r#"{"schema_version":1,"name":"x","mods":[{"id":"swofty.core"},{"id":"b"},{"id":"mine"},{"id":"a"}],
+                "options":{"a":{"laps":3,"keep":1}}}"#,
+        )
+        .unwrap();
+        p.normalise();
+        let host = crate::row_ids::Overrides {
+            order: vec!["a".into(), "b".into(), "swofty.core".into()],
+            options: BTreeMap::from([(
+                "a".to_owned(),
+                BTreeMap::from([("laps".to_owned(), serde_json::json!(5))]),
+            )]),
+            ..Default::default()
+        };
+        assert_eq!(p.lend(&host), (2, 1));
+        assert_eq!(p.enabled().collect::<Vec<_>>(), ["swofty.core", "a", "mine", "b"]);
+        assert_eq!(p.options["a"]["laps"], 5);
+        assert_eq!(p.options["a"]["keep"], 1);
+    }
+
     use super::*;
 
     #[test]
@@ -308,10 +415,32 @@ mod tests {
     }
 
     #[test]
+    fn adds_and_removes_addons() {
+        let mut p = Profile::new("x");
+        p.set_enabled("a.a", true).unwrap();
+        p.add_addon("b.b").unwrap();
+        p.add_addon("a.a").unwrap();
+        assert!(p.has("b.b") && !p.has("c.c"));
+        assert_eq!(p.enabled().collect::<Vec<_>>(), [CORE_ID, "a.a"]);
+        p.remove_addon("a.a").unwrap();
+        assert!(!p.has("a.a"));
+        assert_eq!(p.enabled().collect::<Vec<_>>(), [CORE_ID]);
+        assert!(p.remove_addon(CORE_ID).is_err());
+        assert!(Profile::vanilla().add_addon("a.a").is_err());
+        assert!(Profile::vanilla().remove_addon("a.a").is_err());
+    }
+
+    #[test]
     fn profile_names() {
         assert!(valid_name("grid-24_b"));
         assert!(!valid_name(VANILLA));
         assert!(!valid_name("a b"));
         assert!(!valid_name("../x"));
+        assert!(valid_name("-swofty"));
+        assert!(!valid_new_name("-swofty"));
+        assert!(!valid_new_name("--profile"));
+        assert!(valid_new_name("grid-24_b"));
+        assert!(valid_new_name("_x"));
+        assert!(!valid_new_name(VANILLA));
     }
 }

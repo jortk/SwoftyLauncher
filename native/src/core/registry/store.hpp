@@ -175,6 +175,10 @@ public:
     std::vector<std::string> registries() const;
     std::vector<Refusal> refusals();
     std::vector<Conflict> conflicts();
+    // Both read without the store's lock: generation() moves on every change to the store, would_wait() says a
+    // get on this thread would wait for a career load to finish.
+    uint64_t generation() const;
+    bool would_wait() const;
     std::size_t layer_count(const std::string &addon, const std::string &registry) const;
     void set_op_index(const std::string &addon, int op);
     bool read_option(const std::string &addon, const std::string &id, Value &out);

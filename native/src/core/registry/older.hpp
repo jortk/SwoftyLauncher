@@ -23,6 +23,8 @@
 //   addon's global layer of it.
 // - addon.option: "<addon>/<option id>", added from settings.json's options; the player's choice is its
 //   value.
+// - hud.element: "<addon>/<element id>", from the addon's operations.hud files. The launcher composes them into
+//   the HUD archives at build time; the core only holds the records so other addons can read them.
 
 namespace swofty_core::registry::older {
 
@@ -33,6 +35,7 @@ inline constexpr const char *CHARACTER = "career.character";
 inline constexpr const char *STRING = "lang.string";
 inline constexpr const char *OPTION = "addon.option";
 inline constexpr const char *MODE = "career.mode";
+inline constexpr const char *HUD_ELEMENT = "hud.element";
 
 void declare(Store &st);
 int put(Store &st, const std::string &addon, const char *registry, const std::string &key, const Value &value,

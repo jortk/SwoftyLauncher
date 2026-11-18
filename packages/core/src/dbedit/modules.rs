@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 
 use serde::Deserialize;
 
+use super::calendar;
 use super::catalog::plain;
 use super::driver_manager::{self, Driver};
 use super::{Catalog, Edits, NodeId, rows};
@@ -245,6 +246,8 @@ pub struct ModuleView {
     pub rows: Vec<ModuleRow>,
     /// Paths of non-optional fields some row lacks.
     pub missing: Vec<String>,
+    /// Problems with the rows as edited, such as rounds an Events count cuts.
+    pub warnings: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -573,6 +576,7 @@ impl Module {
                 columns: self.columns(),
                 rows: Vec::new(),
                 missing: Vec::new(),
+                warnings: Vec::new(),
             });
         }
         let rows = table_rows(cat, Some(edits), &self.rows, &self.filter, scope.as_deref())
@@ -644,13 +648,51 @@ impl Module {
                 cells,
             });
         }
+        let warnings = self.warnings(cat, edits, scope.as_deref(), &out);
         Ok(ModuleView {
             scopes,
             scope,
             columns: self.columns(),
             rows: out,
             missing: missing.into_iter().collect(),
+            warnings,
         })
+    }
+
+    fn warnings(&self, cat: &Catalog, edits: &Edits, scope: Option<&str>, rows: &[ModuleRow]) -> Vec<String> {
+        if self.id != "calendar" {
+            return Vec::new();
+        }
+        let (Some(list), Some(event)) = (scope, self.fields.iter().position(|f| f.id == "event_name")) else {
+            return Vec::new();
+        };
+        let Some(sc) = &self.scope else {
+            return Vec::new();
+        };
+        let Ok(lists) = table_rows(cat, None, &sc.rows, &sc.filter, None) else {
+            return Vec::new();
+        };
+        let Some(row) = lists
+            .into_iter()
+            .find(|&r| under(cat, None, r, &sc.label) == Some(list))
+        else {
+            return Vec::new();
+        };
+        let Some(count) = under(cat, Some(edits), row, "_fixed_event_reference_instancecount_")
+            .and_then(|c| c.trim().parse::<usize>().ok())
+        else {
+            return Vec::new();
+        };
+        let events: Vec<String> = rows
+            .iter()
+            .map(|r| {
+                let c = &r.cells[event];
+                c.text.clone().unwrap_or_else(|| c.value.clone())
+            })
+            .collect();
+        calendar::cut_of(list, count, &events)
+            .map(|c| vec![c.text()])
+            .unwrap_or_default()
     }
 
     fn columns(&self) -> Vec<Column> {
@@ -1112,6 +1154,32 @@ mod tests {
             }],
         );
         assert_eq!(picked, names(&[("bahrain24", "Bahrain")]));
+    }
+
+    #[test]
+    fn a_lowered_events_count_warns_on_the_calendar_page() {
+        let Some(cat) = crate::dbedit::catalog::tests::real() else {
+            eprintln!("F1_25_DIR is not set; skipping");
+            return;
+        };
+        let calendar = module("calendar").unwrap();
+        let view = calendar
+            .view(&cat, &Edits::default(), Some("F1_2026_full"))
+            .unwrap();
+        assert!(view.warnings.is_empty(), "{:?}", view.warnings);
+        let lists = module("track-lists").unwrap();
+        let events = lists.fields.iter().position(|f| f.id == "events").unwrap();
+        let rows = lists.view(&cat, &Edits::default(), None).unwrap();
+        let full = rows.rows.iter().find(|r| r.label == "F1_2026_full").unwrap();
+        let mut cut = Edits::default();
+        cut.set(&cat, full.cells[events].key.unwrap(), "17").unwrap();
+        let after = calendar.view(&cat, &cut, Some("F1_2026_full")).unwrap();
+        assert_eq!(after.warnings.len(), 1, "{:?}", after.warnings);
+        assert!(
+            after.warnings[0].contains("Events is 17") && after.warnings[0].contains("rounds 18 to 24"),
+            "{}",
+            after.warnings[0]
+        );
     }
 
     #[test]

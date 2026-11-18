@@ -65,5 +65,7 @@ static_assert(sizeof(EntrantWriteData) == 0x2c);
 
 using Ent_Deserialise_EntrantVector_t = int(void *vector_object, void *bag);
 inline constexpr fn<"Ent_Deserialise_EntrantVector", Ent_Deserialise_EntrantVector_t> Ent_Deserialise_EntrantVector{}; // L2 experimental
+using Ent_EntrantsSystem_ReplaceVehicle_t = int(void *entrants, uint32_t handle, const void *vehicle);
+inline constexpr fn<"Ent_EntrantsSystem_ReplaceVehicle", Ent_EntrantsSystem_ReplaceVehicle_t> Ent_EntrantsSystem_ReplaceVehicle{}; // L2 experimental
 
 }

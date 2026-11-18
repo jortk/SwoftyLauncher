@@ -35,6 +35,7 @@ std::once_flag resolved;
 void **g_db;
 Insert_t *insert_fn;
 uintptr_t base;
+std::atomic<bool> initialised;
 
 std::mutex probe_lock;
 void *probe_vt[6];
@@ -45,6 +46,7 @@ void resolve()
     base = swofty::api->module_base();
     g_db = reinterpret_cast<void **>(runtime::find(S_GLOBAL, "dbread"));
     insert_fn = reinterpret_cast<Insert_t *>(runtime::find(S_INSERT, "dbread"));
+    initialised = true;
 }
 
 uint8_t *database()
@@ -520,6 +522,11 @@ namespace runtime {
 const SwoftyDb *db_table()
 {
     return &table;
+}
+
+bool db_initialised()
+{
+    return initialised;
 }
 
 void dbread_setup()

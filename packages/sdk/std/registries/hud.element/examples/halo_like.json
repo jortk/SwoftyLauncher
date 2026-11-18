@@ -1,0 +1,28 @@
+{
+  "hud.element": {
+    "halo": {
+      "dial": "f1_26",
+      "stock": "park",
+      "sprites": {
+        "base": { "png": "art/base.png", "bounds": [-100, -48, 110, 38] },
+        "boost_on": { "png": "art/boost_on.png", "bounds": [-90, -30, -50, -10] },
+        "rpm_mask": { "png": "art/rpm_mask.png", "bounds": [-100, -48, 110, 38] },
+        "solid": { "png": "art/solid.png", "bounds": [-8, -8, 8, 8] }
+      },
+      "elements": [
+        {
+          "kind": "group",
+          "id": "std",
+          "visible": { "view_model": "view_model_data.hud_halo_gm", "not": true, "default": true },
+          "children": [
+            { "kind": "sprite", "id": "base", "sprite": "base", "layer": 20 },
+            { "kind": "sprite", "id": "boost_on", "sprite": "boost_on", "visible": { "view_model": "view_model_data.hud_halo_boost" } },
+            { "kind": "text", "id": "speed", "style": "OSD_24_bold", "align": "centre", "box": 40, "cap_height": 9.5, "at": [0, -14.9], "value": { "game": "speed_str" } },
+            { "kind": "sweep", "id": "rpm", "mask_sprite": "rpm_mask", "fill_sprite": "solid", "pivot": [0, 0], "start": 225, "arc": [[0, 0], [1, -270]], "value": { "game": "revs" } }
+          ]
+        }
+      ],
+      "editor": { "preview": { "game.revs": 0.62, "game.speed_str": "135" }, "team_colour": "#27F4D2" }
+    }
+  }
+}

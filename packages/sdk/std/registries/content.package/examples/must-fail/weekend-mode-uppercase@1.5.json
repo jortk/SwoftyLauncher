@@ -1,0 +1,12 @@
+{
+  "content.package": {
+    "f1_1959": {
+      "$comment": "a game_setup_modes row name: lower case, digits, underscore",
+      "entrant_list": "f1_1959",
+      "season": 1959,
+      "rules": {
+        "weekend_mode": "Classic Weekend"
+      }
+    }
+  }
+}

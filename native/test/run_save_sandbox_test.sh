@@ -197,7 +197,7 @@ SETTINGS=$(launcher_settings default "$LS/saves/default/remote") play launcherno
 check "launcher saves: a device without a Steam helper fails closed" 'LAUNCHER SAVES FAILED: the save device has no Steam helper'
 
 SETTINGS=$(launcher_settings default "$LS/saves/default/remote") play launcheroptout 0 T_EXPECT_NORMAL=1 SWOFTY_LAUNCHER_SAVES=off
-check "launcher saves: the once-on-Steam opt-out runs the session on Steam's saves" "\[saves\] launcher saves are off: this session runs on Steam's saves"
+check "launcher saves: the once-on-Steam opt-out runs the session on Steam's saves" "\[saves\] launcher saves are off.*this session runs on Steam's saves"
 none "launcher saves: the opt-out arms nothing" '\[saves\] (launcher saves armed|sandbox)'
 
 cp "$OUT/bindings.full.json" "$OUT/bindings.steam.json"
@@ -207,24 +207,10 @@ doc = json.load(open(sys.argv[1]))
 doc['build']['distribution'] = 'EA app'
 json.dump(doc, open(sys.argv[2], 'w'))
 EOB
-SETTINGS=$(launcher_settings default "$LS/saves/default/remote") play launcherea 0 T_EXPECT_NORMAL=1
+SETTINGS=$(launcher_settings default "$LS/saves/default/remote") play launcherea 93
+check "launcher saves: the EA copy fails closed without a bound NeSaveSystem2Win vtable" "LAUNCHER SAVES FAILED: vt_Ne_SaveSystem2Win does not resolve"
+grep -q "the game's own start ran" "$OUT/launcherea.out" && { echo "FAIL: launcher EA device: the device started"; status=1; } || echo "ok  : launcher EA device: the device never started"
 cp "$OUT/bindings.steam.json" "$OUT/bindings.full.json"
-check "launcher saves: the EA copy keeps its own saves and says why" '\[saves\] launcher saves are off: launcher saves are not available on the EA copy yet'
-none "launcher saves: the EA copy arms nothing" '\[saves\] (launcher saves armed|sandbox)'
-
-if grep -q 'constexpr bool EA_BACKEND = true' ../src/core/save_sandbox.cpp; then
-    python3 - "$OUT/bindings.steam.json" "$OUT/bindings.full.json" <<'EOB'
-import json, sys
-doc = json.load(open(sys.argv[1]))
-doc['build']['distribution'] = 'EA app'
-json.dump(doc, open(sys.argv[2], 'w'))
-EOB
-    SETTINGS=$(launcher_settings default "$LS/saves/default/remote") play launcheread 93
-    cp "$OUT/bindings.steam.json" "$OUT/bindings.full.json"
-    check "launcher saves: on the EA copy a device that is not the EA build's fails closed" "LAUNCHER SAVES FAILED: the save device's vtable is not the EA build's NeSaveSystem2Win"
-    grep -q "the game's own start ran" "$OUT/launcheread.out" && { echo "FAIL: launcher EA device: the device started"; status=1; } || echo "ok  : launcher EA device: the device never started"
-    check "launcher saves: the EA copy wraps Start and Mount only" '\[saves\] launcher saves hooked: Ne_SaveSystem2Win_Start and Ne_SaveSystem2Win_Mount are wrapped'
-fi
 
 R=$(run_dir testwins)
 SETTINGS=$(launcher_settings default "$LS/saves/default/remote") play testwins 0 SWOFTY_TEST_RUN="$R" SWOFTY_TEST_TOKEN=$TOKEN T_LINGER_MS=1500

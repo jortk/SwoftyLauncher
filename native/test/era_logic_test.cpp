@@ -1,6 +1,6 @@
 // Host unit test for the era picker logic (era_logic.hpp): the box check, the default title and image,
-// the box order, the Time Trial list and car limit, the press guard, the addon row's handle links and the DRS
-// group swap. run_events_test.sh builds and runs it.
+// the box order, the Time Trial list and car limit, the press guard, the addon row's handle links, the DRS
+// group swap and the restore stack of list cuts. run_events_test.sh builds and runs it.
 #include "../src/core/era_logic.hpp"
 
 #include <cstdio>
@@ -68,6 +68,302 @@ static void drs_swap_tests()
     expect(swaps.active() == 0 && b.field() == &b.own, "no mode or no holder: nothing is swapped");
     expect(era::MODE_DRS_GROUP == 0x1e0 && era::MODE_NAME == 0xd8 && era::HOLDER_TEXT == 0x10,
            "GameSetupMode +0x1e0 DRS group and +0xd8 name holders, text at holder +0x10 (re/db structs/GameSetupMode.h)");
+}
+
+static void warmer_swap_tests()
+{
+    era::WarmerSwaps swaps;
+    Mode a("f1_2024"), b("f1_2024");
+    a.mem[era::MODE_TYRE_WARMERS] = 1;
+    b.mem[era::MODE_TYRE_WARMERS] = 1;
+    swaps.swap(a.mem, false);
+    swaps.swap(b.mem, false);
+    expect(a.mem[era::MODE_TYRE_WARMERS] == 0 && b.mem[era::MODE_TYRE_WARMERS] == 0 && swaps.active() == 2,
+           "a press writes the box's tyre warmer rule into every host mode");
+    swaps.swap(a.mem, true);
+    expect(a.mem[era::MODE_TYRE_WARMERS] == 1 && swaps.active() == 2, "a second press without a put back keeps the game's value once");
+    expect(swaps.put_back() == 2 && a.mem[era::MODE_TYRE_WARMERS] == 1 && b.mem[era::MODE_TYRE_WARMERS] == 1 && swaps.active() == 0,
+           "put back restores the game's value in every swapped mode");
+
+    a.mem[era::MODE_TYRE_WARMERS] = 0;
+    swaps.swap(a.mem, true);
+    a.mem[era::MODE_TYRE_WARMERS] = 0;                               // the game reloaded the mode since the press
+    expect(swaps.put_back() == 0 && a.mem[era::MODE_TYRE_WARMERS] == 0, "put back leaves a byte the game changed since the swap");
+
+    swaps.swap(a.mem, true);
+    a.mem[era::MODE_TYRE_WARMERS] = 7;
+    expect(swaps.forget() == 1 && swaps.active() == 0 && a.mem[era::MODE_TYRE_WARMERS] == 7 && swaps.put_back() == 0,
+           "forget drops the swaps and writes nothing into the modes");
+    swaps.swap(nullptr, true);
+    expect(swaps.active() == 0, "no mode: nothing is swapped");
+    expect(era::MODE_TYRE_WARMERS == 0x1c8 && era::MODE_TYRE_WARMERS < era::MODE_DRS_GROUP,
+           "GameSetupMode +0x1c8 has_tyre_warmers (re/db structs/GameSetupMode.h)");
+}
+
+static void time_limit_swap_tests()
+{
+    era::TimeLimitSwaps swaps;
+    Mode a("swofty_f1"), b("swofty_f1");
+    auto lim = [](Mode &m) { return reinterpret_cast<uint32_t *>(m.mem + era::MODE_RACE_TIME_LIMIT); };
+    for (int i = 0; i < 3; ++i)
+        lim(a)[i] = lim(b)[i] = 7200;
+    lim(a)[3] = 3600;                                                 // the sprint limit right behind (+0xc0)
+    swaps.swap(a.mem, 10800);
+    swaps.swap(b.mem, 10800);
+    expect(lim(a)[0] == 10800 && lim(a)[1] == 10800 && lim(a)[2] == 10800 && lim(b)[2] == 10800 && lim(a)[3] == 3600 &&
+               swaps.active() == 2,
+           "a press writes the box's race time limit into the three values of every host mode, not the sprint limit");
+    swaps.swap(a.mem, 5400);
+    expect(lim(a)[0] == 5400 && swaps.active() == 2, "a second press without a put back keeps the game's values once");
+    expect(swaps.put_back() == 2 && lim(a)[0] == 7200 && lim(a)[2] == 7200 && lim(b)[1] == 7200 && swaps.active() == 0,
+           "put back restores the game's limits in every swapped mode");
+    swaps.swap(a.mem, 10800);
+    lim(a)[1] = 7200;                                                 // the game reloaded the mode since the press
+    expect(swaps.put_back() == 0 && lim(a)[0] == 10800, "put back leaves values the game changed since the swap");
+    swaps.swap(a.mem, 10800);
+    expect(swaps.forget() == 1 && swaps.put_back() == 0 && lim(a)[0] == 10800, "forget writes nothing into the modes");
+    swaps.swap(nullptr, 10800);
+    expect(swaps.active() == 0, "no mode: nothing is swapped");
+    expect(era::MODE_RACE_TIME_LIMIT == 0xb4 && era::MODE_RACE_TIME_LIMIT + 4 * era::RACE_TIME_LIMITS == 0xc0 &&
+               era::MODE_RACE_TIME_LIMIT + 12 <= era::MODE_NAME,
+           "GameSetupMode +0xb4 race_time_limit_in_seconds[3], sprint limits from +0xc0 (re/db structs/GameSetupMode.h)");
+}
+
+static void weekend_swap_tests()
+{
+    era::WeekendSwaps swaps;
+    Mode host("swofty_f1"), one("swofty_f1_one_practice"), two("swofty_f1_one_shot");
+    auto q = [](Mode &m) { return reinterpret_cast<uint64_t *>(m.mem + era::MODE_WEEKEND_OPTIONS); };
+    for (uint64_t i = 0; i < 4; ++i) {
+        q(host)[i] = 0x100 + i;
+        q(one)[i] = 0x200 + i;
+        q(two)[i] = 0x300 + i;
+    }
+    q(host)[4] = 0xaaaa;                                              // the field right behind (+0x1b0) stays put
+    auto tag = [](Mode &m) { return reinterpret_cast<uint64_t *>(m.mem + era::MODE_OPTIONS_TAG); };
+    *tag(host) = 0xf1, *tag(one) = 0xf50, *tag(two) = 0xf53;
+    expect(swaps.swap(host.mem, one.mem) && q(host)[0] == 0x200 && q(host)[3] == 0x203 && q(one)[0] == 0x100 &&
+               q(one)[3] == 0x103 && q(host)[4] == 0xaaaa && swaps.active() == 1,
+           "a press exchanges the four weekend option qwords of the host and the helper mode");
+    expect(*tag(host) == 0xf50 && *tag(one) == 0xf1, "a press exchanges the options tag (+0x00) too: the menu offers the helper's values");
+    expect(swaps.swap(host.mem, one.mem) && q(host)[0] == 0x200 && q(one)[0] == 0x100,
+           "pressing the same box again keeps the exchange (no double swap)");
+    expect(swaps.swap(host.mem, two.mem) && q(host)[0] == 0x300 && q(two)[0] == 0x100 && q(one)[0] == 0x200 &&
+               swaps.helper() == two.mem,
+           "a box with another helper puts the first helper's container back before it exchanges");
+    expect(swaps.put_back() == 1 && q(host)[0] == 0x100 && q(host)[3] == 0x103 && q(two)[0] == 0x300 && *tag(host) == 0xf1 &&
+               *tag(two) == 0xf53 && *tag(one) == 0xf50 && swaps.active() == 0,
+           "put back gives every mode its own container again");
+    expect(swaps.put_back() == 0, "nothing held: put back writes nothing");
+
+    swaps.swap(host.mem, one.mem);
+    q(host)[2] = 0xdead;                                              // the game rebuilt the host's container
+    expect(swaps.put_back() == 0 && q(host)[2] == 0xdead && q(one)[0] == 0x100,
+           "put back leaves the modes alone when the game changed them since the swap");
+    for (uint64_t i = 0; i < 4; ++i) {
+        q(host)[i] = 0x100 + i;
+        q(one)[i] = 0x200 + i;
+    }
+
+    swaps.swap(host.mem, one.mem);
+    expect(swaps.forget() == 1 && swaps.put_back() == 0 && q(host)[0] == 0x200 && q(one)[0] == 0x100,
+           "forget drops the pair without writing (each container is still owned by exactly one mode)");
+    expect(!swaps.swap(host.mem, host.mem) && !swaps.swap(nullptr, one.mem) && !swaps.swap(host.mem, nullptr) &&
+               swaps.active() == 0,
+           "no host, no helper or the host itself: nothing is exchanged");
+    expect(era::MODE_WEEKEND_OPTIONS == 0x190 && era::WEEKEND_SWAP_OFFSETS[era::WEEKEND_OPTION_QWORDS - 1] == 0x1a8 &&
+               era::MODE_WEEKEND_OPTIONS + 0x20 <= era::MODE_TYRE_WARMERS && era::WEEKEND_SWAP_OFFSETS[0] == 0,
+           "GameSetupMode +0x00 options tag and +0x190..+0x1a8 weekend options container (re/db structs/GameSetupMode.h)");
+}
+
+// The store of every parsed setup mode (g_Game_Scenarios +0x40): 16-byte entries {allocator, GameSetupMode *} by stat
+// id, null where no row has the id. A weekend helper listed in no game mode is found here.
+static void stored_mode_tests()
+{
+    struct Named {
+        alignas(8) uint8_t mem[0x200] = {};
+        era::DrsHolder label;
+        explicit Named(const char *name)
+        {
+            label.text = name;
+            *reinterpret_cast<void **>(mem + era::MODE_NAME) = &label;
+        }
+    };
+    Named f1("f1"), host("swofty_f1"), helper("f50_wk"), longer("f50_wk_2");
+    struct Entry {
+        void *allocator;
+        uint8_t *mode;
+    };
+    static_assert(sizeof(Entry) == era::STORE_SETUP_MODE_ENTRY && offsetof(Entry, mode) == era::STORE_SETUP_MODE_PTR);
+    Entry entries[22] = {};
+    entries[0].mode = f1.mem;
+    entries[20].mode = host.mem;
+    entries[21].mode = helper.mem;
+    entries[7].mode = longer.mem;
+    alignas(8) uint8_t registry[0x80] = {};
+    auto set_range = [&](Entry *b, Entry *e) {
+        *reinterpret_cast<Entry **>(registry + era::STORE_SETUP_MODES_BEGIN) = b;
+        *reinterpret_cast<Entry **>(registry + era::STORE_SETUP_MODES_END) = e;
+    };
+    set_range(entries, entries + 22);
+    auto all = [](const void *, size_t) { return true; };
+    size_t seen = 0;
+    expect(era::find_stored_mode(registry, "f50_wk", all, &seen) == helper.mem && seen == 4,
+           "the helper mode (stat id 21, listed in no game mode) is found in the store; null ids are skipped");
+    expect(era::find_stored_mode(registry, "swofty_f1", all) == host.mem, "the host mode is in the store too");
+    std::vector<std::string> labels;
+    expect(!era::find_stored_mode(registry, "f51_wk", all, &seen, &labels) && seen == 4 &&
+               labels == std::vector<std::string>{"f1", "f50_wk_2", "swofty_f1", "f50_wk"},
+           "a helper that is not stored: the labels of the stored modes are collected for the log");
+    expect(!era::find_stored_mode(registry, "f50", all) && !era::find_stored_mode(registry, "f50_wk_", all),
+           "a label must match whole, not as a prefix");
+    expect(!era::find_stored_mode(registry, "", all) && !era::find_stored_mode(nullptr, "f50_wk", all),
+           "no name or no registry: nothing found");
+    expect(!era::find_stored_mode(registry, "f50_wk", [](const void *, size_t) { return false; }),
+           "unreadable memory: nothing is read");
+    set_range(entries + 22, entries);
+    expect(!era::find_stored_mode(registry, "f50_wk", all), "a store whose end lies before its begin is not walked");
+    set_range(entries, reinterpret_cast<Entry *>(reinterpret_cast<uint8_t *>(entries) + 24));
+    expect(!era::find_stored_mode(registry, "f1", all), "a store that is not a whole number of entries is not walked");
+    set_range(entries, entries + 22);
+    expect(era::STORE_SETUP_MODES_BEGIN == 0x48 && era::STORE_SETUP_MODES_END == 0x50 && era::MODE_NAME == 0xd8,
+           "Sess_Load_GameSetupModes (0x142a148f0) store at g_Game_Scenarios +0x40: begin +0x48, end +0x50");
+}
+
+// A parsed points level as the game holds it: rule byte, bonus, the points column (i32s at +0x08..+0x10).
+struct Column {
+    uint8_t mem[0x18] = {};
+    std::vector<int32_t> v;
+    explicit Column(std::vector<int32_t> p) : v(std::move(p)) { v.resize(26, 0); }
+    uint8_t *link()                                  // after the column sits in its final place
+    {
+        int32_t *b = v.data(), *e = v.data() + v.size();
+        std::memcpy(mem + era::COLUMN_BEGIN, &b, 8);
+        std::memcpy(mem + era::COLUMN_END, &e, 8);
+        return mem;
+    }
+};
+
+struct Preset {
+    std::vector<Column> cols;
+    std::vector<uint8_t> levels;
+    void fill(uint8_t *at, uint8_t rule, int32_t bonus)
+    {
+        levels.assign(cols.size() * era::LEVEL_SIZE, 0);
+        for (size_t i = 0; i < cols.size(); i++) {
+            uint8_t *l = levels.data() + i * era::LEVEL_SIZE;
+            l[era::LEVEL_RULE] = rule;
+            std::memcpy(l + era::LEVEL_BONUS, &bonus, 4);
+            uint8_t *c = cols[i].link();
+            std::memcpy(l + era::LEVEL_POINTS, &c, 8);
+        }
+        uint8_t *b = levels.data(), *e = levels.data() + levels.size();
+        std::memcpy(at + era::PRESET_LEVELS_BEGIN, &b, 8);
+        std::memcpy(at + era::PRESET_LEVELS_END, &e, 8);
+    }
+};
+
+static void points_tests()
+{
+    era::Readable ok = [](const void *p, size_t) { return p != nullptr; };
+    std::vector<uint8_t> presets(3 * era::PRESET_SIZE, 0);
+    Preset stock{{Column({25, 18, 15, 12, 10, 8, 6, 4, 2, 1}), Column({19, 14, 12}), Column({13, 10, 8}), Column({6, 5, 4})}};
+    Preset other{{Column({8, 6, 4, 3, 2}), Column({8, 6, 4, 3, 2}), Column({8, 6, 4, 3, 2}), Column({8, 6, 4, 3, 2})}};
+    Preset era1950{{Column({8, 6, 4, 3, 2}), Column({8, 6, 4, 3, 2}), Column({8, 6, 4, 3, 2}), Column({8, 6, 4, 3, 2})}};
+    stock.fill(presets.data(), 0, 0);
+    other.fill(presets.data() + era::PRESET_SIZE, 0, 0);                          // same points, no fastest lap point
+    era1950.fill(presets.data() + 2 * era::PRESET_SIZE, 1, 1);
+    std::vector<int32_t> full = {8, 6, 4, 3, 2};
+    full.resize(26, 0);
+    era::PointsWant want{full, {full, full, full}, 1, 1};
+    const uint8_t *found = era::find_points_preset(ok, presets.data(), presets.data() + presets.size(), want);
+    expect(found == presets.data() + 2 * era::PRESET_SIZE, "the box's preset is found by its points, fastest lap rule and bonus");
+    want.bonus = 2;
+    expect(!era::find_points_preset(ok, presets.data(), presets.data() + presets.size(), want), "another bonus: no preset");
+    want.bonus = 1;
+    want.reduced[2][0] = 4;
+    expect(!era::find_points_preset(ok, presets.data(), presets.data() + presets.size(), want), "other reduced points: no preset");
+    want.reduced[2][0] = 8;
+    expect(!era::find_points_preset(ok, presets.data(), presets.data() + presets.size() - 1, want) &&
+               !era::find_points_preset(ok, nullptr, nullptr, want),
+           "a preset vector that is not whole presets, or none: no preset");
+
+    // two weekend structures, the second a sprint weekend; sessions: practice, race, race_2 without a preset
+    std::vector<uint8_t> mode(0x200, 0), weekends(2 * era::WEEKEND_SIZE, 0), s0(3 * era::SESSION_SIZE, 0), s1(era::SESSION_SIZE, 0);
+    auto session = [](std::vector<uint8_t> &v, size_t i, uint64_t preset, uint32_t id) {
+        std::memcpy(v.data() + i * era::SESSION_SIZE, &preset, 8);
+        std::memcpy(v.data() + i * era::SESSION_SIZE + era::SESSION_ID, &id, 4);
+    };
+    uint64_t stock_ptr = reinterpret_cast<uint64_t>(presets.data());
+    session(s0, 0, stock_ptr, 1);
+    session(s0, 1, stock_ptr, 15);
+    session(s0, 2, 0, 16);
+    session(s1, 0, stock_ptr, 15);
+    auto span = [](uint8_t *at, size_t b, size_t e, std::vector<uint8_t> &v) {
+        uint8_t *p = v.data(), *q = v.data() + v.size();
+        std::memcpy(at + b, &p, 8);
+        std::memcpy(at + e, &q, 8);
+    };
+    span(weekends.data(), era::WEEKEND_SESSIONS_BEGIN, era::WEEKEND_SESSIONS_END, s0);
+    span(weekends.data() + era::WEEKEND_SIZE, era::WEEKEND_SESSIONS_BEGIN, era::WEEKEND_SESSIONS_END, s1);
+    weekends[era::WEEKEND_SIZE + era::WEEKEND_SPRINT] = 1;
+    span(mode.data(), era::MODE_WEEKENDS_BEGIN, era::MODE_WEEKENDS_END, weekends);
+    auto races = era::race_sessions(ok, mode.data());
+    expect(races.size() == 1 && races[0] == reinterpret_cast<uint64_t *>(s0.data() + era::SESSION_SIZE),
+           "only the race of the non-sprint weekend that holds a preset is swapped");
+
+    era::PointsSwaps swaps;
+    uint64_t ours = reinterpret_cast<uint64_t>(found);
+    for (uint64_t *s : races)
+        swaps.swap(s, ours);
+    expect(*races[0] == ours && swaps.active() == 1, "a press points the race at the box's preset");
+    swaps.swap(races[0], ours);
+    expect(swaps.put_back() == 1 && *races[0] == stock_ptr && swaps.active() == 0, "put back restores the game's preset once");
+    swaps.swap(races[0], ours);
+    *races[0] = 0x1234;                                                         // the game parsed the mode again
+    expect(swaps.put_back() == 0 && *races[0] == 0x1234, "put back leaves a pointer the game changed since the swap");
+    swaps.swap(races[0], ours);
+    expect(swaps.forget() == 1 && *races[0] == ours && swaps.put_back() == 0, "forget writes nothing");
+    expect(era::MODE_WEEKENDS_BEGIN == 0x198 && era::WEEKEND_SIZE == 0x88 && era::SESSION_RACE == 15,
+           "GameSetupMode +0x190 weekend structures (re/db structs/GameSetupMode.h, WeekendStructure.h)");
+}
+
+static void tyre_change_tests()
+{
+    era::TyreChangeSwaps swaps;
+    Mode a("f1_2024"), b("f1_2024");
+    for (size_t i = 0; i < era::TYRE_REQUIREMENT_BYTES; i++) {
+        a.mem[era::MODE_TYRE_REQUIREMENTS + i] = uint8_t(i % 3 == 0);
+        b.mem[era::MODE_TYRE_REQUIREMENTS + i] = 1;
+    }
+    a.mem[era::MODE_TYRE_REQUIREMENTS - 1] = 7;                          // tyre_setup_enabled, next to the flags
+    a.mem[era::MODE_TYRE_REQUIREMENTS + era::TYRE_REQUIREMENT_BYTES] = 9;
+    auto all = [](Mode &m, uint8_t v) {
+        for (size_t i = 0; i < era::TYRE_REQUIREMENT_BYTES; i++)
+            if (m.mem[era::MODE_TYRE_REQUIREMENTS + i] != v)
+                return false;
+        return true;
+    };
+    swaps.swap(a.mem, false);
+    swaps.swap(b.mem, false);
+    expect(all(a, 0) && all(b, 0) && swaps.active() == 2 && a.mem[era::MODE_TYRE_REQUIREMENTS - 1] == 7 &&
+               a.mem[era::MODE_TYRE_REQUIREMENTS + era::TYRE_REQUIREMENT_BYTES] == 9,
+           "a press clears the 39 requirement flags of every host mode and nothing next to them");
+    swaps.swap(a.mem, true);
+    expect(all(a, 1) && swaps.active() == 2, "a second press keeps the game's flags once");
+    expect(swaps.put_back() == 2 && a.mem[era::MODE_TYRE_REQUIREMENTS] == 1 && a.mem[era::MODE_TYRE_REQUIREMENTS + 1] == 0 &&
+               all(b, 1) && swaps.active() == 0,
+           "put back restores the game's flags in every swapped mode");
+    swaps.swap(a.mem, false);
+    a.mem[era::MODE_TYRE_REQUIREMENTS + 5] = 1;                          // the game reloaded the mode since the press
+    expect(swaps.put_back() == 0 && a.mem[era::MODE_TYRE_REQUIREMENTS + 5] == 1, "put back leaves flags the game changed");
+    swaps.swap(a.mem, true);
+    expect(swaps.forget() == 1 && all(a, 1) && swaps.put_back() == 0, "forget writes nothing");
+    swaps.swap(nullptr, true);
+    expect(swaps.active() == 0, "no mode: nothing is swapped");
+    expect(era::MODE_TYRE_REQUIREMENTS == 0x8b && era::MODE_TYRE_REQUIREMENTS + era::TYRE_REQUIREMENT_BYTES == 0xb2 &&
+               era::MODE_TYRE_REQUIREMENTS + era::TYRE_REQUIREMENT_BYTES < era::MODE_TYRE_WARMERS,
+           "GameSetupMode +0x8b..+0xb1 tyre regulation requirements (re/db structs/GameSetupMode.h)");
 }
 
 static void setup_guard_tests()
@@ -214,6 +510,22 @@ static void continue_tests()
     p = era::continue_list(lists, {era::NO_TEAM, 0}, "", "f1");
     expect(p.index < 0, "unresolved team ids match no list");
 
+    std::vector<std::string> names{"f1_2025", "cs_f1_2016", "f1_career_progressive"};
+    era::CareerListPick c = era::career_list(names, "f1_career_progressive", {}, "f1_26");
+    expect(c.index == 2 && c.line.find("named like the career's data group") != std::string::npos,
+           "a Driver Career with an empty list loads the list named like its data group: " + c.line);
+    c = era::career_list(names, "other_group", {"cs_f1_2016"}, "f1_26");
+    expect(c.index == 1 && c.line.find("content the career runs") != std::string::npos,
+           "without a list for the data group, the list of the career's content is loaded: " + c.line);
+    c = era::career_list(names, "", {"nothing"}, "f1_26");
+    expect(c.index < 0 && c.line.find("(none)") != std::string::npos, "no data group and no matching content picks nothing");
+    c = era::career_list({}, "f1_career_progressive", {}, "");
+    expect(c.index < 0 && c.line.find("offers 0 lists") != std::string::npos && c.line.find("setup mode ?") != std::string::npos,
+           "a setup mode without lists picks nothing: " + c.line);
+    expect(era::career_stop(c).find("Driver Career load stopped: ") == 0 &&
+               era::career_stop(c).find("instead of crashing") != std::string::npos,
+           "no list stops the load with the reason");
+
     era::IdAliases aliases;
     std::string doc = R"({"version":1,"tables":{"teams":{"646":510,"652":511,"559":512,"3":9,"0":4,"99999":5},"vehicles":{"700":701}}})";
     expect(era::parse_aliases(doc, aliases), "the alias file parses");
@@ -233,6 +545,9 @@ static void continue_tests()
     expect(era::saved_predates(aliases, {9, 646, 4}) && !era::saved_predates(aliases, {9, 4, 510}) &&
                !era::saved_predates(aliases, {0, era::NO_TEAM}) && !era::saved_predates(era::IdAliases{}, hashed),
            "a career vector is mapped only when one of its teams is an earlier id");
+    expect(era::saved_predates(aliases, {9, 4}, {700, 5}, {}) && !era::saved_predates(aliases, {9, 4}, {701, 5}, {}) &&
+               !era::saved_predates(aliases, {9, 4}, {era::NO_TEAM, 0}, {era::NO_TEAM}),
+           "a career vector whose teams kept their ids is mapped when one of its vehicles is an earlier id");
     std::vector<uint16_t> stray{646, 4000};
     ap = era::continue_list_aliased(lists, stray, "cs_f1_2017", "swofty_f1", aliases);
     expect(!ap.remapped && ap.pick.index == 1, "a mapping no list holds falls back to the pressed box as before");
@@ -267,6 +582,13 @@ static void continue_tests()
     base.tracks.push_back(sepang);
     expect(era::track_missing(base, "game/bahrain24").empty(), "the same row filled by its track record loads");
     base.tracks.pop_back();
+    trk::Base none;
+    none.ready = true;
+    expect(era::track_missing(none, "game/melbourne").empty() && era::track_missing(none, "game/silverstone").empty(),
+           "a stock track loads when the base holds no tracks (no track addon on)");
+    expect(!era::track_missing(none, "game/bahrain24").empty(), "a dormant row still stops with no track addon on");
+    expect(!era::track_missing(none, "mod.hockenheim/hockenheim").empty(), "an addon track whose addon is off still stops");
+    expect(era::track_missing(base, "game/melbourne").empty(), "a stock track missing from a built base loads");
     era::ContinuePick fine;
     fine.index = 0;
     stop = era::continue_stop(gone, fine, false);
@@ -283,6 +605,167 @@ struct GridSetup {
     void set(int32_t v) { *reinterpret_cast<int32_t *>(mem + era::ENTRANT_SETUP_MAX_ENTRANTS) = v; }
     int32_t get() const { return *reinterpret_cast<const int32_t *>(mem + era::ENTRANT_SETUP_MAX_ENTRANTS); }
 };
+
+// An entrant setup mode's list array (the lists at +0x130, their count at +0x230, max_entrants at +0x268) over 16 fake
+// list objects, laid out like swofty_f1's Time Trial mode in the illanori bundle: the 24-car bdy_s5_2010 first.
+struct Esm {
+    alignas(8) uint8_t mem[0x300] = {};
+    int objects[era::ESM_LIST_SLOTS] = {};
+    std::vector<void *> original;
+    explicit Esm(size_t n, int32_t max_entrants = 24)
+    {
+        for (size_t i = 0; i < n; ++i)
+            original.push_back(&objects[i]);
+        reset();
+        limit() = max_entrants;
+    }
+    void reset()
+    {
+        memcpy(era::esm_lists(mem), original.data(), original.size() * sizeof(void *));
+        era::esm_list_count(mem) = int64_t(original.size());
+    }
+    void *list(size_t i) { return &objects[i]; }
+    int32_t &limit() { return *reinterpret_cast<int32_t *>(mem + era::ENTRANT_SETUP_MAX_ENTRANTS); }
+    std::vector<void *> now()
+    {
+        int64_t n = era::esm_list_count(mem);
+        void **arr = era::esm_lists(mem);
+        return std::vector<void *>(arr, arr + std::max<int64_t>(n, 0));
+    }
+    bool whole() { return now() == original; }
+};
+
+struct TtLoad {
+    era::ListCut stack[16];
+    size_t used = 0;
+    era::TtHold held;
+    bool holding = false;
+    std::vector<const era::ListCut *> failed;
+    auto on_failed()
+    {
+        return [this](const era::ListCut &n) { failed.push_back(&n); };
+    }
+    void load(Esm &esm, size_t fit_slot, const std::vector<size_t> &cut)
+    {
+        held = {};
+        held.esm = esm.mem;
+        era::swap_into_first(held, esm.mem, fit_slot);
+        held.limit_was = esm.limit();
+        esm.limit() = era::time_trial_limit(esm.limit());
+        holding = true;
+        for (size_t i : cut)
+            era::cut_list(stack, used, std::size(stack), esm.mem, esm.list(i));
+    }
+};
+
+static void cut_restore_tests()
+{
+    {
+        Esm esm(16);
+        TtLoad tt;
+        tt.load(esm, 5, {7, 9, 12, 14});
+        expect(esm.now().size() == 12 && esm.now()[0] == esm.list(5) && tt.used == 1 && esm.limit() == 23,
+               "the 2010 load swaps the Time Trial list into slot 0, cuts 4 lists after it and lowers max_entrants");
+        era::CutsPutBack r = era::end_hold(tt.stack, tt.used, tt.held, tt.holding, true, tt.on_failed());
+        expect(r.put == 1 && r.failed == 0 && tt.failed.empty() && esm.whole() && esm.limit() == 24 && tt.used == 0 &&
+                   !tt.holding,
+               "the unload puts the cut back before the swap: all 16 lists are back in their order, max_entrants 24");
+    }
+    {
+        Esm esm(16);
+        TtLoad tt;
+        tt.load(esm, 5, {7, 9, 12, 14});
+        era::put_back_hold(tt.held);
+        tt.holding = false;
+        era::CutsPutBack r = era::put_back_cuts(tt.stack, tt.used, true, tt.on_failed());
+        auto out = tt.failed.empty() ? std::vector<void *>{} : era::left_out(*tt.failed[0]);
+        expect(r.put == 0 && r.failed == 1 && esm.now().size() == 12 && tt.used == 0,
+               "the old order (swap first, then the cut) changes the array, so the cut is not put back and not counted");
+        expect(out == std::vector<void *>{esm.list(7), esm.list(9), esm.list(12), esm.list(14)},
+               "the failed entry names the 4 lists it left out, in the mode's order");
+    }
+    {
+        Esm esm(16);
+        TtLoad tt;
+        tt.load(esm, 5, {1, 2, 9});
+        era::CutsPutBack r = era::end_hold(tt.stack, tt.used, tt.held, tt.holding, true, tt.on_failed());
+        expect(r.put == 1 && r.failed == 0 && esm.whole(),
+               "a cut before the swapped slot shifts it, and the cut-first order still puts every list back unswapped");
+    }
+    {
+        Esm esm(16);
+        TtLoad tt;
+        tt.load(esm, 5, {1, 2, 9});
+        era::put_back_hold(tt.held);
+        era::put_back_cuts(tt.stack, tt.used, true, tt.on_failed());
+        expect(esm.now().size() == 16 && esm.now()[0] == esm.list(5) && !esm.whole(),
+               "the old order with a cut before the swapped slot leaves the Time Trial list stuck in slot 0");
+    }
+    {
+        Esm esm(16);
+        TtLoad tt;
+        for (size_t i : {3, 4})
+            era::cut_list(tt.stack, tt.used, std::size(tt.stack), esm.mem, esm.list(i));
+        expect(tt.used == 1 && tt.stack[0].kept == 14 && tt.stack[0].count == 16,
+               "a second cut of the same mode extends its entry instead of pushing another");
+        tt.load(esm, 6, {10, 11});
+        expect(tt.used == 1 && tt.stack[0].kept == 12, "the load's cut extends the entry of a stock press's keep");
+        era::CutsPutBack r = era::end_hold(tt.stack, tt.used, tt.held, tt.holding, true, tt.on_failed());
+        expect(r.put == 1 && esm.whole() && esm.limit() == 24,
+               "the entry made before the swap puts the whole array back; the swap then finds nothing to undo");
+    }
+    {
+        Esm host(16), other(8);
+        TtLoad tt;
+        tt.load(host, 5, {7, 9});
+        era::cut_list(tt.stack, tt.used, std::size(tt.stack), other.mem, other.list(2));
+        era::ListCut &narrowed = tt.stack[tt.used++];
+        narrowed = {};
+        Esm press(4);
+        narrowed.setup = press.mem;
+        narrowed.count = 4;
+        narrowed.kept = 1;
+        memcpy(narrowed.lists, press.original.data(), 4 * sizeof(void *));
+        narrowed.kept_lists[0] = press.list(2);
+        era::esm_lists(press.mem)[0] = press.list(2);
+        era::esm_list_count(press.mem) = 1;
+        era::esm_lists(other.mem)[0] = other.list(7);
+        era::CutsPutBack r = era::end_hold(tt.stack, tt.used, tt.held, tt.holding, true, tt.on_failed());
+        expect(r.put == 1 && r.failed == 1 && tt.failed.size() == 1 && host.whole() && !other.whole(),
+               "a mode the game changed since is not overwritten: 1 of 2 Time Trial entries put back, 1 counted failed");
+        expect(tt.used == 1 && tt.stack[0].setup == press.mem && era::esm_list_count(press.mem) == 1,
+               "the unload leaves a box press's narrowing on the stack and in its mode");
+        era::put_back_cuts(tt.stack, tt.used, false, tt.on_failed());
+        expect(tt.used == 0 && press.whole(), "a restore of every entry puts the narrowing back too");
+    }
+    {
+        Esm esm(16);
+        TtLoad tt;
+        era::cut_list(tt.stack, tt.used, std::size(tt.stack), esm.mem, esm.list(3));
+        era::CutsPutBack r = era::end_hold(tt.stack, tt.used, tt.held, tt.holding, false, tt.on_failed());
+        expect(r.put == 0 && tt.used == 1 && esm.now().size() == 15,
+               "a press without a held swap leaves the Time Trial cuts for the unload");
+        tt.used = 0;
+        esm.reset();
+        tt.load(esm, 5, {8});
+        r = era::end_hold(tt.stack, tt.used, tt.held, tt.holding, false, tt.on_failed());
+        expect(r.put == 1 && tt.used == 0 && esm.whole() && !tt.holding,
+               "a press or a load that ends a held swap puts that load's cut back first");
+    }
+    {
+        Esm esm(4);
+        era::ListCut full[2];
+        size_t used = 2;
+        full[0].setup = full[1].setup = nullptr;
+        expect(!era::cut_list(full, used, 2, esm.mem, esm.list(1)) && esm.whole() && used == 2,
+               "with the restore stack full a cut is not made");
+    }
+    std::string line = era::put_back_failed_line({"bdx_s5_2012", "bdx_s5_2012_tt", "ms_f1_2014", "f1_2022_supercar"}, 12, 12, true);
+    expect(line.find("Time Trial guard") != std::string::npos &&
+               line.find("bdx_s5_2012, bdx_s5_2012_tt, ms_f1_2014, f1_2022_supercar stay out") != std::string::npos &&
+               line.find("12 now, 12 left") != std::string::npos,
+           "a failed put-back names the lists that stay out (" + line + ")");
+}
 
 static void grid_limit_tests()
 {
@@ -345,6 +828,56 @@ static void grid_limit_tests()
     expect(resume.get() == 20, "the Continue path's put-back restores max_entrants to 20");
 }
 
+static void front_end_leak_tests()
+{
+    struct Pick {
+        bool narrowed = false;
+        std::string last_pick, selected;
+    };
+    auto press = [](Pick &p, const char *list) {
+        p.narrowed = true;
+        p.last_pick = list;
+        p.selected = list;
+    };
+    auto load = [](Pick &p, const char *mode) {
+        era::FrontEndLeave l = era::leaving_front_end(mode, !p.selected.empty());
+        if (l.restore)
+            p.narrowed = false;
+        if (l.clear_selected)
+            p.selected.clear();
+        if (l.forget_pick)
+            p.last_pick.clear();
+    };
+    auto clean = [](const Pick &p) { return !p.narrowed && p.last_pick.empty() && p.selected.empty(); };
+
+    Pick gp;
+    press(gp, "cs_f1_2023");
+    load(gp, "grand_prix_23");
+    expect(gp.narrowed && gp.last_pick == "cs_f1_2023" && gp.selected == "cs_f1_2023",
+           "a Grand Prix session load keeps the box pick");
+    load(gp, "driver_career_progressive");
+    expect(clean(gp), "GP box press then career Continue: narrowing, last pick and selected list are put back");
+
+    Pick tt;
+    press(tt, "bdy_s5_2010_tt");
+    load(tt, "time_trial");
+    expect(tt.narrowed && tt.selected == "bdy_s5_2010_tt", "a Time Trial session load keeps the box pick");
+    load(tt, "driver_career_progressive");
+    expect(clean(tt), "TT box press then career New: everything is put back");
+
+    Pick two;
+    press(two, "ms_f1_2015");
+    press(two, "bdy_s5_2010");
+    load(two, "driver_career_progressive");
+    expect(clean(two), "two box presses then a career load: nothing of either survives");
+
+    Pick none;
+    era::FrontEndLeave l = era::leaving_front_end("my_team_career_25", false);
+    expect(l.restore && !l.clear_selected && l.forget_pick, "a career load with no box list selected leaves the selection alone");
+    expect(!era::leaving_front_end("grand_prix_splitscreen", true).restore && !era::leaving_front_end("solo_testing", true).restore,
+           "Grand Prix and Time Trial front ends are not left");
+}
+
 int main()
 {
     std::vector<era::Box> have;
@@ -378,7 +911,7 @@ int main()
     for (size_t i = 0; i < era::MAX_BOXES; i++)
         full.push_back(box(("l" + std::to_string(i)).c_str()));
     era::Box over = box("one_more");
-    expect(!era::check(over, full).empty(), "a box past the 64th is refused");
+    expect(!era::check(over, full).empty(), "a box past the 255th is refused");
 
     std::vector<era::Box> mixed = {box("y2018", "", "", 2018), box("y2016", "", "", 2016), box("late_a"), box("y2017", "", "", 2017),
                                    box("late_b")};
@@ -491,6 +1024,17 @@ int main()
                "an oversized Time Trial list is refused by its own name (" + why + ")");
         expect(era::time_trial_refusal(plain, -1).empty(), "an unread car count refuses nothing");
 
+        era::Box both = box("bdx_any"), tt_only = box("bdx_tt_only"), gp_only = box("bdx_gp_only");
+        tt_only.only = era::ONLY_TIME_TRIAL;
+        gp_only.only = era::ONLY_GRAND_PRIX;
+        expect(era::check(tt_only, none).empty() && era::check(gp_only, none).empty(), "a box with only set is accepted");
+        expect(era::shown(both, false) && era::shown(both, true), "a box without only shows on both pickers");
+        expect(!era::shown(tt_only, false) && era::shown(tt_only, true), "a Time Trial only box is off the Grand Prix picker and on the Time Trial picker");
+        expect(era::shown(gp_only, false) && !era::shown(gp_only, true), "a Grand Prix only box is on the Grand Prix picker and off the Time Trial picker");
+        era::Box odd = box("bdx_odd");
+        odd.only = 3;
+        expect(!era::check(odd, none).empty(), "an only past 2 is refused");
+
         expect(era::entrant_count(0x1000, 0x1000 + 24 * 0x88) == 24, "24 entrant records of 0x88 bytes count 24");
         expect(era::entrant_count(0x1000, 0x1000) == 0, "an empty list counts 0");
         expect(era::entrant_count(0, 0x88) < 0 && era::entrant_count(0x2000, 0x1000) < 0 &&
@@ -567,6 +1111,15 @@ int main()
         auto two = era::time_trial_budget({custom, a, bb});
         expect(two.dropped == std::vector<size_t>{2} && two.cars == 21,
                "two kept boxes of f1_2025's leaderboard (15 + 10 + 10): the first fits (25 vehicles), the second is left out");
+        {
+            era::TtList own{"swofty_cs_2016_list", true, true, refs(2000, 22)};
+            auto alone = era::time_trial_budget({own});
+            expect(alone.dropped.empty() && alone.cars == 22 && alone.cars + era::TT_OWN_ENTRIES == 26,
+                   "a box on a leaderboard of its own keeps its 22 cars: 26 vehicles, the full table");
+            expect(era::leaderboard_text(6) == "6, added" && era::leaderboard_text(1) == "1, classic" &&
+                       era::leaderboard_text(4) == "4",
+                   "the log names a descriptor an addon added, and the stock ones");
+        }
         era::TtList wide{"ex_23", false, true, refs(900, 12)};
         wide.refs.resize(23, wide.refs.back());
         expect(era::distinct_cars(wide.refs) == 12 && era::time_trial_budget({custom, wide}).dropped == std::vector<size_t>{1},
@@ -583,6 +1136,24 @@ int main()
         auto sel = era::time_trial_budget({big_selected, f1_2025});
         expect(sel.dropped == std::vector<size_t>{1} && sel.cars == 24,
                "the selected list always stays; the others are left out when it fills the table by itself");
+        {
+            era::TtList prev{"cs_f1_2020", true, false, refs(3000, 20)};
+            std::vector<era::ListCars> esm = {{"bdx_s5_2012", 24}, {"bdx_s5_2012_tt", 12}, {"cs_f1_2020", 20}};
+            era::ListCars session{"cs_f1_2020", 20}, first{"bdx_s5_2012", 24};
+            int64_t loaded = era::time_trial_loaded(session, first, esm, {"f1_2025", "bdx_s5_2012_tt"});
+            expect(loaded == 1 && esm[size_t(loaded)].name == "bdx_s5_2012_tt",
+                   "after a previous session on cs_f1_2020, a 24-car first list swaps to its _tt list, which is what loads");
+            expect(era::time_trial_loaded({"cs_f1_2020", 20}, {"cs_f1_2020", 20}, esm, {}) == -1,
+                   "no swap while the selected and first lists fit: the selected list is what loads");
+            era::TtList tt{"bdx_s5_2012_tt", true, true, refs(700, 12)};
+            era::TtList stock_a{"cs_f1_2021", false, false, refs(3100, 10)}, stock_b{"cs_f1_2022", false, false, refs(3200, 10)};
+            auto fresh = era::time_trial_budget({tt, stock_a, stock_b});
+            expect(fresh.cars + era::TT_OWN_ENTRIES <= era::TT_TABLE && fresh.dropped == std::vector<size_t>{2},
+                   "the budget built for the list that loads (12 cars) keeps the table within 26 and leaves out what does not fit");
+            auto wrong = era::time_trial_budget({prev, stock_a});
+            expect(wrong.cars + era::TT_OWN_ENTRIES + 12 > era::TT_TABLE,
+                   "a budget built for the pre-swap list leaves room that the swapped list's 12 cars then overflow");
+        }
         era::TtList empty_refs{"ex_empty", false, true, {0x3fff0000u, 0x3fff0000u}};
         expect(era::time_trial_budget({custom, empty_refs}).dropped.empty() && era::distinct_cars(empty_refs.refs) == 0,
                "entrants without a vehicle ref (0x3fff) take no slot");
@@ -693,8 +1264,8 @@ int main()
             early.previous = 25;
             expect(!era::budget_mismatch(early).empty(), "from Exiting on, any count is compared, changed or not");
             expect(era::leaderboard_text(0) == "0, f1" && era::leaderboard_text(1) == "1, classic" &&
-                       era::leaderboard_text(4) == "4" && era::leaderboard_text(40) == "40",
-                   "stock leaderboard ids print with their names (f1 is 0); others print as the id");
+                       era::leaderboard_text(4) == "4" && era::leaderboard_text(40) == "40, added",
+                   "stock leaderboard ids print with their names (f1 is 0); ids past them print as added");
         }
         expect(era::vehicle_flags(era::TAKES_LIST, 0) == era::TAKES_LIST &&
                    era::vehicle_flags(0, era::TAKES_POOL_A) == era::TAKES_POOL_A && era::vehicle_flags(0, 0) == 0,
@@ -755,9 +1326,17 @@ int main()
            "djb2 of addon_select_pressed, select_pressed and addon_tiles");
 
     drs_swap_tests();
+    warmer_swap_tests();
+    points_tests();
+    tyre_change_tests();
+    time_limit_swap_tests();
+    weekend_swap_tests();
+    stored_mode_tests();
     continue_tests();
     setup_guard_tests();
     grid_limit_tests();
+    cut_restore_tests();
+    front_end_leak_tests();
 
     printf("%s\n", fails ? "era_logic_test: FAILED" : "era_logic_test: all passed");
     return fails ? 1 : 0;

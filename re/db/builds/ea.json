@@ -534,11 +534,28 @@
    "pattern": "E8 ?? ?? ?? ?? 8B 7C 24 4C 4C 8D 74 24 68",
    "expect": "E8 57 34 87 FE",
    "note": "The pattern matches EA once at the Steam offset. The expected site bytes carry a rip-relative or call displacement that differs on EA; they are the EA dump's bytes."
+  },
+  "site_Game_GarageSetups_EntryStep": {
+   "pattern": "4E 8B 0C C2 4A 8D 14 C2 4D 8B 41 38 4D 8B 80 60 02 00 00 41 39 80",
+   "expect": "4A 8D 14 C2 4D 8B 41 38",
+   "note": "EA's owner lookup is inlined into the setup-list builder (F1_25.exe+0xc1fe90) with the entry walk in rdx instead of rcx; the entry is still r9 and the lea sits at the same offset. The first 12 bytes also match two other hash-set walks (+0x2bf0c2f, +0x2bf0e8f), so the pattern runs on to the +0x260/+0x2a8 reads that only the setup walk has."
+  },
+  "site_Game_GarageSetups_NotFound": {
+   "pattern": "31 F6 48 8D 8C 24 D8 00 00 00 48 89 F2",
+   "expect": "31 F6 48 8D 8C",
+   "note": "The inlined lookup's not-found join (xor esi,esi, then the name node built from rsi) at F1_25.exe+0xc2076f; Steam's equivalent is the function exit that returns rsi."
+  },
+  "Game_TileList_PushChildSelection_Thunk": {
+   "pattern": "E9 ?? ?? ?? ?? 0F 85 D5 4D 16 00 D5 0C 41 CF 00 4E C7",
+   "note": "the bytes after the 5-byte jmp are not code and differ on EA (thunk 0x1438285d0 to the body 0x14f622850)"
   }
  },
  "hints": {
   "Car_Reset_LastFittedUpgrade": {
    "match": "0x3507f80"
+  },
+  "Car_SuspensionDamage_OnCollision": {
+   "match": "0x464afa0"
   },
   "Career_Add_SeasonWeekend": {
    "match": "0xae4ad0"
@@ -757,6 +774,9 @@
   "Game_F1WorldActivityContainer_SelectEntrantList": {
    "match": "0x1a735f0"
   },
+  "Game_Fill_PerformanceComparison": {
+   "match": "0x188b3b0"
+  },
   "Game_PracticeTrackAcclimatisation_RefreshState": {
    "match": "0x2997720"
   },
@@ -786,6 +806,9 @@
   },
   "Game_SpeechSystem_PostLine": {
    "match": "0xa2f4d0"
+  },
+  "Game_Vfx_UpdateWheelTyreInstance": {
+   "match": "0x45a2d90"
   },
   "Gdb_Lookup_Key": {
    "match": "0x4598580"
@@ -827,6 +850,9 @@
   "Ne_StringTable_Lookup": {
    "match": "0x3917940"
   },
+  "Ne_Subscribe_BusMessage": {
+   "match": "0x3974900"
+  },
   "Sess_Build_GroupResult": {
    "match": "0xaf8b90"
   },
@@ -856,6 +882,12 @@
   },
   "Sess_WeatherComponent_SetSystemRandomSeed": {
    "match": "0xbdcd50"
+  },
+  "Sess_WeekendOptions_Refresh": {
+   "match": "0xbe5e20"
+  },
+  "Sess_WeekendSetup_LayoutWeekends": {
+   "match": "0xbecd70"
   },
   "Sess_Weekend_Start": {
    "match": "0xaeedd0"
@@ -904,6 +936,21 @@
   "g_Game_Root": {
    "match": "0x267270"
   },
+  "g_Game_TrackLength": {
+   "match": "0x360d104"
+  },
+  "g_Live_ControllerSystem": {
+   "match": "0x39cf0e"
+  },
+  "g_Live_RacingVehicles": {
+   "match": "0x46c68b2"
+  },
+  "g_Live_SectorCount": {
+   "match": "0x147f5a7"
+  },
+  "g_Live_SectorEnds": {
+   "match": "0x147f604"
+  },
   "g_Ne_DefaultAllocator": {
    "match": "0x1c805d4"
   },
@@ -922,6 +969,12 @@
   },
   "g_Sess_TyreRulesSessionType": {
    "match": "0x2e7c274"
+  },
+  "g_Sess_VehicleCount": {
+   "match": "0x1745c8"
+  },
+  "g_Sess_VehicleTable": {
+   "match": "0x1745d0"
   },
   "g_Vm_Registry": {
    "match": "0x1691f60",
@@ -1028,6 +1081,45 @@
   },
   "k_Gdb_StringXorKey": {
    "match": "0x20d520"
+  },
+  "k_Live_EntrantsSystemKey": {
+   "match": "0x27a11f"
+  },
+  "k_Live_GameModeSystemKey": {
+   "match": "0x207d12"
+  },
+  "k_Live_GameVehicleProgressSystemKey": {
+   "match": "0x98c887"
+  },
+  "k_Live_MarshalZoneMonitorKey": {
+   "match": "0x3089ebc"
+  },
+  "k_Live_PenaltyLogKey": {
+   "match": "0x5fdb08"
+  },
+  "k_Live_PitLaneSystemKey": {
+   "match": "0x5fd7a2"
+  },
+  "k_Live_RedFlagSystemKey": {
+   "match": "0xa3d9c4"
+  },
+  "k_Live_RelativeGapHelperKey": {
+   "match": "0x97c37c"
+  },
+  "k_Live_SafetyCarLogicSystemKey": {
+   "match": "0x5fd6e5"
+  },
+  "k_Live_SessionSystemKey": {
+   "match": "0x213ce5"
+  },
+  "k_Live_SpectatorDirectorKey": {
+   "match": "0x392445"
+  },
+  "k_Live_TyreSystemKey": {
+   "match": "0x3c6005"
+  },
+  "k_Live_VehicleHelperSystemKey": {
+   "match": "0x207c22"
   },
   "k_Ne_BagCodecVtbl": {
    "match": "0x29c7a89"
@@ -1368,6 +1460,18 @@
   "site_Career_RnDUpgradeListDeptIcon": {
    "match": "0x1747fc5"
   },
+  "site_Career_ScheduleComponent_TrackListEntryDone": {
+   "match": "0x126ceb0"
+  },
+  "site_Career_ScheduleComponent_TrackListNextRow": {
+   "match": "0x126cf70"
+  },
+  "site_Career_ScheduleComponent_TrackListPush": {
+   "match": "0x126cf7d"
+  },
+  "site_Career_ScheduleComponent_TrackListSave": {
+   "match": "0x126c3a0"
+  },
   "site_Career_StandingsWeekendTrackDone": {
    "match": "0x1818a2c"
   },
@@ -1510,6 +1614,24 @@
   "site_Game_CareerContinue_DriverSlotTitle": {
    "match": "0x1a09c74"
   },
+  "site_Game_CareerEventsSequencerFirstRecord": {
+   "match": "0xc6d128"
+  },
+  "site_Game_CareerEventsSequencerPlayerDriver": {
+   "match": "0xc6d399"
+  },
+  "site_Game_CareerEventsSequencerPlayerDriverJoin": {
+   "match": "0xc6d3a1"
+  },
+  "site_Game_CareerEventsSequencerRecordsJoin": {
+   "match": "0xc6d16c"
+  },
+  "site_Game_CareerEventsSequencerTeamMateDriver": {
+   "match": "0xc6d13f"
+  },
+  "site_Game_CareerEventsSequencerTeamMateDriverJoin": {
+   "match": "0xc6d147"
+  },
   "site_Game_CareerWizardConfirm_NextRoute": {
    "match": "0x1a1e15d"
   },
@@ -1537,6 +1659,18 @@
   "site_Game_ErsNewLap_VehicleLookup": {
    "match": "0x2511450"
   },
+  "site_Game_GhostlapTrace_RivalLogBoard": {
+   "match": "0x147d386"
+  },
+  "site_Game_GhostlapTrace_RivalLogDone": {
+   "match": "0x147d3af"
+  },
+  "site_Game_GrandPrixContinueVm_F1wCarCheck": {
+   "match": "0x1bc8f5c"
+  },
+  "site_Game_GrandPrixContinueVm_F1wWarningCheck": {
+   "match": "0x1bc92d5"
+  },
   "site_Game_SaveData_ContainersChildren": {
    "match": "0x3641dd8"
   },
@@ -1560,6 +1694,18 @@
   },
   "site_Game_TimeTrialLeaderboard_BoardsDone": {
    "match": "0x2fc2d72"
+  },
+  "site_Game_TimeTrial_SetReferenceListBoard": {
+   "match": "0x1475fc2"
+  },
+  "site_Game_TimeTrial_SetReferenceLogBoard": {
+   "match": "0x147605f"
+  },
+  "site_Game_TimeTrial_SetReferenceLogDone": {
+   "match": "0x1476167"
+  },
+  "site_Game_TimeTrial_SetReferenceNoList": {
+   "match": "0x14762ae"
   },
   "site_Gdb_DeptCountStore": {
    "match": "0x4598b6f"
@@ -1667,6 +1813,15 @@
    "match": "0x603b5d",
    "func_rva": "0x600160"
   },
+  "site_Sess_TimeTrialLeaderboard_TabChild": {
+   "match": "0x2fbfae9"
+  },
+  "site_Sess_TimeTrialLeaderboard_TabDone": {
+   "match": "0x2fbfaf9"
+  },
+  "vt_Car_SystemsContainer": {
+   "match": "0x461e9f3"
+  },
   "vt_Career_BankTransactionMessage": {
    "match": "0xc57216"
   },
@@ -1723,6 +1878,60 @@
   },
   "vt_Game_TrackListComponent": {
    "match": "0xcfb775"
+  },
+  "vt_Sess_ControllerSystem": {
+   "match": "0x3885193"
+  },
+  "vt_Sess_HumanController": {
+   "match": "0x3883bc7"
+  },
+  "site_Game_MyTeamVehicleBases_AiConfigLoad": {
+   "match": "0x2501675"
+  },
+  "site_Game_MyTeamVehicleBases_NextBase": {
+   "match": "0x2502c4d"
+  },
+  "site_Sess_TimeTrialLeaderboard_BoundTabChild": {
+   "match": "0x2fc1146"
+  },
+  "site_Sess_TimeTrialLeaderboard_BoundTabDone": {
+   "match": "0x2fc1156"
+  },
+  "g_Ne_InlineStr128Vtable": {
+   "match": "0x2d56149"
+  },
+  "site_Sess_InGameRaceRetirementDriver": {
+   "match": "0x2d56210"
+  },
+  "site_Sess_InGameRaceRetirementDriverJoin": {
+   "match": "0x2d56224"
+  },
+  "site_Game_TheatreRows_RowOffset": {
+   "match": "0x1f04f42"
+  },
+  "site_Game_TheatreList_EntryStepAlt": {
+   "match": "0x2bf0d20"
+  },
+  "site_Game_TheatreList_NoSlotAlt": {
+   "match": "0x2bf0d20"
+  },
+  "site_Game_TileListSelect_ChildStep": {
+   "match": "0x38261f5"
+  },
+  "site_Game_TileListSelect_ChildNext": {
+   "match": "0x38261f5"
+  },
+  "site_Team_RecognitionFirstRecord": {
+   "match": "0x20b4ec6"
+  },
+  "site_Team_RecognitionRecordsExit": {
+   "match": "0x20b59f7"
+  },
+  "Sess_RaceStrategy_RedFlagRecompute": {
+   "match": "0x368ca20"
+  },
+  "Game_TileList_PushChildSelection_Thunk": {
+   "match": "0x38285d0"
   }
  },
  "unresolvable": {}

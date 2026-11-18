@@ -3684,7 +3684,7 @@
    "group": "Tracks & Calendar",
    "title": "Calendar",
    "icon": "calendar-days",
-   "summary": "The events of each track list, in calendar order.",
+   "summary": "The events of each track list.",
    "scope": {
     "title": "Track list",
     "rows": "schedule.track_lists.track_event_list",
@@ -3709,7 +3709,7 @@
        "template": "{activity}"
       }
      },
-     "help": "Reorder the calendar by swapping events between rounds."
+     "help": "The event this slot of the list runs. Careers order their rounds by each event's own date, not by the slot, so swapping events between slots changes which events run but doesn't reorder them."
     },
     {
      "id": "label",
@@ -3729,7 +3729,8 @@
     }
    ],
    "notes": [
-    "Lists sorted by date order their events by the weekend dates in Track settings.",
+    "A career orders its rounds by each event's own date, whatever the order of the list and whatever Sort by date says. Swapping events between slots changes which events run, not their order. The DB Editor has no page for the event dates, and the weekend day and month in Track settings do not set them.",
+    "Events count on Track lists lowers the list; slots past it are dropped, and the page and the build say which rounds.",
     "To race a round at another track, such as Sepang in the bahrain24 slot or a modded track, change its weekend's track in Race weekends."
    ]
   },
@@ -3773,7 +3774,7 @@
    ],
    "notes": [
     "A modded track, or the bahrain24 slot a track like Sepang fills, needs its track addon on in the profile.",
-    "A weekend at another track uses that track's Track settings, including the weekend date that lists sorted by date order by."
+    "A weekend at another track keeps the place its event has in a career's order; the Track settings dates of the new track don't move it."
    ]
   },
   {
@@ -3796,13 +3797,14 @@
      "kind": "int",
      "min": 1,
      "max": 30,
-     "help": "The game reads this many events from the list. More events need new rows; without them, the build keeps the count at the rows the list has."
+     "help": "The game reads this many events from the list and drops the slots after them. Lowering it cuts rounds from the end; the Calendar page and the build name them. More events need new rows; without them, the build keeps the count at the rows the list has."
     },
     {
      "id": "sort_by_date",
      "label": "Sort by date",
      "path": "sort_by_date",
-     "kind": "bool"
+     "kind": "bool",
+     "help": "Careers order the rounds by date whichever way this is set."
     },
     {
      "id": "label",

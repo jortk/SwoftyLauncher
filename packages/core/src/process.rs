@@ -103,6 +103,14 @@ fn folder_key(p: &Path) -> String {
     }
 }
 
+/// `--<name>=<value>` as one argument, so a value that starts with `-`, such as
+/// a profile named `-swofty`, is not read as another flag.
+pub fn flag(name: &str, value: impl AsRef<std::ffi::OsStr>) -> std::ffi::OsString {
+    let mut arg = std::ffi::OsString::from(format!("--{name}="));
+    arg.push(value);
+    arg
+}
+
 pub fn game_running() -> bool {
     !game_processes().is_empty()
 }
@@ -318,12 +326,38 @@ mod win32 {
         exe_file: [u16; MAX_PATH],
     }
 
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+
     #[link(name = "kernel32")]
     unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        fn QueryFullProcessImageNameW(
+            process: *mut c_void,
+            flags: u32,
+            name: *mut u16,
+            size: *mut u32,
+        ) -> i32;
         fn CreateToolhelp32Snapshot(flags: u32, pid: u32) -> *mut c_void;
         fn Process32FirstW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
         fn Process32NextW(snapshot: *mut c_void, entry: *mut ProcessEntry32W) -> i32;
         fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+
+    /// The full path of the exe the process `pid` runs, or None when it cannot be opened.
+    pub fn image_path(pid: u32) -> Option<std::path::PathBuf> {
+        // SAFETY: the handle is checked before use and closed once; the buffer is `size` u16s long and
+        // QueryFullProcessImageNameW sets `size` to the length it wrote.
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if handle.is_null() {
+                return None;
+            }
+            let mut buf = vec![0u16; 32_768];
+            let mut size = buf.len() as u32;
+            let ok = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut size) != 0;
+            CloseHandle(handle);
+            ok.then(|| std::path::PathBuf::from(String::from_utf16_lossy(&buf[..size as usize])))
+        }
     }
 
     /// The pids of the processes whose exe file name is `name` in any case,
@@ -354,6 +388,15 @@ mod win32 {
             Some(out)
         }
     }
+}
+
+#[cfg(windows)]
+pub(crate) fn named_paths(name: &str) -> Vec<PathBuf> {
+    win32::process_ids(name)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(win32::image_path)
+        .collect()
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
@@ -479,6 +522,108 @@ pub(crate) fn started(pid: u32) -> Option<SystemTime> {
     (ok != 0).then(|| filetime(creation)).flatten()
 }
 
+pub fn own_elevation() -> Option<bool> {
+    elevation(std::process::id())
+}
+
+pub struct ExitProbe(#[cfg(windows)] *mut std::ffi::c_void);
+
+#[cfg(windows)]
+mod token {
+    use std::ffi::c_void;
+    pub const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    pub const TOKEN_QUERY: u32 = 0x8;
+    pub const TOKEN_ELEVATION: u32 = 20;
+    pub const STILL_ACTIVE: u32 = 259;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        pub fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        pub fn GetExitCodeProcess(process: *mut c_void, code: *mut u32) -> i32;
+        pub fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+    #[link(name = "advapi32")]
+    unsafe extern "system" {
+        pub fn OpenProcessToken(process: *mut c_void, access: u32, token: *mut *mut c_void) -> i32;
+        pub fn GetTokenInformation(
+            token: *mut c_void,
+            class: u32,
+            info: *mut c_void,
+            len: u32,
+            returned: *mut u32,
+        ) -> i32;
+    }
+}
+
+#[cfg(windows)]
+pub fn elevation(pid: u32) -> Option<bool> {
+    use std::ffi::c_void;
+    use token::*;
+    // SAFETY: each handle is checked before use and closed once, and the
+    // elevation flag is a u32 whose size is passed to the call.
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            return None;
+        }
+        let mut handle: *mut c_void = std::ptr::null_mut();
+        let opened = OpenProcessToken(process, TOKEN_QUERY, &mut handle) != 0;
+        CloseHandle(process);
+        if !opened {
+            return None;
+        }
+        let (mut flag, mut returned) = (0u32, 0u32);
+        let ok = GetTokenInformation(
+            handle,
+            TOKEN_ELEVATION,
+            (&mut flag as *mut u32).cast(),
+            4,
+            &mut returned,
+        );
+        CloseHandle(handle);
+        (ok != 0).then_some(flag != 0)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn elevation(_: u32) -> Option<bool> {
+    None
+}
+
+#[cfg(windows)]
+impl ExitProbe {
+    pub fn open(pid: u32) -> Option<Self> {
+        // SAFETY: the handle is checked before it is kept; Drop closes it once.
+        let handle = unsafe { token::OpenProcess(token::PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        (!handle.is_null()).then_some(Self(handle))
+    }
+
+    pub fn exit_code(&self) -> Option<u32> {
+        let mut code = 0u32;
+        // SAFETY: the handle is open until Drop and `code` is a u32.
+        let ok = unsafe { token::GetExitCodeProcess(self.0, &mut code) };
+        (ok != 0 && code != token::STILL_ACTIVE).then_some(code)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ExitProbe {
+    fn drop(&mut self) {
+        // SAFETY: the handle came from OpenProcess and is closed only here.
+        unsafe { token::CloseHandle(self.0) };
+    }
+}
+
+#[cfg(not(windows))]
+impl ExitProbe {
+    pub fn open(_: u32) -> Option<Self> {
+        None
+    }
+
+    pub fn exit_code(&self) -> Option<u32> {
+        None
+    }
+}
+
 /// A FILETIME: 100 ns ticks since 1601-01-01 UTC.
 #[cfg(any(windows, test))]
 fn filetime(ticks: u64) -> Option<SystemTime> {
@@ -510,6 +655,12 @@ pub fn stop_game_in(dir: &Path) -> std::io::Result<Vec<u32>> {
 #[cfg(test)]
 mod status_tests {
     use super::*;
+
+    #[test]
+    fn a_flag_keeps_a_value_that_starts_with_a_dash() {
+        assert_eq!(flag("profile", "-swofty"), "--profile=-swofty");
+        assert_eq!(flag("game", Path::new("/games/F1 25")), "--game=/games/F1 25");
+    }
 
     #[test]
     fn reports_the_live_session_of_a_running_game() {

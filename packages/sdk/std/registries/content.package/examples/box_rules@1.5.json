@@ -1,0 +1,14 @@
+{
+  "content.package": {
+    "f1_1970": {
+      "entrant_list": "f1_1970",
+      "season": 1970,
+      "rules": {
+        "safety_car": "off",
+        "formation_lap": false,
+        "penalties": "corner_cutting_only",
+        "corner_cutting": "regular"
+      }
+    }
+  }
+}

@@ -241,11 +241,21 @@ public:
 
     std::vector<std::string> put_back(const std::string &scope)
     {
+        return put_back_if([&](const Claim &c) { return c.scope == scope; });
+    }
+
+    std::vector<std::string> withdraw(const std::string &addon, const std::string &registry, const std::string &id)
+    {
+        return put_back_if([&](const Claim &c) { return c.addon == addon && c.registry == registry && c.id == id; });
+    }
+
+    template <typename Pred> std::vector<std::string> put_back_if(Pred gone)
+    {
         std::vector<std::string> lines;
         std::vector<std::string> paths;
         for (auto &[p, list] : claims_)
             for (auto &c : list)
-                if (c.scope == scope) {
+                if (gone(c)) {
                     paths.push_back(p);
                     break;
                 }
@@ -253,8 +263,7 @@ public:
             const Claim *before = winner(p);
             Claim was = before ? *before : Claim{};
             auto &list = claims_[p];
-            list.erase(std::remove_if(list.begin(), list.end(), [&](const Claim &c) { return c.scope == scope; }),
-                       list.end());
+            list.erase(std::remove_if(list.begin(), list.end(), gone), list.end());
             const Claim *now = winner(p);
             if (now && now->target == was.target && now->id == was.id)
                 continue;
@@ -316,6 +325,15 @@ public:
         for (auto &[p, list] : claims_)
             n += winner(p) != nullptr;
         return n;
+    }
+
+    std::map<std::string, std::string> active_routes() const
+    {
+        std::map<std::string, std::string> out;
+        for (const auto &[path, claims] : claims_)
+            if (auto *claim = winner(path))
+                out.emplace(path, "swofty/" + claim->target);
+        return out;
     }
 
     void clear()

@@ -10,10 +10,10 @@ use crate::manifest::{AddonManifest, MANIFEST_FILE};
 use crate::profile::{self, Profile};
 use crate::session::Config;
 use crate::settings::{self, Merge, Requests, SessionSettings};
-use crate::{Error, Result, io_err};
+use crate::{Error, Result, io_err, with_retry};
 
 pub const DEFAULT_PROFILE: &str = "default";
-pub const DATA_VERSION: u32 = 3;
+pub const DATA_VERSION: u32 = 4;
 const LEGACY_ADDONS_DIR: &str = "mods";
 
 static PROFILE_WRITE: Mutex<()> = Mutex::new(());
@@ -51,6 +51,47 @@ fn not_done(what: &str, e: &std::io::Error) -> Error {
     })
 }
 
+fn swap_lock_path(addons: &Path, id: &str) -> PathBuf {
+    addons.join(format!(".swap-{id}.lock"))
+}
+
+/// Held while one process swaps an addon folder, so another launcher's
+/// start-up cleanup leaves the half-finished swap alone. The operating system
+/// drops it when the process ends, which is how a later start tells a dead
+/// swap from a live one. Where the file system cannot lock, swaps go unguarded.
+struct SwapLock {
+    _file: std::fs::File,
+}
+
+impl SwapLock {
+    fn try_acquire(addons: &Path, id: &str) -> Option<Option<Self>> {
+        let path = swap_lock_path(addons, id);
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .ok()?;
+        match file.try_lock() {
+            Err(std::fs::TryLockError::WouldBlock) => Some(None),
+            Ok(()) | Err(std::fs::TryLockError::Error(_)) => Some(Some(Self { _file: file })),
+        }
+    }
+}
+
+fn swap_lock_for(dest: &Path, name: &str) -> Result<Option<SwapLock>> {
+    let (Some(addons), Some(id)) = (dest.parent(), dest.file_name()) else {
+        return Ok(None);
+    };
+    match SwapLock::try_acquire(addons, &id.to_string_lossy()) {
+        Some(None) => Err(Error::Other(format!(
+            "Couldn't change {name}: another Swofty launcher is changing it right now"
+        ))),
+        Some(Some(lock)) => Ok(Some(lock)),
+        None => Ok(None),
+    }
+}
+
 /// Moves `dir` to a hidden `.old-` folder beside it. A file still in use stops
 /// the move, and then nothing in `dir` has changed.
 fn set_aside(dir: &Path, rename: Rename) -> std::io::Result<PathBuf> {
@@ -74,6 +115,7 @@ fn set_aside(dir: &Path, rename: Rename) -> std::io::Result<PathBuf> {
 fn swap_in(staging: &Path, dest: &Path, name: &str, rename: Rename, delete: Delete) -> Result<()> {
     let verb = if dest.exists() { "update" } else { "install" };
     let what = format!("Couldn't {verb} {name}");
+    let _lock = swap_lock_for(dest, name)?;
     let aside = match dest.exists().then(|| set_aside(dest, &mut *rename)).transpose() {
         Ok(aside) => aside,
         Err(e) => {
@@ -100,6 +142,7 @@ fn swap_in(staging: &Path, dest: &Path, name: &str, rename: Rename, delete: Dele
 /// a file still in use stops the removal before anything is deleted. An old
 /// copy that can't be deleted yet is deleted on the next start.
 fn delete_addon_dir(dir: &Path, name: &str, rename: Rename, delete: Delete) -> Result<()> {
+    let _lock = swap_lock_for(dir, name)?;
     let aside = set_aside(dir, rename).map_err(|e| not_done(&format!("Couldn't remove {name}"), &e))?;
     waiting_out_locks(|| delete(&aside)).ok();
     Ok(())
@@ -107,6 +150,19 @@ fn delete_addon_dir(dir: &Path, name: &str, rename: Rename, delete: Delete) -> R
 
 fn profile_write() -> MutexGuard<'static, ()> {
     PROFILE_WRITE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Where an addon being installed came from, which decides what it may be.
+#[derive(Debug, Clone, Copy)]
+enum InstallFrom<'a> {
+    /// A file the player chose.
+    Other,
+    /// A folder the helper of the addon with this id asked to install.
+    Helper(&'a str),
+    /// A download the catalog lists as this id and version.
+    Catalog(&'a str, &'a semver::Version),
+    /// A release of the addon the launcher manages.
+    ManagedRelease,
 }
 
 #[derive(Debug, Clone)]
@@ -158,6 +214,16 @@ impl Store {
         self.root.join("addons")
     }
 
+    /// Personal shader configs and the shader settings.
+    pub fn shaders_dir(&self) -> PathBuf {
+        self.root.join("shaders")
+    }
+
+    /// Compiled effects and the extracted effect library.
+    pub fn shaders_cache_dir(&self) -> PathBuf {
+        self.root.join("cache/shaders")
+    }
+
     pub fn addon_data_dir(&self, id: &str) -> PathBuf {
         self.root.join("addon-data").join(id)
     }
@@ -179,7 +245,7 @@ impl Store {
     }
 
     pub fn overlays_dir(&self, profile: &str) -> PathBuf {
-        self.root.join("cache/overlay").join(profile)
+        overlay_root(&self.root).join(profile)
     }
 
     pub fn overlay_dir(&self, profile: &str, buildhash: &str) -> PathBuf {
@@ -220,6 +286,13 @@ impl Store {
 
     pub fn migrate(&self) -> Result<Vec<String>> {
         let mut notes = Vec::new();
+        if let Some(target) = crate::paths::dangling_link(&self.root) {
+            return Err(Error::Other(format!(
+                "the data folder {} links to {}, which is missing. Reconnect that drive or restore the folder; the launcher will not start a new data folder in its place",
+                self.root.display(),
+                target.display()
+            )));
+        }
         if !self.root.is_dir() {
             return Ok(notes);
         }
@@ -269,7 +342,23 @@ impl Store {
                 Err(e) => return Err(Error::Other(format!("migrating {id}: {e}"))),
             }
         }
+        let backfilled = match config
+            .as_ref()
+            .map_or(Ok(Vec::new()), |_| self.backfill_profile_addons(from))
+        {
+            Ok(n) => {
+                notes.extend(n);
+                true
+            }
+            Err(e) => {
+                let text = format!("couldn't list installed addons in the profiles, will retry: {e}");
+                warn(text.clone());
+                notes.push(text);
+                false
+            }
+        };
         match config {
+            Ok(_) if !backfilled => {}
             Ok(mut config) => {
                 config.data_version = DATA_VERSION;
                 self.save_config(&config)?;
@@ -277,6 +366,64 @@ impl Store {
             Err(e) => notes.push(format!("data_version not recorded: {e}")),
         }
         Ok(notes)
+    }
+
+    /// Data version 4: a profile lists every installed addon, as the Addons page showed
+    /// them before profiles listed their own. Each one a profile doesn't list is added off,
+    /// at the end, in the order that page showed them; the profile's own entries stay as
+    /// they are.
+    fn backfill_profile_addons(&self, from: u32) -> Result<Vec<String>> {
+        let mut notes = Vec::new();
+        if from >= 4 {
+            return Ok(notes);
+        }
+        let mut installed: Vec<AddonManifest> = self
+            .addons()?
+            .into_values()
+            .filter(|m| {
+                !m.is_builtin() && !self.is_builtin(&m.id) && m.id != crate::managed::ID && m.id != CORE_ID
+            })
+            .collect();
+        installed.sort_by_cached_key(|m| m.name.to_lowercase());
+        if installed.is_empty() {
+            return Ok(notes);
+        }
+        for name in self.profile_names()? {
+            if name == profile::VANILLA {
+                continue;
+            }
+            let added = self.update_profile_if(&name, |p| {
+                let mut added = Vec::new();
+                for m in &installed {
+                    if !p.has(&m.id) {
+                        p.add_addon(&m.id)?;
+                        added.push(m.id.clone());
+                    }
+                }
+                Ok(added)
+            })?;
+            if !added.is_empty() {
+                notes.push(format!(
+                    "listed {} installed addons in the {name} profile",
+                    added.len()
+                ));
+            }
+        }
+        Ok(notes)
+    }
+
+    fn update_profile_if(
+        &self,
+        name: &str,
+        f: impl FnOnce(&mut Profile) -> Result<Vec<String>>,
+    ) -> Result<Vec<String>> {
+        let _write = profile_write();
+        let mut p = self.profile(name)?;
+        let added = f(&mut p)?;
+        if !added.is_empty() {
+            self.save_profile(&p)?;
+        }
+        Ok(added)
     }
 
     /// Finishes addon updates and removals an earlier run left: an old copy
@@ -296,6 +443,34 @@ impl Store {
         old.sort();
         let mut notes = Vec::new();
         for dir in old {
+            let stem = dir
+                .file_name()
+                .map(|n| n.to_string_lossy().trim_start_matches(OLD_PREFIX).to_owned())
+                .unwrap_or_default();
+            let base = match stem.rsplit_once('-') {
+                Some((b, n)) if !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()) => b.to_owned(),
+                _ => stem.clone(),
+            };
+            let mut names = vec![stem, base];
+            names.extend(manifest_id(&dir));
+            names.sort();
+            names.dedup();
+            let mut guards = Vec::new();
+            let mut busy = false;
+            for n in &names {
+                match SwapLock::try_acquire(&addons, n) {
+                    Some(None) => busy = true,
+                    Some(Some(g)) => guards.push(g),
+                    None => {}
+                }
+            }
+            if busy {
+                notes.push(format!(
+                    "left {} alone: another launcher is changing it",
+                    dir.display()
+                ));
+                continue;
+            }
             let interrupted = manifest_id(&dir).filter(|id| {
                 !addons.join(id).exists() && addons.join(format!("{STAGING_PREFIX}{id}")).is_dir()
             });
@@ -400,12 +575,68 @@ impl Store {
     }
 
     pub fn install_addon_for(&self, src: &Path, launcher: &semver::Version) -> Result<AddonManifest> {
+        self.install_addon_target(src, launcher, None, InstallFrom::Other)
+    }
+
+    /// Install into a specific existing profile rather than whichever profile is active later.
+    pub fn install_addon_in_profile(&self, src: &Path, profile: &str) -> Result<AddonManifest> {
+        self.install_addon_target(
+            src,
+            &crate::update::current_version(),
+            Some(profile),
+            InstallFrom::Other,
+        )
+    }
+
+    /// Install a folder the helper of the addon `helper` made. An addon the Simplified Importer
+    /// made may be installed under another id ([`crate::imported::install_id`]).
+    pub(crate) fn install_addon_by(&self, src: &Path, helper: &str) -> Result<AddonManifest> {
+        self.install_addon_target(
+            src,
+            &crate::update::current_version(),
+            None,
+            InstallFrom::Helper(helper),
+        )
+    }
+
+    /// Install what the catalog lists as `id` at `version`, into `profile` when one is named.
+    pub(crate) fn install_listed(
+        &self,
+        src: &Path,
+        profile: Option<&str>,
+        id: &str,
+        version: &semver::Version,
+    ) -> Result<AddonManifest> {
+        self.install_addon_target(
+            src,
+            &crate::update::current_version(),
+            profile,
+            InstallFrom::Catalog(id, version),
+        )
+    }
+
+    /// Install a release of the addon the launcher manages.
+    pub(crate) fn install_managed_release(
+        &self,
+        src: &Path,
+        launcher: &semver::Version,
+    ) -> Result<AddonManifest> {
+        self.install_addon_target(src, launcher, None, InstallFrom::ManagedRelease)
+    }
+
+    fn install_addon_target(
+        &self,
+        src: &Path,
+        launcher: &semver::Version,
+        profile: Option<&str>,
+        from: InstallFrom,
+    ) -> Result<AddonManifest> {
         if src.is_file() {
             let scratch = self.scratch_dir();
             let result = self
                 .unpacked_addons(src, &scratch)
                 .and_then(|found| match found.as_slice() {
-                    [one] => self.install_addon_for(one, launcher),
+                    [one] => self.install_addon_target(one, launcher, profile, from),
                     many => Err(Error::Other(format!(
                         "{} holds {} addons; drop it on the launcher to install them all",
                         src.display(),
@@ -419,10 +650,11 @@ impl Store {
         if src.join(crate::dbedit::package::MARKER).is_file() {
             return crate::dbedit::package::install(self, src).map(|(p, _)| {
                 std::fs::remove_file(self.registry_install_path(&p.manifest.id)).ok();
+                self.add_to_install_profile(&p.manifest.id, profile);
                 p.manifest
             });
         }
-        let m = AddonManifest::load(src).map_err(|e| {
+        let mut m = AddonManifest::load(src).map_err(|e| {
             let u = Unreadable::of(src, &e, launcher);
             if u.newer {
                 Error::Other(u.line())
@@ -432,6 +664,29 @@ impl Store {
         })?;
         if self.is_builtin(&m.id) {
             return Err(Error::Other(format!("{} is built in", m.id)));
+        }
+        if let InstallFrom::Catalog(id, version) = from
+            && (m.id != id || m.version != *version)
+        {
+            return Err(Error::Other(format!(
+                "the registry lists {id} {version}, the download holds {} {}",
+                m.id, m.version
+            )));
+        }
+        if matches!(from, InstallFrom::Catalog(..)) {
+            crate::imported::refuse_listed(self, &m)?;
+        }
+        let id = match from {
+            InstallFrom::Helper(helper) if crate::imported::made_by(helper, &m) => {
+                crate::imported::install_id(self, src, &m)?
+            }
+            _ => m.id.clone(),
+        };
+        if crate::managed::is_managed(&m.id) && !matches!(from, InstallFrom::ManagedRelease) {
+            return Err(Error::Other(format!(
+                "{} is managed by the launcher, which installs and updates it itself",
+                m.id
+            )));
         }
         let prefix = crate::dbedit::package::ID_PREFIX;
         if crate::dbedit::package::is_package(self, &m.id) {
@@ -449,10 +704,11 @@ impl Store {
         if let Some(why) = crate::resolver::launcher_refusal(&m, launcher) {
             return Err(Error::Other(why));
         }
-        crate::busy::refuse_change(&self.root, &m.id, &m.name)?;
-        let dest = self.addons_dir().join(&m.id);
-        self.helpers.forget(&m.id);
-        let staging = self.addons_dir().join(format!("{STAGING_PREFIX}{}", m.id));
+        crate::busy::refuse_change(&self.root, &id, &m.name)?;
+        let dest = self.addons_dir().join(&id);
+        let fresh = !dest.exists();
+        self.helpers.forget(&id);
+        let staging = self.addons_dir().join(format!("{STAGING_PREFIX}{id}"));
         if staging.exists() {
             std::fs::remove_dir_all(&staging).map_err(io_err(&staging))?;
         }
@@ -460,6 +716,15 @@ impl Store {
         if !moved && let Err(e) = copy_dir(src, &staging) {
             std::fs::remove_dir_all(&staging).ok();
             return Err(e);
+        }
+        if id != m.id {
+            match crate::imported::rename(&staging, &id) {
+                Ok(renamed) => m = renamed,
+                Err(e) => {
+                    std::fs::remove_dir_all(&staging).ok();
+                    return Err(e);
+                }
+            }
         }
         swap_in(
             &staging,
@@ -469,7 +734,43 @@ impl Store {
             &mut |d| std::fs::remove_dir_all(d),
         )?;
         std::fs::remove_file(self.registry_install_path(&m.id)).ok();
+        if fresh {
+            self.add_to_install_profile(&m.id, profile);
+        }
         Ok(m)
+    }
+
+    /// A new addon goes into the profile it was installed from, off, rather than
+    /// every profile; the others add it from their own Addons page. A failure
+    /// only leaves it out of the profile, so it doesn't fail the install.
+    /// Every installed addon is in every profile, off until a profile turns it on, so an
+    /// install lists it in all of them at the end of their order. `target` only names a
+    /// profile that must still exist for a queued install to count.
+    fn add_to_install_profile(&self, id: &str, target: Option<&str>) {
+        let names = match self.profile_names() {
+            Ok(names) => names,
+            Err(e) => {
+                warn(format!("couldn't list the profiles for {id}: {e}"));
+                return;
+            }
+        };
+        if let Some(target) = target
+            && target != profile::VANILLA
+            && !names.iter().any(|n| n == target)
+        {
+            warn(format!(
+                "profile {target} no longer exists; {id} is listed in the others"
+            ));
+        }
+        for name in names.iter().filter(|n| n.as_str() != profile::VANILLA) {
+            if let Err(e) = self.update_profile_if(name, |p| {
+                let had = p.has(id);
+                p.add_addon(id)?;
+                Ok(if had { Vec::new() } else { vec![id.to_owned()] })
+            }) {
+                warn(format!("couldn't add {id} to the {name} profile: {e}"));
+            }
+        }
     }
 
     fn in_scratch(&self, path: &Path) -> bool {
@@ -547,7 +848,15 @@ impl Store {
             };
             let listed = p.addons.iter().any(|a| a.id == id);
             let had_options = p.options.contains_key(id) || p.applied.contains_key(id);
-            if listed || had_options {
+            let shader = p.shader.as_deref().is_some_and(|r| {
+                r.strip_prefix("addon:")
+                    .and_then(|r| r.split_once('/'))
+                    .is_some_and(|(a, _)| a == id)
+            });
+            if listed || had_options || shader {
+                if shader {
+                    p.shader = None;
+                }
                 p.addons.retain(|a| a.id != id);
                 p.options.remove(id);
                 p.applied.remove(id);
@@ -601,15 +910,22 @@ impl Store {
         Ok(names)
     }
 
+    /// Refuses a name that isn't valid, or that another profile holds. Windows ignores
+    /// capitals in file names, so `Grid` and `grid` would be one profile's files.
+    fn check_new_profile_name(&self, name: &str) -> Result<()> {
+        check_new_name(name)?;
+        if let Some(taken) = self
+            .profile_names()?
+            .iter()
+            .find(|n| n.eq_ignore_ascii_case(name))
+        {
+            return Err(Error::Other(format!("a profile named {taken} already exists")));
+        }
+        Ok(())
+    }
+
     pub fn create_profile(&self, name: &str, from: Option<&str>) -> Result<Profile> {
-        if !profile::valid_name(name) {
-            return Err(Error::Other(format!(
-                "{name:?} is not a valid profile name (letters, digits, - and _)"
-            )));
-        }
-        if self.profile_names()?.iter().any(|n| n == name) {
-            return Err(Error::Other(format!("a profile named {name} already exists")));
-        }
+        self.check_new_profile_name(name)?;
         let mut p = match from {
             Some(src) => self.profile(src)?,
             None => Profile::new(name),
@@ -617,6 +933,13 @@ impl Store {
         p.name = name.into();
         p.normalise();
         self.adopt_builtins(&mut p);
+        if from.is_none() {
+            for m in self.addons()?.into_values().filter(|m| {
+                !m.is_builtin() && !self.is_builtin(&m.id) && m.id != crate::managed::ID && m.id != CORE_ID
+            }) {
+                p.add_addon(&m.id)?;
+            }
+        }
         self.save_profile(&p)?;
         crate::addon_storage::profile_created(&self.root, name, from)?;
         Ok(p)
@@ -626,14 +949,53 @@ impl Store {
         if from == profile::VANILLA {
             return Err(Error::Other("the vanilla profile cannot be renamed".into()));
         }
-        let p = self.create_profile(to, Some(from))?;
-        let old = self.profiles_dir().join(format!("{from}.json"));
-        if old.is_file() {
-            std::fs::remove_file(&old).map_err(io_err(&old))?;
+        // The running game keeps writing to the saves folder this would move.
+        if let Some(j) = crate::journal::Journal::open(&self.root)?
+            .into_iter()
+            .find(|j| j.profile == from)
+        {
+            return Err(Error::Other(format!(
+                "{from} is installed in the game folder (journal {}); close F1 25 or run \
+                 swofty restore, then rename it",
+                j.id
+            )));
         }
+        if from != to && from.eq_ignore_ascii_case(to) {
+            return self.rename_profile_capitals(from, to);
+        }
+        self.check_new_profile_name(to)?;
         let saves = self.saves_dir(from);
-        if saves.is_dir() {
-            std::fs::rename(&saves, self.saves_dir(to)).map_err(io_err(&saves))?;
+        let saves_to = self.saves_dir(to);
+        let has_saves = saves.is_dir();
+        if has_saves {
+            if std::fs::read_dir(&saves_to).is_ok_and(|mut rd| rd.next().is_some()) {
+                return Err(Error::Other(format!(
+                    "{} already holds saves; move them away, then rename {from}",
+                    saves_to.display()
+                )));
+            }
+            std::fs::remove_dir(&saves_to).ok();
+        }
+        let p = self.create_profile(to, Some(from))?;
+        // The saves move first: they fail most often, and until the old profile is
+        // gone everything can still go back to how it was.
+        let undo = || {
+            std::fs::remove_file(self.profiles_dir().join(format!("{to}.json"))).ok();
+            crate::addon_storage::profile_deleted(&self.root, to).ok();
+        };
+        if has_saves && let Err(e) = with_retry(&saves, || std::fs::rename(&saves, &saves_to)) {
+            undo();
+            return Err(e);
+        }
+        let old = self.profiles_dir().join(format!("{from}.json"));
+        if old.is_file()
+            && let Err(e) = with_retry(&old, || std::fs::remove_file(&old))
+        {
+            if has_saves {
+                std::fs::rename(&saves_to, &saves).ok();
+            }
+            undo();
+            return Err(e);
         }
         crate::launcher_saves::rename_vaults(&self.root, from, to)?;
         crate::launcher_saves::rename_in_marker(&self.root, from, to)?;
@@ -648,6 +1010,21 @@ impl Store {
             self.save_config(&config)?;
         }
         Ok(p)
+    }
+
+    /// `from` and `to` differ only in capitals. On Windows they name the same files, so going
+    /// straight across would write over the profile and then delete it: it goes by way of
+    /// another name.
+    fn rename_profile_capitals(&self, from: &str, to: &str) -> Result<Profile> {
+        check_new_name(to)?;
+        if self.profile_names()?.iter().any(|n| n == to) {
+            return Err(Error::Other(format!("a profile named {to} already exists")));
+        }
+        let between = format!("renaming-{}", std::process::id());
+        self.rename_profile(from, &between)?;
+        self.rename_profile(&between, to).inspect_err(|_| {
+            self.rename_profile(&between, from).ok();
+        })
     }
 
     pub fn plan_profile_deletion(&self, name: &str) -> Result<ProfileDeletion> {
@@ -747,16 +1124,15 @@ impl Store {
     }
 
     pub fn config(&self) -> Config {
-        let mut config = match crate::load_json(&self.config_path()) {
-            Ok(crate::Loaded::Found(c)) => c,
-            _ => Config::default(),
-        };
+        let mut config: Config = load_settings(&self.config_path());
         config.migrate_games();
         config
     }
 
     pub fn save_config(&self, config: &Config) -> Result<()> {
-        crate::write_json(&self.config_path(), config)
+        let path = self.config_path();
+        set_aside_unreadable::<Config>(&path)?;
+        crate::write_json(&path, config)
     }
 
     pub fn folders_path(&self) -> PathBuf {
@@ -764,14 +1140,13 @@ impl Store {
     }
 
     pub fn folders(&self) -> crate::folders::Folders {
-        match crate::load_json(&self.folders_path()) {
-            Ok(crate::Loaded::Found(f)) => f,
-            _ => Default::default(),
-        }
+        load_settings(&self.folders_path())
     }
 
     pub fn save_folders(&self, folders: &crate::folders::Folders) -> Result<()> {
-        crate::write_json(&self.folders_path(), folders)
+        let path = self.folders_path();
+        set_aside_unreadable::<crate::folders::Folders>(&path)?;
+        crate::write_json(&path, folders)
     }
 
     pub fn active_profile(&self) -> String {
@@ -799,10 +1174,29 @@ impl Store {
     }
 
     pub fn session_settings(&self, profile: &str) -> Result<SessionSettings> {
-        let requests = crate::paths::game_folder_view(&self.requests_path(profile));
-        let p = self.profile(profile)?;
-        let mut s = SessionSettings::build(&p, &self.addons()?, Some(requests))?;
-        s.launcher_saves = p.launcher_saves.then(|| settings::SessionSaves {
+        self.session_settings_of(&self.profile(profile)?)
+    }
+
+    /// The settings of a session of `p`, a profile as the caller has it, such as one a room lends the host's
+    /// load order and options.
+    pub fn session_settings_of(&self, p: &Profile) -> Result<SessionSettings> {
+        let requests = crate::paths::game_folder_view(&self.requests_path(&p.name));
+        let installed = self.addons()?;
+        let mut s = SessionSettings::build(p, &installed, Some(requests))?;
+        // Each addon's folder and track flag, as the launcher's Addons page has them.
+        let folders = self.folders();
+        for a in &mut s.addons {
+            let Some(m) = installed.get(&a.id) else { continue };
+            let builtin = self.is_builtin(&a.id) || a.id == crate::managed::ID;
+            a.track |=
+                !self.is_builtin(&a.id) && crate::tracks::is_track_addon(&self.addons_dir().join(&a.id), m);
+            let category = m
+                .category
+                .or(a.track.then_some(swofty_addon::manifest::Category::Tracks));
+            a.folder = folders.place(&a.id, builtin, category).map(|k| folders.name(&k));
+        }
+        let redirect = p.launcher_saves && !crate::launcher_saves::steam_save_pending(&self.root, &p.name);
+        s.launcher_saves = redirect.then(|| settings::SessionSaves {
             profile: p.name.clone(),
             remote: crate::paths::game_folder_view(&crate::launcher_saves::remote_dir(&self.root, &p.name)),
         });
@@ -840,6 +1234,33 @@ impl Store {
         let out = f(&mut p)?;
         self.save_profile(&p)?;
         Ok(out)
+    }
+
+    /// Writes a load-order fix: the profile's new order and the folders its
+    /// ejected addons leave, together. A folders failure puts the profile back.
+    pub fn apply_fix(
+        &self,
+        name: &str,
+        plan: &crate::order::FixPlan,
+        default_place: &dyn Fn(&str) -> Option<crate::folders::Key>,
+    ) -> Result<()> {
+        let _write = profile_write();
+        let saved = self.profile(name)?;
+        let mut fixed = saved.clone();
+        crate::folders::reorder(&mut fixed, &plan.order, &|_| false);
+        self.save_profile(&fixed)?;
+        if plan.ejected.is_empty() {
+            return Ok(());
+        }
+        let mut folders = self.folders();
+        for (id, _) in &plan.ejected {
+            folders.set_place(id, None, default_place(id).as_ref());
+        }
+        if let Err(e) = self.save_folders(&folders) {
+            self.save_profile(&saved)?;
+            return Err(e);
+        }
+        Ok(())
     }
 
     pub fn save_profile(&self, p: &Profile) -> Result<()> {
@@ -946,12 +1367,69 @@ fn unknown_part(message: &str) -> Option<String> {
 }
 
 /// Prints a warning to stderr once per process.
+static WARNING_SINK: std::sync::OnceLock<fn(&str)> = std::sync::OnceLock::new();
+
+/// Sends the store's warnings to `sink` as well as stderr; the launcher uses its app log.
+pub fn set_warning_sink(sink: fn(&str)) {
+    WARNING_SINK.set(sink).ok();
+}
+
+fn warn(text: String) {
+    eprintln!("swofty: warning: {text}");
+    if let Some(sink) = WARNING_SINK.get() {
+        sink(&text);
+    }
+}
+
 fn warn_once(text: String) {
     static SEEN: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
     let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
     if seen.insert(text.clone()) {
         eprintln!("swofty: warning: {text}");
     }
+}
+
+/// A settings file, or the defaults when there is none or this build can't read it. One that is
+/// JSON in a shape this build can't read (a hand edit with a wrong type, a value a newer launcher
+/// wrote) stays where it is, so fixing it or going back to that launcher brings it back, until a
+/// save moves it aside with [`set_aside_unreadable`].
+fn load_settings<T: serde::de::DeserializeOwned + Default>(path: &Path) -> T {
+    match crate::load_json(path) {
+        Ok(crate::Loaded::Found(v)) => v,
+        Ok(crate::Loaded::Missing | crate::Loaded::Damaged(_)) => T::default(),
+        Err(e) => {
+            warn_once(format!("{e}; using the defaults until it can be read"));
+            T::default()
+        }
+    }
+}
+
+/// Before a save replaces the settings file at `path`, move one this build can't read aside to
+/// `<name>.unreadable-<unix time>`, so the defaults [`load_settings`] fell back to don't overwrite
+/// the only copy of the player's settings.
+fn set_aside_unreadable<T: serde::de::DeserializeOwned>(path: &Path) -> Result<()> {
+    if let Err(e @ Error::Json { .. }) = crate::load_json::<T>(path) {
+        let to = crate::set_aside(path, crate::UNREADABLE_SUFFIX)?;
+        warn(format!(
+            "{e}; moved it to {} and saved new settings in its place",
+            to.display()
+        ));
+    }
+    Ok(())
+}
+
+fn check_new_name(name: &str) -> Result<()> {
+    if profile::reads_as_flag(name) {
+        return Err(Error::Other(format!(
+            "{name:?} starts with -, which commands read as an option; start the profile name with a letter, digit or _"
+        )));
+    }
+    if !profile::valid_name(name) {
+        return Err(Error::Other(format!(
+            "{name:?} is not a valid profile name (letters, digits, - and _)"
+        )));
+    }
+    Ok(())
 }
 
 fn load_profile(path: &Path) -> Result<Option<Profile>> {
@@ -1000,6 +1478,10 @@ fn copy_dir(src: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+pub fn overlay_root(root: &std::path::Path) -> PathBuf {
+    root.join("cache").join("overlay")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1009,6 +1491,40 @@ mod tests {
         std::fs::remove_dir_all(&d).ok();
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn apply_fix_writes_the_order_and_the_folders_together() {
+        use crate::folders::Key;
+        let root = tmp("apply-fix");
+        let store = Store::new(&root);
+        let mut p = store.profile(DEFAULT_PROFILE).unwrap();
+        for id in ["t.a", "t.c", "t.b"] {
+            p.set_enabled(id, true).unwrap();
+        }
+        store.save_profile(&p).unwrap();
+        let plan = crate::order::FixPlan {
+            order: [CORE_ID, "t.a", "t.b", "t.c"].map(str::to_owned).to_vec(),
+            ejected: vec![("t.c".to_owned(), Key::Own("f".into()))],
+            moved: 2,
+        };
+        let mut f = crate::folders::Folders::default();
+        f.placed.insert("t.c".into(), Key::Own("f".into()).text());
+        store.save_folders(&f).unwrap();
+        let default = Key::Category(swofty_addon::manifest::Category::Seasons);
+        store
+            .apply_fix(DEFAULT_PROFILE, &plan, &|_| Some(default.clone()))
+            .unwrap();
+        let ids: Vec<String> = store
+            .profile(DEFAULT_PROFILE)
+            .unwrap()
+            .addons
+            .into_iter()
+            .map(|a| a.id)
+            .collect();
+        assert_eq!(ids, plan.order);
+        assert_eq!(store.folders().place("t.c", false, None), None);
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]
@@ -1326,6 +1842,58 @@ mod tests {
     }
 
     #[test]
+    fn only_a_managed_release_installs_under_the_managed_id() {
+        let root = tmp("managed-claimed");
+        let store = Store::new(root.join("data"));
+        let fake = root.join("fake");
+        write_addon(&fake, crate::managed::ID);
+
+        for err in [
+            store.install_addon(&fake).unwrap_err(),
+            store.install_addons(&fake).remove(0).unwrap_err(),
+            store.install_addon_in_profile(&fake, "default").unwrap_err(),
+        ] {
+            assert!(err.to_string().contains("managed by the launcher"), "{err}");
+        }
+        assert!(!store.addons_dir().join(crate::managed::ID).exists());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_listed_install_refuses_anything_else_before_replacing_an_addon() {
+        let root = tmp("listed");
+        let store = Store::new(root.join("data"));
+        let one = root.join("one");
+        write_addon(&one, "t.one");
+        store.install_addon(&one).unwrap();
+        let v1 = semver::Version::new(1, 0, 0);
+
+        let other = root.join("other");
+        write_addon(&other, "t.other");
+        let err = store.install_listed(&other, None, "t.one", &v1).unwrap_err();
+        assert!(
+            err.to_string().contains("the registry lists t.one 1.0.0"),
+            "{err}"
+        );
+        assert!(!store.addons_dir().join("t.other").exists());
+
+        // A listed id that isn't what the download holds can't replace the addon it names, either.
+        let err = store
+            .install_listed(&one, None, "t.one", &semver::Version::new(2, 0, 0))
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("the download holds t.one 1.0.0"),
+            "{err}"
+        );
+
+        assert_eq!(
+            store.install_listed(&one, None, "t.one", &v1).unwrap().id,
+            "t.one"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
     fn manages_the_team_simplified_addon() {
         let root = tmp("managed-addon");
         let store = Store::new(root.join("data"));
@@ -1338,7 +1906,9 @@ mod tests {
         z.start_file("bin/helper", opts).unwrap();
         z.finish().unwrap();
 
-        let m = store.install_addon(&pkg).unwrap();
+        let m = store
+            .install_managed_release(&pkg, &crate::update::current_version())
+            .unwrap();
         assert_eq!(m.id, crate::managed::ID);
         assert!(store.addons().unwrap().contains_key(crate::managed::ID));
 
@@ -1377,7 +1947,7 @@ mod tests {
         let store = Store::new(&root);
         write_addon(&root.join("mods/a.one"), "a.one");
         std::fs::write(store.config_path(), r#"{"active_profile":"grid"}"#).unwrap();
-        assert_eq!(store.migrate().unwrap().len(), 1);
+        assert_eq!(store.migrate().unwrap().len(), 2);
         assert!(!root.join("mods").exists());
         assert!(store.addons().unwrap().contains_key("a.one"));
         let config = store.config();
@@ -1412,10 +1982,206 @@ mod tests {
         std::fs::remove_dir_all(root.join("mods/stray")).unwrap();
         write_addon(&root.join("mods/a.three"), "a.three");
         std::fs::remove_file(store.config_path()).unwrap();
-        assert_eq!(store.migrate().unwrap().len(), 2);
+        assert_eq!(store.migrate().unwrap().len(), 3);
         assert!(!root.join("mods").exists());
         assert!(root.join("addons/a.three").is_dir());
         assert_eq!(store.config().data_version, DATA_VERSION);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_save_keeps_a_config_or_folders_file_this_build_cant_read() {
+        let root = tmp("unreadable-config");
+        let store = Store::new(&root);
+        let config = r#"{"active_profile":"grid","launch":{"env":{"DXVK_ASYNC":1}}}"#;
+        let folders = r#"{"placed":{"t.a":1}}"#;
+        std::fs::write(store.config_path(), config).unwrap();
+        std::fs::write(store.folders_path(), folders).unwrap();
+        assert_eq!(store.config().active_profile, None);
+        assert_eq!(store.folders(), crate::folders::Folders::default());
+        assert_eq!(std::fs::read_to_string(store.config_path()).unwrap(), config);
+        assert_eq!(std::fs::read_to_string(store.folders_path()).unwrap(), folders);
+
+        let aside = |name: &str| -> Vec<PathBuf> {
+            let prefix = format!("{name}{}", crate::UNREADABLE_SUFFIX);
+            std::fs::read_dir(&root)
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.file_name().unwrap().to_string_lossy().starts_with(&prefix))
+                .collect()
+        };
+        for round in ["other", "third"] {
+            store.set_active_profile(round).unwrap();
+            store.save_folders(&store.folders()).unwrap();
+            assert_eq!(store.config().active_profile.as_deref(), Some(round));
+            let kept = aside("config.json");
+            assert_eq!(kept.len(), 1, "{round}: {kept:?}");
+            assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), config, "{round}");
+            let kept = aside(crate::folders::FILE);
+            assert_eq!(kept.len(), 1, "{round}: {kept:?}");
+            assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), folders, "{round}");
+        }
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    fn v3_store(name: &str, ids: &[&str]) -> (PathBuf, Store) {
+        let root = tmp(name);
+        let store = Store::new(&root);
+        for id in ids {
+            write_addon(&root.join("addons").join(id), id);
+        }
+        std::fs::write(
+            store.config_path(),
+            r#"{"data_version":3,"active_profile":"grid"}"#,
+        )
+        .unwrap();
+        (root, store)
+    }
+
+    fn listed(store: &Store, name: &str) -> Vec<(String, bool)> {
+        store
+            .profile(name)
+            .unwrap()
+            .addons
+            .iter()
+            .filter(|a| a.id != CORE_ID && !store.is_builtin(&a.id))
+            .map(|a| (a.id.clone(), a.enabled))
+            .collect()
+    }
+
+    #[test]
+    fn migrate_lists_the_installed_addons_a_profile_lacks() {
+        let (root, store) = v3_store("backfill", &["a.e", "a.b", "a.d", "a.a", "a.c"]);
+        store
+            .update_profile("grid", |p| {
+                p.set_enabled("a.d", true)?;
+                p.set_enabled("a.b", false)
+            })
+            .unwrap();
+        store.save_profile(&Profile::new("other")).unwrap();
+        let builtins_before = store.profile("grid").unwrap().addons.len() - 2;
+        store.migrate().unwrap();
+        assert_eq!(store.config().data_version, DATA_VERSION);
+        let want = [
+            ("a.d", true),
+            ("a.b", false),
+            ("a.a", false),
+            ("a.c", false),
+            ("a.e", false),
+        ];
+        let got = listed(&store, "grid");
+        assert_eq!(got, want.map(|(i, e)| (i.to_owned(), e)));
+        assert_eq!(store.profile("grid").unwrap().addons.len(), builtins_before + 5);
+        assert_eq!(listed(&store, "other").len(), 5);
+        assert!(store.profile(profile::VANILLA).unwrap().is_vanilla());
+        assert!(!store.profiles_dir().join("vanilla.json").exists());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_install_lists_the_addon_off_in_every_profile_and_a_removal_clears_it_everywhere() {
+        let root = tmp("everywhere");
+        let store = Store::new(root.join("data"));
+        store.save_profile(&Profile::new("default")).unwrap();
+        store.save_profile(&Profile::new("grid")).unwrap();
+        let src = root.join("one");
+        write_addon(&src, "t.one");
+        store.install_addon(&src).unwrap();
+        for name in ["default", "grid"] {
+            assert_eq!(
+                listed(&store, name).last(),
+                Some(&("t.one".to_owned(), false)),
+                "{name}"
+            );
+        }
+        store
+            .update_profile("default", |p| p.set_enabled("t.one", true))
+            .unwrap();
+        assert_eq!(
+            listed(&store, "default").last(),
+            Some(&("t.one".to_owned(), true))
+        );
+        assert_eq!(listed(&store, "grid").last(), Some(&("t.one".to_owned(), false)));
+        let two = root.join("two");
+        write_addon(&two, "t.two");
+        store.install_addon(&two).unwrap();
+        store
+            .update_profile("grid", |p| {
+                p.set_enabled("t.two", true)?;
+                p.set_enabled("t.one", true)
+            })
+            .unwrap();
+        let ids =
+            |name: &str| -> Vec<String> { listed(&store, name).into_iter().map(|(id, _)| id).collect() };
+        assert_eq!(ids("default"), ["t.one", "t.two"]);
+        assert_eq!(ids("grid"), ["t.one", "t.two"]);
+        store.remove_addon("t.one").unwrap();
+        assert_eq!(ids("default"), ["t.two"]);
+        assert_eq!(ids("grid"), ["t.two"]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_new_profile_lists_every_installed_addon_off() {
+        let root = tmp("new-profile-all");
+        let store = Store::new(root.join("data"));
+        store.save_profile(&Profile::new("default")).unwrap();
+        let src = root.join("one");
+        write_addon(&src, "t.one");
+        store.install_addon(&src).unwrap();
+        store.create_profile("fresh", None).unwrap();
+        assert_eq!(listed(&store, "fresh").last(), Some(&("t.one".to_owned(), false)));
+        let enabled: Vec<String> = store
+            .profile("fresh")
+            .unwrap()
+            .enabled()
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(enabled, ["swofty.core"]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_profile_that_lacked_an_addon_loads_unchanged_and_the_on_set_is_what_it_was() {
+        let mut p = Profile::new("old");
+        p.set_enabled("t.a", true).unwrap();
+        p.set_enabled("t.b", false).unwrap();
+        let json = serde_json::to_string(&p).unwrap();
+        let back: Profile = serde_json::from_str(&json).unwrap();
+        assert!(!back.has("t.c"));
+        assert_eq!(back.enabled().collect::<Vec<_>>(), ["swofty.core", "t.a"]);
+        let mut grown = back.clone();
+        grown.add_addon("t.c").unwrap();
+        assert_eq!(
+            grown.enabled().collect::<Vec<_>>(),
+            back.enabled().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn migrate_backfill_runs_once() {
+        let (root, store) = v3_store("backfill-once", &["a.one", "a.two"]);
+        store.save_profile(&Profile::new("grid")).unwrap();
+        store.migrate().unwrap();
+        let path = store.profiles_dir().join("grid.json");
+        let after = std::fs::read(&path).unwrap();
+        assert!(store.migrate().unwrap().is_empty());
+        assert_eq!(std::fs::read(&path).unwrap(), after);
+
+        store.update_profile("grid", |p| p.remove_addon("a.two")).unwrap();
+        let removed = std::fs::read(&path).unwrap();
+        assert!(store.migrate().unwrap().is_empty());
+        assert_eq!(std::fs::read(&path).unwrap(), removed);
+        assert_eq!(listed(&store, "grid"), [("a.one".to_owned(), false)]);
+
+        std::fs::write(store.config_path(), r#"{"data_version":3}"#).unwrap();
+        store.migrate().unwrap();
+        assert_eq!(listed(&store, "grid").len(), 2);
+        let again = std::fs::read(&path).unwrap();
+        std::fs::write(store.config_path(), r#"{"data_version":3}"#).unwrap();
+        store.migrate().unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), again);
         std::fs::remove_dir_all(&root).ok();
     }
 
@@ -1510,6 +2276,17 @@ mod tests {
             ]
         };
         write_addon(&Store::new(&root).addons_dir().join("a.user"), "a.user");
+        crate::write_json(
+            &crate::launcher_saves::marker_path(&root),
+            &crate::launcher_saves::Marker {
+                at: 0,
+                launcher: String::new(),
+                profiles: Vec::new(),
+                note: String::new(),
+                seen: true,
+            },
+        )
+        .unwrap();
         let plain = Store::new(&root).with_builtins(vec![tuned()]);
         let mut expected = SessionSettings::build(
             &plain.profile(DEFAULT_PROFILE).unwrap(),
@@ -1519,6 +2296,9 @@ mod tests {
             )),
         )
         .unwrap();
+        for a in &mut expected.addons {
+            a.folder = plain.is_builtin(&a.id).then(|| "Built In".to_owned());
+        }
         expected.launcher_saves = Some(settings::SessionSaves {
             profile: DEFAULT_PROFILE.into(),
             remote: crate::paths::game_folder_view(&crate::launcher_saves::remote_dir(
@@ -1551,6 +2331,30 @@ mod tests {
         let mut without_pages = s.clone();
         without_pages.ui = None;
         assert_eq!(serde_json::to_vec(&without_pages).unwrap(), plain_json);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_profile_keeps_playing_on_the_steam_save_until_an_import_finds_one() {
+        let root = tmp("steam-pending");
+        let store = Store::new(&root);
+        assert!(
+            store
+                .session_settings(DEFAULT_PROFILE)
+                .unwrap()
+                .launcher_saves
+                .is_none()
+        );
+        let remote = crate::launcher_saves::remote_dir(&root, DEFAULT_PROFILE);
+        std::fs::create_dir_all(&remote).unwrap();
+        std::fs::write(remote.join("savegame@profile#X"), b"x").unwrap();
+        assert!(
+            store
+                .session_settings(DEFAULT_PROFILE)
+                .unwrap()
+                .launcher_saves
+                .is_some()
+        );
         std::fs::remove_dir_all(&root).ok();
     }
 
@@ -1703,6 +2507,43 @@ mod tests {
     }
 
     #[test]
+    fn a_rename_onto_a_deleted_profiles_name_keeps_both_vaults() {
+        let root = tmp("rename-onto-deleted-vault");
+        let store = Store::new(&root);
+        store.create_profile("grid", None).unwrap();
+        store.create_profile("main", None).unwrap();
+        let vaults = root.join("career-vault");
+        for prefix in ["launcher-", "launcher-ea."] {
+            for name in ["grid", "main"] {
+                let vault = vaults.join(format!("{prefix}{name}"));
+                std::fs::create_dir_all(&vault).unwrap();
+                std::fs::write(vault.join("marker"), format!("{name}'s")).unwrap();
+            }
+        }
+        store.delete_profile("grid").unwrap();
+        store.rename_profile("main", "grid").unwrap();
+        for prefix in ["launcher-", "launcher-ea."] {
+            let read = |vault: &Path| std::fs::read_to_string(vault.join("marker")).unwrap();
+            assert_eq!(read(&vaults.join(format!("{prefix}grid"))), "main's", "{prefix}");
+            assert!(!vaults.join(format!("{prefix}main")).exists(), "{prefix}");
+            let aside: Vec<PathBuf> = std::fs::read_dir(&vaults)
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with(&format!("{prefix}grid.deleted."))
+                })
+                .collect();
+            assert_eq!(aside.len(), 1, "{prefix}: {aside:?}");
+            assert_eq!(read(&aside[0]), "grid's", "{prefix}");
+        }
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
     fn keeps_vanilla_and_the_last_profile() {
         let root = tmp("delete-last");
         let store = Store::new(&root);
@@ -1760,6 +2601,157 @@ mod tests {
 
         assert_eq!(store.delete_profile("zeta").unwrap().switch_to, None);
         assert_eq!(store.active_profile(), "alpha");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_name_that_differs_only_in_capitals_is_taken() {
+        let root = tmp("create-capitals");
+        let store = Store::new(&root);
+        store.create_profile("grid", None).unwrap();
+        for name in ["Grid", "GRID", "Vanilla"] {
+            let err = store.create_profile(name, None).unwrap_err();
+            assert!(err.to_string().contains("already exists"), "{name}: {err}");
+        }
+        assert!(!store.profile_names().unwrap().contains(&"Grid".to_owned()));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_profile_named_with_a_leading_dash_keeps_working_but_no_new_one_gets_that_name() {
+        let root = tmp("leading-dash");
+        let store = Store::new(&root);
+        // Earlier launchers let a profile be named this way.
+        store.save_profile(&Profile::new("-swofty")).unwrap();
+        store.set_active_profile("-swofty").unwrap();
+        touch(&store.saves_dir("-swofty").join("remote/save"));
+
+        assert!(store.profile_names().unwrap().contains(&"-swofty".to_owned()));
+        assert_eq!(store.active_profile(), "-swofty");
+        assert_eq!(store.profile("-swofty").unwrap().name, "-swofty");
+
+        for name in ["-grid", "--profile"] {
+            let err = store.create_profile(name, None).unwrap_err();
+            assert!(err.to_string().contains("starts with -"), "{name}: {err}");
+            let err = store.create_profile(name, Some("-swofty")).unwrap_err();
+            assert!(err.to_string().contains("starts with -"), "{name}: {err}");
+            let err = store.rename_profile("-swofty", name).unwrap_err();
+            assert!(err.to_string().contains("starts with -"), "{name}: {err}");
+        }
+        let err = store.rename_profile("-swofty", "-Swofty").unwrap_err();
+        assert!(err.to_string().contains("starts with -"), "{err}");
+        assert!(store.profiles_dir().join("-swofty.json").is_file());
+        assert!(store.saves_dir("-swofty").join("remote/save").is_file());
+
+        assert_eq!(store.rename_profile("-swofty", "swofty").unwrap().name, "swofty");
+        assert_eq!(store.active_profile(), "swofty");
+        assert!(store.saves_dir("swofty").join("remote/save").is_file());
+        assert!(!store.profile_names().unwrap().contains(&"-swofty".to_owned()));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn renames_a_profile_to_other_capitals() {
+        let root = tmp("rename-capitals");
+        let store = Store::new(&root);
+        store.create_profile("grid", None).unwrap();
+        store.set_active_profile("grid").unwrap();
+        touch(&store.saves_dir("grid").join("remote/save"));
+
+        assert_eq!(store.rename_profile("grid", "Grid").unwrap().name, "Grid");
+
+        let names = store.profile_names().unwrap();
+        assert!(names.contains(&"Grid".to_owned()), "{names:?}");
+        assert!(!names.contains(&"grid".to_owned()), "{names:?}");
+        assert!(!names.iter().any(|n| n.starts_with("renaming")), "{names:?}");
+        assert_eq!(store.profile("Grid").unwrap().name, "Grid");
+        assert_eq!(store.active_profile(), "Grid");
+        assert!(store.saves_dir("Grid").join("remote/save").is_file());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    // Both names can only exist where file names are case-sensitive.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_rename_to_the_capitals_of_a_profile_that_exists_changes_nothing() {
+        let root = tmp("rename-both");
+        let store = Store::new(&root);
+        store.create_profile("grid", None).unwrap();
+        // Only a case-sensitive folder from before names were compared this way holds both.
+        store.save_profile(&Profile::new("Grid")).unwrap();
+
+        let err = store.rename_profile("grid", "Grid").unwrap_err();
+        assert!(err.to_string().contains("already exists"), "{err}");
+        let names = store.profile_names().unwrap();
+        assert!(names.contains(&"grid".to_owned()) && names.contains(&"Grid".to_owned()));
+        assert!(!names.iter().any(|n| n.starts_with("renaming")), "{names:?}");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn refuses_renaming_a_profile_installed_in_the_game_folder() {
+        let root = tmp("rename-applied");
+        let store = Store::new(&root);
+        store.create_profile("grid", None).unwrap();
+        store.set_active_profile("grid").unwrap();
+        touch(&store.saves_dir("grid").join("remote/save"));
+        let j = crate::journal::Journal::create(&root, "grid", "build-1", true).unwrap();
+
+        let err = store.rename_profile("grid", "main").unwrap_err();
+        assert!(err.to_string().contains("installed in the game folder"), "{err}");
+        assert!(err.to_string().contains(&j.id), "{err}");
+        assert!(store.profiles_dir().join("grid.json").is_file());
+        assert!(!store.profiles_dir().join("main.json").exists());
+        assert!(store.saves_dir("grid").join("remote/save").is_file());
+        assert_eq!(store.active_profile(), "grid");
+
+        j.close().unwrap();
+        store.rename_profile("grid", "main").unwrap();
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_rename_onto_saves_left_behind_changes_nothing() {
+        let root = tmp("rename-orphan");
+        let store = Store::new(&root);
+        store.create_profile("grid", None).unwrap();
+        store.set_active_profile("grid").unwrap();
+        touch(&store.saves_dir("grid").join("remote/save"));
+        touch(&store.saves_dir("main").join("remote/old"));
+
+        let err = store.rename_profile("grid", "main").unwrap_err();
+        assert!(err.to_string().contains("already holds saves"), "{err}");
+        assert!(store.profiles_dir().join("grid.json").is_file());
+        assert!(!store.profiles_dir().join("main.json").exists());
+        assert!(store.saves_dir("grid").join("remote/save").is_file());
+        assert!(store.saves_dir("main").join("remote/old").is_file());
+        assert_eq!(store.active_profile(), "grid");
+
+        // An empty folder holds nothing to lose, and doesn't stop the rename.
+        std::fs::remove_dir_all(store.saves_dir("main")).unwrap();
+        std::fs::create_dir_all(store.saves_dir("main")).unwrap();
+        store.rename_profile("grid", "main").unwrap();
+        assert!(store.saves_dir("main").join("remote/save").is_file());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    // A file in the saves' way makes the move fail here; Windows may not fail the same way.
+    #[cfg(unix)]
+    #[test]
+    fn a_rename_that_cannot_move_the_saves_puts_the_profile_back() {
+        let root = tmp("rename-undo");
+        let store = Store::new(&root);
+        store.create_profile("grid", None).unwrap();
+        store.set_active_profile("grid").unwrap();
+        touch(&store.saves_dir("grid").join("remote/save"));
+        touch(&store.saves_dir("main"));
+
+        assert!(store.rename_profile("grid", "main").is_err());
+
+        assert!(store.profiles_dir().join("grid.json").is_file());
+        assert!(!store.profiles_dir().join("main.json").exists());
+        assert!(store.saves_dir("grid").join("remote/save").is_file());
+        assert_eq!(store.active_profile(), "grid");
         std::fs::remove_dir_all(&root).ok();
     }
 
@@ -1826,6 +2818,44 @@ mod tests {
         .unwrap();
         std::fs::write(staging.join("base/common.erp"), b"v2").unwrap();
         (root, store, dest, staging)
+    }
+
+    #[test]
+    fn finish_swaps_leaves_a_swap_another_process_is_making() {
+        let (root, store, dest, staging) = installed_with_update("swap-live");
+        let aside = store.addons_dir().join(format!("{OLD_PREFIX}a.livery"));
+        std::fs::rename(&dest, &aside).unwrap();
+        let lock = SwapLock::try_acquire(&store.addons_dir(), "a.livery")
+            .unwrap()
+            .unwrap();
+        let notes = store.finish_swaps();
+        assert!(aside.is_dir() && staging.is_dir() && !dest.exists());
+        assert!(notes.iter().any(|n| n.contains("another launcher")));
+        drop(lock);
+        let notes = store.finish_swaps();
+        assert!(dest.is_dir() && !aside.exists() && !staging.exists());
+        assert!(notes.iter().any(|n| n.contains("put back a.livery")));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_swap_waits_out_nothing_when_another_process_holds_the_same_addon() {
+        let (root, store, dest, staging) = installed_with_update("swap-contended");
+        let lock = SwapLock::try_acquire(&store.addons_dir(), "a.livery")
+            .unwrap()
+            .unwrap();
+        let e = swap_in(
+            &staging,
+            &dest,
+            "A",
+            &mut |from, to| std::fs::rename(from, to),
+            &mut |d| std::fs::remove_dir_all(d),
+        )
+        .unwrap_err();
+        assert!(e.to_string().contains("another Swofty launcher"));
+        assert_eq!(std::fs::read(dest.join("base/common.erp")).unwrap(), b"v1");
+        drop(lock);
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]

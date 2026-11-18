@@ -45,7 +45,7 @@ std::atomic<int> skipped{0};
 
 bool read_memory(uint64_t address, void *out, size_t n, void *)
 {
-    if (!runtime::readable(reinterpret_cast<const void *>(address), n))
+    if (!swofty::mem::readable(address, n))
         return false;
     memcpy(out, reinterpret_cast<const void *>(address), n);
     return true;
@@ -53,7 +53,12 @@ bool read_memory(uint64_t address, void *out, size_t n, void *)
 
 void entry_step(SwoftyContext *c)
 {
-    if (gs::entry_usable(c->r9, read_memory, nullptr))
+    bool usable;
+    {
+        swofty::mem::Trust trust(runtime::HEAP_TRUST_MS);
+        usable = gs::entry_usable(c->r9, read_memory, nullptr);
+    }
+    if (usable)
         return;
     c->rip = not_found;
     int n = ++skipped;

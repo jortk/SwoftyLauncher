@@ -19,6 +19,7 @@ use crate::store::Store;
 pub const TABLE: &str = "entrants.animation.driver_heads";
 pub const ROWS: &str = "entrants.animation.driver_heads.driver_head";
 const ROW: &str = "driver_head";
+const REGISTRY: &str = "driver.head";
 const ARCHIVES: &str = "2025_asset_groups/animation_package/scenes/cinematics/drivers";
 const GROUPS: &str = "asset_groups/animation_package/scenes/cinematics/drivers";
 // Rows no other table has a row of the same label for, so copies raise no side-data findings.
@@ -157,11 +158,9 @@ impl Unworn {
     }
 }
 
-/// Puts the game's own head back on every row of `db` whose changed `head`
-/// names no driver head row, such as a head from a face mod that is now off.
-pub fn keep_wearable(db: &mut Gvdb, shipped: &Gvdb) -> Vec<Unworn> {
-    let heads = labels(db);
-    let mut fields: HashMap<u64, String> = HashMap::new();
+/// The `head` field key of every row of the tables that wear a head, with the row's path.
+fn head_fields(db: &Gvdb) -> HashMap<u64, String> {
+    let mut fields = HashMap::new();
     for (container, row) in WEARERS {
         for i in 0..db.instance_count(container, row).unwrap_or(0) {
             fields.insert(
@@ -170,14 +169,23 @@ pub fn keep_wearable(db: &mut Gvdb, shipped: &Gvdb) -> Vec<Unworn> {
             );
         }
     }
-    let values = |db: &Gvdb| -> HashMap<u64, String> {
-        db.records
-            .iter()
-            .filter(|r| fields.contains_key(&r.key))
-            .map(|r| (r.key, r.text().into_owned()))
-            .collect()
-    };
-    let (now, stock) = (values(db), values(shipped));
+    fields
+}
+
+fn head_values(db: &Gvdb, fields: &HashMap<u64, String>) -> HashMap<u64, String> {
+    db.records
+        .iter()
+        .filter(|r| fields.contains_key(&r.key))
+        .map(|r| (r.key, r.text().into_owned()))
+        .collect()
+}
+
+/// Puts the game's own head back on every row of `db` whose changed `head`
+/// names no driver head row, such as a head from a face mod that is now off.
+pub fn keep_wearable(db: &mut Gvdb, shipped: &Gvdb) -> Vec<Unworn> {
+    let heads = labels(db);
+    let fields = head_fields(db);
+    let (now, stock) = (head_values(db, &fields), head_values(shipped, &fields));
     let mut out: Vec<Unworn> = now
         .into_iter()
         .filter(|(key, head)| !head.is_empty() && !heads.contains(head) && stock.get(key) != Some(head))
@@ -199,6 +207,119 @@ pub fn keep_wearable(db: &mut Gvdb, shipped: &Gvdb) -> Vec<Unworn> {
             && let Some(r) = db.records.iter_mut().find(|r| r.key == u.key)
         {
             r.value = stock.clone().into_bytes();
+        }
+    }
+    out
+}
+
+/// The head a row the game ships headless wears: a generic male head of the game's, which no driver wears.
+pub const STAND_IN: &str = MALE;
+
+/// A row whose `head`, as the game ships it, names no driver head row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Headless {
+    pub row: String,
+    pub head: String,
+    /// The head it wears now; empty when the database has no [`STAND_IN`] row either.
+    pub worn: String,
+}
+
+impl Headless {
+    pub fn line(&self) -> String {
+        let worn = match self.worn.is_empty() {
+            true => "its head is left empty".to_owned(),
+            false => format!("it wears the game's head {}", self.worn),
+        };
+        format!(
+            "database: {} wears head {}, which the game has no driver head row for, so {worn} (the game stops at \
+             start-up when an addon puts the driver in an entrant list)",
+            self.row, self.head
+        )
+    }
+}
+
+/// Gives [`STAND_IN`] to every row of `db` whose `head` is still the game's
+/// own and names no driver head row of `db` and none of `added`, the heads
+/// the core adds in game. The game ships `nico_rosberg` so and never loads
+/// him while he is unavailable; an addon's entrant list that names him makes
+/// him available, and the game then reads his head with no check for a head
+/// it cannot find.
+pub fn wear_stand_ins(db: &mut Gvdb, shipped: &Gvdb, added: &BTreeSet<String>) -> Vec<Headless> {
+    let heads = labels(db);
+    let fields = head_fields(db);
+    let (now, stock) = (head_values(db, &fields), head_values(shipped, &fields));
+    let worn = match heads.contains(STAND_IN) {
+        true => STAND_IN.to_owned(),
+        false => String::new(),
+    };
+    let mut found: Vec<(String, u64, String)> = now
+        .into_iter()
+        .filter(|(key, head)| {
+            !head.is_empty() && !heads.contains(head) && !added.contains(head) && stock.get(key) == Some(head)
+        })
+        .map(|(key, head)| {
+            let row = db
+                .get_text(&format!("{}._metadata_", fields[&key]))
+                .unwrap_or_else(|| fields[&key].clone());
+            (row, key, head)
+        })
+        .collect();
+    found.sort();
+    for (_, key, _) in &found {
+        if let Some(r) = db.records.iter_mut().find(|r| r.key == *key) {
+            r.value = worn.clone().into_bytes();
+        }
+    }
+    found
+        .into_iter()
+        .map(|(row, _, head)| Headless {
+            row,
+            head,
+            worn: worn.clone(),
+        })
+        .collect()
+}
+
+/// The labels of the driver head rows the core adds in game from an addon's
+/// data file `text`: each `driver.head` record's `label`, or its key.
+pub fn registry_labels(text: &str) -> BTreeSet<String> {
+    let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(text) else {
+        return BTreeSet::new();
+    };
+    map.get(REGISTRY)
+        .and_then(serde_json::Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter(|(key, _)| !key.contains('/') && !key.starts_with('$'))
+        .map(|(key, rec)| {
+            rec.get("label")
+                .and_then(serde_json::Value::as_str)
+                .filter(|l| !l.is_empty())
+                .unwrap_or(key)
+                .to_owned()
+        })
+        .collect()
+}
+
+/// The labels of the driver head rows the core adds in game for the addons
+/// of `order`, from the data files of those with `driver.head` records.
+pub fn registry_heads(
+    addons_dir: &Path,
+    order: &[String],
+    std: &BTreeMap<String, crate::stdlib::deps::Std>,
+) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for id in order {
+        let Some(s) = std
+            .get(id)
+            .filter(|s| s.records.iter().any(|r| r.registry == REGISTRY))
+        else {
+            continue;
+        };
+        for rel in &s.data_files {
+            if let Ok(text) = std::fs::read_to_string(addons_dir.join(id).join(rel)) {
+                out.extend(registry_labels(&text));
+            }
         }
     }
     out
@@ -535,5 +656,106 @@ mod tests {
             model_path("eaid://character_package/heads/male_driver/x/idf/x_rig_head_morph_v1.idf?render"),
             None
         );
+    }
+
+    fn db(drivers: &[(&str, &str)], heads: &[&str]) -> Gvdb {
+        use swofty_formats::gvdb::Record;
+        let mut records = vec![
+            Record::new(
+                "entrants.drivers._driver_instancecount_",
+                0,
+                drivers.len().to_string(),
+            ),
+            Record::new(
+                &format!("{TABLE}._{ROW}_instancecount_"),
+                0,
+                heads.len().to_string(),
+            ),
+        ];
+        for (i, (label, head)) in drivers.iter().enumerate() {
+            records.push(Record::new(
+                &format!("entrants.drivers.driver_{i}._metadata_"),
+                2,
+                *label,
+            ));
+            records.push(Record::new(
+                &format!("entrants.drivers.driver_{i}.head"),
+                4,
+                *head,
+            ));
+        }
+        for (i, label) in heads.iter().enumerate() {
+            records.push(Record::new(&format!("{ROWS}_{i}._metadata_"), 2, *label));
+        }
+        Gvdb { records }
+    }
+
+    fn head_of(db: &Gvdb, i: usize) -> Option<String> {
+        db.get_text(&format!("entrants.drivers.driver_{i}.head"))
+    }
+
+    #[test]
+    fn a_driver_the_game_ships_headless_wears_the_stand_in() {
+        let drivers = [
+            ("lando_norris", "lando_norris"),
+            ("nico_rosberg", "nico_rosberg"),
+            ("lukas_weber", ""),
+        ];
+        let shipped = db(&drivers, &["lando_norris", STAND_IN]);
+        let mut now = shipped.clone();
+        let found = wear_stand_ins(&mut now, &shipped, &BTreeSet::new());
+        assert_eq!(
+            found,
+            [Headless {
+                row: "nico_rosberg".into(),
+                head: "nico_rosberg".into(),
+                worn: STAND_IN.into(),
+            }]
+        );
+        assert_eq!(head_of(&now, 1).as_deref(), Some(STAND_IN));
+        assert_eq!(head_of(&now, 0).as_deref(), Some("lando_norris"));
+        assert_eq!(head_of(&now, 2).as_deref(), Some(""));
+        assert_eq!(now.records.len(), shipped.records.len());
+        assert_eq!(wear_stand_ins(&mut now, &shipped, &BTreeSet::new()), []);
+        assert!(found[0].line().contains("wears the game's head male_ls222"));
+    }
+
+    #[test]
+    fn a_head_the_core_adds_or_an_addon_changed_is_left_alone() {
+        let shipped = db(&[("nico_rosberg", "nico_rosberg"), ("x", "x")], &["x", STAND_IN]);
+        let mut now = shipped.clone();
+        let added = BTreeSet::from(["nico_rosberg".to_owned()]);
+        assert_eq!(wear_stand_ins(&mut now, &shipped, &added), []);
+        assert_eq!(head_of(&now, 0).as_deref(), Some("nico_rosberg"));
+        now.set("entrants.drivers.driver_1.head", "face_mod_x", None)
+            .unwrap();
+        assert_eq!(wear_stand_ins(&mut now, &shipped, &BTreeSet::new()).len(), 1);
+        assert_eq!(head_of(&now, 1).as_deref(), Some("face_mod_x"));
+    }
+
+    #[test]
+    fn a_database_without_the_stand_in_leaves_the_head_empty() {
+        let shipped = db(&[("nico_rosberg", "nico_rosberg")], &["lando_norris"]);
+        let mut now = shipped.clone();
+        let found = wear_stand_ins(&mut now, &shipped, &BTreeSet::new());
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].worn, "");
+        assert_eq!(head_of(&now, 0).as_deref(), Some(""));
+        assert!(found[0].line().contains("its head is left empty"));
+    }
+
+    #[test]
+    fn registry_heads_go_by_label_or_key() {
+        let labels = registry_labels(
+            r#"{ "driver.head": { "sw15_nico_rosberg": { "archive": "heads/x.erp" },
+                                  "senna": { "label": "ayrton_senna" },
+                                  "game/male_ls222": { "label": "layer" } },
+                 "driver.identity": { "sw15_rosberg": { "head": "sw15_nico_rosberg" } } }"#,
+        );
+        assert_eq!(
+            labels,
+            BTreeSet::from(["ayrton_senna".to_owned(), "sw15_nico_rosberg".to_owned()])
+        );
+        assert!(registry_labels("not json").is_empty());
     }
 }

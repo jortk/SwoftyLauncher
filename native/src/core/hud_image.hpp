@@ -13,7 +13,12 @@
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 #endif
-#define STBI_ONLY_PNG
+#define STBI_NO_BMP
+#define STBI_NO_GIF
+#define STBI_NO_PSD
+#define STBI_NO_PIC
+#define STBI_NO_PNM
+#define STBI_NO_TGA
 #define STBI_NO_STDIO
 #define STBI_NO_HDR
 #define STBI_NO_LINEAR
@@ -115,7 +120,7 @@ inline bool decode(std::string_view data, Pixels &out, std::string &why)
         return dds(data, out, why);
     int w = 0, h = 0, n = 0;
     if (!stbi_info_from_memory(reinterpret_cast<const stbi_uc *>(data.data()), int(data.size()), &w, &h, &n))
-        return why = "not a PNG or DDS file the overlay reads", false;
+        return why = "not a PNG, JPEG or DDS file the overlay reads", false;
     if (w <= 0 || h <= 0 || uint32_t(w) > MAX_SIDE || uint32_t(h) > MAX_SIDE)
         return why = "the image is " + std::to_string(w) + "x" + std::to_string(h) + ", outside 1..4096", false;
     stbi_uc *px = stbi_load_from_memory(reinterpret_cast<const stbi_uc *>(data.data()), int(data.size()), &w, &h, &n, 4);

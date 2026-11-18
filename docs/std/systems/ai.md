@@ -289,6 +289,108 @@ events::on<ai::events::ControllerUpdate>().replace([](ai::events::ControllerUpda
 - **Only AI cars.** The point runs for a car whose controller set is in AI mode, including the player's car while `sessions::set_control` has handed it to the AI. A handler gets no `events::Context` (the point builds none), so it reads the car through `u.car()`; `when()` and `in()` selectors still apply. A value a handler writes that is not a finite number is dropped.
 - **Where it runs.** By default the core writes its dispatcher into slot 1 of the AI controller's vtable while the point has a subscriber, and puts the game's function back with the last one. The core's config key `ai_controller_site` set to `"apply"` runs the point instead as a mid-hook on the record-apply call in `Sess_ControllerSystem_ApplyInputs`: there the record already holds the game's decision, so `before` and `after` see the same values and a `replace` handler decides on top of them. The default follows in-game check T145.
 
+## Racecraft per car, live
+
+Each car has its own copy of its driver config. Its slots are `cars::live` fields (see [Car physics](./car-physics)), so a layer changes one car for as long as it is held. The blocking evaluator re-reads its four distance and fraction floats and eight more of the blocking keys on every tick; `start_blocking_intersection_time` and `merge_back_to_racing_line` have no reader that was found.
+
+| Field | Group | Kind | Range | Stock |
+|---|---|---|---|---|
+| `ai.blocking.fraction_of_follow_speed` | blocking | float | 0 .. 4 | 0.975 |
+| `ai.blocking.fraction_of_follow_speed_at_race_start` | blocking | float | 0 .. 4 | 0.875 |
+| `ai.blocking.max_blocking_distance` | blocking | float | 0 .. 1000 | 18 |
+| `ai.blocking.max_blocking_distance_at_race_start` | blocking | float | 0 .. 1000 | 18 |
+| `ai.blocking.start_blocking_intersection_time` (off) | blocking | float | 0 .. 60 | 1.1 |
+| `ai.blocking.start_blocking_maximum_time_to_corner` | blocking | float | 0 .. 60 | 8 |
+| `ai.blocking.start_blocking_minimum_time_to_corner` | blocking | curve | 0 .. 60 | curve |
+| `ai.blocking.time_to_corner_for_end_merge_rate` | blocking | float | 0 .. 60 | 3.5 |
+| `ai.blocking.time_to_corner_for_start_merge_rate` | blocking | float | 0 .. 60 | 7 |
+| `ai.blocking.end_blocking_time_to_corner_vs_offset` | blocking | curve | 0 .. 50 | curve |
+| `ai.blocking.blocking_offset_from_car_behind` | blocking | curve | 0 .. 50 | curve |
+| `ai.blocking.blocking_speed_differential` | blocking | float | 0 .. 100 | 0.6 |
+| `ai.blocking.blocking_threat_time_modifier` | blocking | float | -10 .. 10 | 0.175 |
+| `ai.blocking.blocking_variable_offset_fraction` | blocking | float | 0 .. 1 | 0.5 |
+| `ai.blocking.avoidance_decrease_rate` | blocking | float | 0 .. 100 | 1 |
+| `ai.blocking.merge_back_to_racing_line` (off) | blocking | curve | 0 .. 10 | curve |
+| `ai.alongside.speed_difference_for_limited_zone_yielding` | alongside | float | 0 .. 500 | 3 |
+| `ai.alongside.yield_overtake_rate` | alongside | float | 0 .. 100 | 1 |
+| `ai.alongside.min_presence_within_buffer` (off) | alongside | curve | 0 .. 100 | curve |
+| `ai.divebomb_defense.max_presence_alongside` (off) | divebomb_defense | curve | 0 .. 100 | curve |
+| `ai.divebomb_defense.max_time_to_ignore` (off) | divebomb_defense | float | 0 .. 60 | 5 |
+| `ai.divebomb_defense.max_track_offset` (off) | divebomb_defense | float | 0 .. 50 | 1.75 |
+| `ai.divebomb_defense.max_track_radius` (off) | divebomb_defense | float | 0 .. 10000 | 160 |
+| `ai.offset_variation.max_offset` | offset_variation | float | 0 .. 50 | 1.33 |
+| `ai.offset_variation.offset_limit_at_corner_start` | offset_variation | float | 0 .. 50 | 0.2 |
+| `ai.offset_variation.offset_limit_blend_distance` | offset_variation | float | 0 .. 1000 | 250 |
+| `ai.offset_variation.half_width_scaling_graph` | offset_variation | curve | 0 .. 100 | curve |
+| `ai.offset_variation.radius_scalar_graph` | offset_variation | curve | 0 .. 100 | curve |
+| `ai.overtake.attacker_close_enough_car_lengths` | overtake | float | 0 .. 50 | 3 |
+| `ai.overtake.braking_zone_abort_overtake_time` | overtake | float | 0 .. 60 | 0.6667 |
+| `ai.overtake.close_range_car_lengths_to_continue_overtake` | overtake | float | 0 .. 50 | 2 |
+| `ai.overtake.close_range_car_lengths_to_start_overtake` | overtake | float | 0 .. 50 | 1.5 |
+| `ai.overtake.oppertunist_overtake_time` | overtake | float | 0 .. 60 | 0.25 |
+| `ai.overtake.oppertunist_overtake_track_speed_difference` (off) | overtake | float | 0 .. 500 | 12 |
+| `ai.overtake.danger_overtake_continue_time_adjustment` | overtake | float | -100 .. 100 | 0.75 |
+| `ai.overtake.danger_overtake_full_heat_time_adjustment` (off) | overtake | float | -100 .. 100 | 0.5 |
+| `ai.overtake.danger_overtake_initiate_time_adjustment` | overtake | float | -100 .. 100 | 0.5 |
+| `ai.overtake.danger_overtake_pull_out_time` | overtake | curve | 0 .. 60 | curve |
+| `ai.overtake.regular_overtake_continue_time_adjustment` | overtake | float | -100 .. 100 | 1.25 |
+| `ai.overtake.regular_overtake_full_heat_time_adjustment` (off) | overtake | float | -100 .. 100 | 0.95 |
+| `ai.overtake.regular_overtake_initiate_time_adjustment` | overtake | float | -100 .. 100 | 0.75 |
+| `ai.overtake.regular_overtake_pull_out_time` | overtake | curve | 0 .. 60 | curve |
+| `ai.overtake.overlap_percentage` | overtake | curve | 0 .. 100 | curve |
+| `ai.overtake.concede_speed_diff` | overtake | curve | -500 .. 500 | curve |
+| `ai.overtake.concede_slowdown_speed_diff` | overtake | float | 0 .. 500 | 1.75 |
+| `ai.overtake.concede_time_vs_behind` | overtake | curve | 0 .. 60 | curve |
+| `ai.space_seeking.added_buffer` | space_seeking | float | 0 .. 100 | 0.05 |
+| `ai.space_seeking.speed_below_follow` | space_seeking | float | 0 .. 500 | 4 |
+| `ai.space_seeking.first_speed_below_follow` | space_seeking | float | 0 .. 500 | 2 |
+| `ai.space_seeking.car_in_front_needed` | space_seeking | int | 0 .. 32 | 2 |
+| `ai.space_seeking.remember_crowed` (off) | space_seeking | float | 0 .. 600 | 4 |
+| `ai.space_seeking.concede_overtake_blocked_by_crowed_time` | space_seeking | float | 0 .. 600 | 5 |
+| `ai.space_seeking.total_queue_needed` | space_seeking | int | 0 .. 32 | 3 |
+| `ai.space_seeking.distance_braking_point` | space_seeking | float | 0 .. 1000 | 75 |
+| `ai.space_seeking.time_to_switch_sides` | space_seeking | float | 0 .. 60 | 2 |
+| `ai.space_seeking.track_distance_needed` | space_seeking | float | 0 .. 1000 | 170 |
+| `ai.space_seeking.track_abort_distance` | space_seeking | float | 0 .. 1000 | 50 |
+| `ai.space_seeking.cars_moving_away_speed_to_ignore` | space_seeking | float | 0 .. 500 | 5 |
+| `ai.space_seeking.can_start_track_radius` | space_seeking | float | 0 .. 10000 | 400 |
+
+Fields marked off report unavailable: no AI behaviour re-reads them per tick (the divebomb defence rows are read only by the human-divebomb behaviour, `alongside.min_presence_within_buffer` and `space_seeking.remember_crowed` have no reader found, the opportunist speed difference is read behind a packed thunk, and nothing reads `blocking.start_blocking_intersection_time` or `blocking.merge_back_to_racing_line` per tick). Stock values are `default_driver`'s; every stock driver has the same.
+
+`-` in Stock: the key catalog lists these keys by name only. `get` returns the game's value for the car.
+
+- **Float and int.** The value is written as the game's own type. `space_seeking.car_in_front_needed` and `space_seeking.total_queue_needed` are int cells: the composed value is rounded to the nearest integer, and the core refuses a cell whose stock value is not an integer from 0 to 65536.
+- **Curve.** A layer on a curve field makes the car's curve flat at the composed value: every x evaluates to it. `get` returns the car's curve at x = 0, which is also the base a layer composes on.
+
+```cpp
+using namespace swofty;
+using cars::live::Cars;
+using cars::live::Layer;
+
+static std::map<uint32_t, Layer> lap_one;
+
+SWOFTY_REGISTER
+{
+    events::on("race.start").after([](std::span<const std::byte>, const events::Context &) {
+        for (auto &car : cars::live::cars())
+            if (car.is_ai())
+                lap_one[car.index()] = Layer::set(Cars::car(car), "ai.blocking.max_blocking_distance", 40.0f);
+    });
+    events::on<sessions::events::Lap>().after([](const sessions::events::Lap &l, const events::Context &) {
+        lap_one.erase(l.car.index());
+    });
+}
+```
+
+Erasing the `Layer` puts the game's value back for that car. The values of the other cars and the game's database stay as they were.
+
+- **Written to no database cell.** The core swaps the car's 8-byte slot in its AI record for a pointer to its own cell and restores the game's pointer at the last release.
+- **Race start.** The `_at_race_start` pair is read until the race start state machine reaches its last state, the plain pair after it.
+- **Readiness.** The fields answer `Result::unavailable` until the AI system is built and the KB rows `AiSystem.records_begin`, `AiCarRecord.vehicle_index` and `AiCarRecord.driver_config` have independent agree verify rows. Each field also needs the `AiDriverConfig.<group>_<key>` row of its own; the four `blocking` rows have one, the 55 others do not yet.
+- **Re-read per tick.** The blocking evaluator (all the blocking keys but `start_blocking_intersection_time` and `merge_back_to_racing_line`), `overtake.overlap_percentage` and the two `alongside` yield floats re-read their slot on every call. For the other fields no consumer was found: whether the game caches the value is unproven, and the float, int or curve kind rests on the key name.
+- **Not exposed.** `cede_position.*`, `exit_fallibility.*`, `race_start.*`, the remaining `alongside.*`, `offset_variation.*` and `overtake.*` keys (`danger_overtake_buffer` among them) are not fields.
+- **Not verified in game.** Whether the first `session.lap` of a car ends lap 1.
+
 ## Events and operations
 
 ```cpp
@@ -309,6 +411,7 @@ ai::assign_track_pack(cars::vehicles["swofty.f1-1990/mclaren_1990"], ai::track_p
 - **`ai.controller.update`: implemented, waiting on verification.** Slot 1 of the AI controller's vtable (`Sess_AiController_Update`, L2) writes the inputs into the record at `[controller+8]`: throttle at +0xC, steering at +0x14 and brake at +0x18 (the names are L1); the vehicle index is at `controller+0x18`. The core's hook binds only after an independent `agree` verify of the table, and whether the game calls slot 1 every frame is test T145, an in-game check. Until a binding resolves the point reports unavailable and its handlers do not run.
 - **Baked tables cap pace.** A car faster than its baked set gets nothing from more grip. Physics changes must keep the car inside the baked envelope.
 - **A missing AI folder hangs the load.** The core refuses a track pack whose folder isn't there. A box offers a track only where every car in it has AI data (see [Tracks](./tracks)).
+- **An added team needs AI data at every track.** A team whose `ai.asset_data` row an addon copies from another team (SWOFTY 2013's Caterham from Lotus) reads its own `ai/<package>/<team>/` folder at each track. An addon ships it for the tracks it knows about. On an added track the build copies the donor team's folder for it ([Installing tracks](/reference/installing-tracks#the-track-archive)), so the team drives with the donor's tyre wear and pace there.
 - **The AI table holds 30 cars.**
 - **Simulated sessions** use the baked lap times, driver statistics and randomness, not physics or R&D.
 - **Third-party natives** that patch raw addresses break on game updates and on the EA build.

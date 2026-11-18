@@ -101,7 +101,7 @@ impl StockLists {
             DbOp::Set { select, .. } | DbOp::ListAppend { select, .. } | DbOp::ListRemove { select, .. } => {
                 in_scope(select)
             }
-            DbOp::AddRow { .. } | DbOp::RemoveRow { .. } => false,
+            DbOp::AddRow { .. } | DbOp::RemoveRow { .. } | DbOp::VirtualList { .. } => false,
         })
     }
 

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.11",
   "description": "Swofty Launcher for F1 25, a launcher and mod loader for F1 25",
-  "license": "AGPL-3.0-or-later",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "engines": {
     "node": ">=24"

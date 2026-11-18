@@ -1,0 +1,216 @@
+{
+  "format": "Shader rule vectors. Per case: build an engine from `rules`, then for each frame step(dt_ms, signals) and apply(base); compare weights, options (32 floats per instance) and off. See the first case's note for the signals shape.",
+  "cases": [
+    {
+      "name": "min_ms_and_fades",
+      "note": "FORMAT: each frame lists the complete signals of that frame (no state carries over). Keys are signal ids; bool: true/false; name: the name (or its index); number: a number; car.surface: 4 names (FL FR RL RR); event: the list of this frame's occurrence magnitudes ([] none, [0] one without magnitude). A missing key or null is a missing signal. expect.weights = each rule's fade state w after the frame; expect.options = every instance's 32 params after apply(); expect.off = per instance. Rule JSON is the active.json rule. Compare floats with 1e-5.",
+      "rules": [
+        {"event":false,"fade_in_ms":100.0,"fade_out_ms":200.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":100.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"true","signal":"view.replay"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.replay":true}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.5]},"signals":{"view.replay":true}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.replay":true}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.replay":true}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[0.84375,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.75]},"signals":{"view.replay":false}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.15625,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.25]},"signals":{"view.replay":false}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.replay":false}}
+      ]
+    },
+    {
+      "name": "brief_touch_under_min_ms",
+      "note": "A condition that clears before min_ms never turns the rule on.",
+      "rules": [
+        {"event":false,"fade_in_ms":100.0,"fade_out_ms":100.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":100.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":3,"values":[2.0]}],"when":[{"op":"true","signal":"view.paused"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":40.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.paused":true}},
+        {"dt_ms":40.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.paused":true}},
+        {"dt_ms":40.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.paused":false}},
+        {"dt_ms":40.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.paused":true}},
+        {"dt_ms":40.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{}}
+      ]
+    },
+    {
+      "name": "hold_ms",
+      "note": "false_for must exceed hold_ms (strictly) before the rule goes off.",
+      "rules": [
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":100.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"true","signal":"view.photo"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":10.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.photo":true}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.photo":false}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.photo":false}},
+        {"dt_ms":10.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.photo":false}},
+        {"dt_ms":10.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.photo":false}}
+      ]
+    },
+    {
+      "name": "ramp_follows_the_signal",
+      "note": "Ramp rules have an empty `when`; zero fades make w jump to the target.",
+      "rules": [
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"flat out","order":0,"priority":0,"ramp":{"from":250,"signal":"car.speed","to":320},"set":[{"instance":0,"mode":"blend","slot":1,"values":[0.5,1.0]}],"when":[]}
+      ],
+      "base": [[0.0,0.0,0.25,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.25,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"car.speed":200}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.078125,0.367188,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.25]},"signals":{"car.speed":267.5}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.25,0.625,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.5]},"signals":{"car.speed":285}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.5,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"car.speed":400}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.25,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"car.speed":100}}
+      ]
+    },
+    {
+      "name": "event_for_ms_and_magnitude",
+      "note": "car.impact above 3 fires a 300 ms window; a 2.0 hit is ignored.",
+      "rules": [
+        {"event":true,"fade_in_ms":0.0,"fade_out_ms":200.0,"for_ms":300.0,"hold_ms":0.0,"min_ms":0.0,"name":"impact","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"above","signal":"car.impact","value":3.0}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"car.impact":[2.0]}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"car.impact":[2.0,3.5]}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"car.impact":[]}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.5]},"signals":{}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{}}
+      ]
+    },
+    {
+      "name": "event_without_magnitude",
+      "note": "A plain event rule fires on any occurrence, each occurrence restarts the window.",
+      "rules": [
+        {"event":true,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":150.0,"hold_ms":0.0,"min_ms":0.0,"name":"lap","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"event","signal":"session.lap"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"session.lap":[0]}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"session.lap":[0]}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{}}
+      ]
+    },
+    {
+      "name": "all_conditions",
+      "note": "Every entry must hold; a missing car.speed fails its entry.",
+      "rules": [
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"is","signal":"car.surface","values":[1],"wheels":2},{"op":"above","signal":"car.speed","value":150}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"car.speed":100,"car.surface":["kerb","kerb","tarmac","tarmac"]}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"car.speed":200,"car.surface":["kerb","kerb","tarmac","tarmac"]}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"car.speed":200,"car.surface":["kerb","tarmac","tarmac","tarmac"]}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"car.surface":["kerb","kerb","tarmac","tarmac"]}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"car.speed":151,"car.surface":["tarmac","tarmac","kerb","kerb"]}}
+      ]
+    },
+    {
+      "name": "surface_wheels",
+      "note": "wheels = 3 over [kerb, rumble]: at least 3 wheels on either surface.",
+      "rules": [
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"is","signal":"car.surface","values":[1,2],"wheels":3}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"car.surface":["kerb","rumble","grass","grass"]}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"car.surface":["kerb","rumble","kerb","grass"]}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"car.surface":[1,2,2,1]}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{}}
+      ]
+    },
+    {
+      "name": "camera_name_list",
+      "note": "A name signal given as a name; `is` holds when it is any listed index (cockpit 0, tcam 1).",
+      "rules": [
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"is","signal":"view.camera","values":[0,1]}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.camera":"cockpit"}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0]},"signals":{"view.camera":"chase_far"}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.camera":1}}
+      ]
+    },
+    {
+      "name": "priority_orders_a_shared_slot",
+      "note": "Applied by (priority, order) ascending, so the highest priority ends on top; equal priority: later in the file wins.",
+      "rules": [
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"hi","order":0,"priority":10,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[0.8999999761581421]},{"instance":0,"mode":"blend","slot":4,"values":[0.10000000149011612]}],"when":[{"op":"true","signal":"view.replay"}]},
+        {"event":false,"fade_in_ms":100.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"lo","order":1,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[0.20000000298023224]}],"when":[{"op":"true","signal":"view.replay"}]},
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"lo2","order":2,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":4,"values":[0.699999988079071]}],"when":[{"op":"true","signal":"view.replay"}]}
+      ],
+      "base": [[0.5,0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[0.9,0.0,0.0,0.0,0.1,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0,0.5,1.0]},"signals":{"view.replay":true}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[0.9,0.0,0.0,0.0,0.1,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0,1.0,1.0]},"signals":{"view.replay":true}},
+        {"dt_ms":50.0,"expect":{"off":[false],"options":[[0.5,0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0,0.0,0.0]},"signals":{"view.replay":false}}
+      ]
+    },
+    {
+      "name": "switch_at_half_and_enabled",
+      "note": "switch values and enabled=false apply once the smoothed strength a is at least 0.5 (w = 0.5).",
+      "rules": [
+        {"event":false,"fade_in_ms":100.0,"fade_out_ms":100.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"switch","slot":5,"values":[1.0]},{"enabled":false,"instance":1}],"when":[{"op":"true","signal":"view.menu"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":25.0,"expect":{"off":[false,false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.25]},"signals":{"view.menu":true}},
+        {"dt_ms":25.0,"expect":{"off":[false,true],"options":[[0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.5]},"signals":{"view.menu":true}},
+        {"dt_ms":25.0,"expect":{"off":[false,true],"options":[[0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.75]},"signals":{"view.menu":true}},
+        {"dt_ms":25.0,"expect":{"off":[false,true],"options":[[0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.menu":true}},
+        {"dt_ms":25.0,"expect":{"off":[false,true],"options":[[0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.75]},"signals":{"view.menu":false}},
+        {"dt_ms":25.0,"expect":{"off":[false,true],"options":[[0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.5]},"signals":{"view.menu":false}},
+        {"dt_ms":25.0,"expect":{"off":[false,false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.25]},"signals":{"view.menu":false}}
+      ]
+    },
+    {
+      "name": "round_mode",
+      "note": "round: blend then round to a whole number; base 4 to 8 at a = 0.15625 is 4.625, rounds to 5.",
+      "rules": [
+        {"event":false,"fade_in_ms":100.0,"fade_out_ms":100.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"round","slot":6,"values":[8.0]}],"when":[{"op":"true","signal":"view.cutscene"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,4.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":25.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,5.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.25]},"signals":{"view.cutscene":true}},
+        {"dt_ms":25.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,6.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.5]},"signals":{"view.cutscene":true}},
+        {"dt_ms":25.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,7.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.75]},"signals":{"view.cutscene":true}},
+        {"dt_ms":25.0,"expect":{"off":[false],"options":[[0.0,0.0,0.0,0.0,0.0,0.0,8.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0]},"signals":{"view.cutscene":true}}
+      ]
+    },
+    {
+      "name": "dt_clamp",
+      "note": "dt is clamped to 0-100 ms: a 1000 ms frame moves a 1000 ms fade by 0.1, a negative dt moves nothing.",
+      "rules": [
+        {"event":false,"fade_in_ms":1000.0,"fade_out_ms":1000.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"true","signal":"view.replay"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":1000.0,"expect":{"off":[false],"options":[[0.028,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.1]},"signals":{"view.replay":true}},
+        {"dt_ms":-50.0,"expect":{"off":[false],"options":[[0.028,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.1]},"signals":{"view.replay":true}},
+        {"dt_ms":100.0,"expect":{"off":[false],"options":[[0.104,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.2]},"signals":{"view.replay":true}},
+        {"dt_ms":5000.0,"expect":{"off":[false],"options":[[0.028,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.1]},"signals":{"view.replay":false}}
+      ]
+    },
+    {
+      "name": "missing_signals",
+      "note": "Conditions on a missing signal are false; a ramp on a missing signal targets 0; events never occur.",
+      "rules": [
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"a","order":0,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":0,"values":[1.0]}],"when":[{"op":"above","signal":"car.speed","value":150}]},
+        {"event":false,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":0.0,"hold_ms":0.0,"min_ms":0.0,"name":"b","order":1,"priority":0,"ramp":{"from":0.5,"signal":"car.rpm","to":1.0},"set":[{"instance":0,"mode":"blend","slot":1,"values":[1.0]}],"when":[]},
+        {"event":true,"fade_in_ms":0.0,"fade_out_ms":0.0,"for_ms":200.0,"hold_ms":0.0,"min_ms":0.0,"name":"c","order":2,"priority":0,"ramp":null,"set":[{"instance":0,"mode":"blend","slot":2,"values":[1.0]}],"when":[{"op":"event","signal":"car.damage"}]}
+      ],
+      "base": [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],
+      "frames": [
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[1.0,1.0,1.0]},"signals":{"car.damage":[0.2],"car.rpm":1.0,"car.speed":200}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0,0.0,1.0]},"signals":{"car.speed":null}},
+        {"dt_ms":16.0,"expect":{"off":[false],"options":[[0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]],"weights":[0.0,0.0,1.0]},"signals":{}}
+      ]
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+use crate::scale::px;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
@@ -6,12 +7,12 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Disableable, Icon, Side, Sizable, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use swofty_i18n::{tr, trf, trn};
 
-use crate::game::{self, Owner, ago, duration};
+use crate::format::{ago, duration};
+use crate::game::{self, Owner};
 
 pub(crate) const HEIGHT: f32 = 72.;
-use crate::library::plural;
-use crate::pages::avatar;
 use crate::shell::{Page, PlayState, Shell};
 use crate::theme::Palette;
 use swofty_core::install::Source;
@@ -22,7 +23,7 @@ pub(crate) fn store_badge(source: Source, p: Palette) -> Div {
     let (text, color) = match source {
         Source::Steam => ("STEAM", p.accent),
         Source::EaApp => ("EA APP", p.warning),
-        Source::Unknown => ("FOLDER", p.text_muted),
+        Source::Unknown => (tr("FOLDER"), p.text_muted),
     };
     div()
         .flex_shrink_0()
@@ -65,8 +66,8 @@ fn status_row() -> Div {
 
 fn launch_failed(row: Div, text: impl std::fmt::Display, p: Palette) -> Div {
     let full = text.to_string();
-    let text = SharedString::from(format!("Launch failed: {}", game::cause_first(&full)));
-    let tip = SharedString::from(format!("Launch failed: {full}"));
+    let text = SharedString::from(trf!("Launch failed: {cause}", cause = game::cause_first(&full)));
+    let tip = SharedString::from(trf!("Launch failed: {cause}", cause = full));
     row.text_color(p.error)
         .child(Icon::new(IconName::CircleAlert).size(px(16.)))
         .child(
@@ -113,9 +114,9 @@ impl Shell {
         };
         let Some(i) = &self.install else {
             let (title, line) = if self.detected {
-                ("F1 25 not found", "Not in Steam or the EA app")
+                (tr("F1 25 not found"), tr("Not in Steam or the EA app"))
             } else {
-                ("F1 25", "Looking for the game…")
+                ("F1 25", tr("Looking for the game…"))
             };
             return v_flex()
                 .w(px(width))
@@ -164,21 +165,27 @@ impl Shell {
                             .flex_shrink_0(),
                     ),
             )
-            .tooltip("Switch the copy of F1 25 Play uses")
+            .tooltip(tr("Switch the copy of F1 25 Play uses"))
             .disabled(matches!(
                 self.play_state(),
-                PlayState::Running | PlayState::Launching | PlayState::Restoring | PlayState::Building
+                PlayState::Running
+                    | PlayState::Preparing
+                    | PlayState::Launching
+                    | PlayState::Restoring
+                    | PlayState::Building
             ))
             .dropdown_menu_with_anchor(Anchor::BottomLeft, move |mut menu, _, _| {
                 menu = menu
                     .min_w(px(360.))
                     .max_w(px(560.))
                     .check_side(Side::Right)
-                    .label("Play this copy");
+                    .label(tr("Play this copy"));
                 for c in &copies {
                     let (shell, dir) = (shell.clone(), c.dir.clone());
-                    let (source, version) =
-                        (c.source, c.version().unwrap_or_else(|| "version unknown".into()));
+                    let (source, version) = (
+                        c.source,
+                        c.version().unwrap_or_else(|| tr("version unknown").into()),
+                    );
                     let folder = c.dir.display().to_string();
                     menu = menu.item(
                         PopupMenuItem::element(move |_, _| {
@@ -220,7 +227,7 @@ impl Shell {
                                     div()
                                         .text_size(px(13.))
                                         .text_color(p.text_muted)
-                                        .child("Folder not found"),
+                                        .child(tr("Folder not found")),
                                 )
                                 .child(
                                     div()
@@ -235,7 +242,7 @@ impl Shell {
                 }
                 let shell = shell.clone();
                 menu.separator().item(
-                    PopupMenuItem::new("Add another folder…")
+                    PopupMenuItem::new(tr("Add another folder…"))
                         .icon(IconName::FolderPlus)
                         .on_click(move |_, window, cx| {
                             shell.update(cx, |s, cx| s.locate_game(window, cx)).ok();
@@ -252,20 +259,28 @@ impl Shell {
             return row
                 .text_color(p.warning)
                 .child(Icon::new(IconName::TriangleAlert).size(px(16.)))
-                .child(div().min_w_0().truncate().child("Your game files were edited"))
                 .child(
-                    link("game-edited-what", "What to do", p)
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .child(tr("Your game files were edited")),
+                )
+                .child(
+                    link("game-edited-what", tr("What to do"), p)
                         .on_click(cx.listener(|this, _, window, cx| this.show_game_edited(window, cx))),
                 )
                 .when_some(self.launch_log(), |d, log| {
                     d.child(
-                        link("launch-log", "View log", p).on_click(move |_, _, cx| cx.open_with_system(&log)),
+                        link("launch-log", tr("View log"), p)
+                            .on_click(move |_, _, cx| cx.open_with_system(&log)),
                     )
                 });
         }
         if let Some(notice) = &self.notice {
             return launch_failed(row, notice, p).when_some(self.launch_log(), |d, log| {
-                d.child(link("launch-log", "View log", p).on_click(move |_, _, cx| cx.open_with_system(&log)))
+                d.child(
+                    link("launch-log", tr("View log"), p).on_click(move |_, _, cx| cx.open_with_system(&log)),
+                )
             });
         }
         if let Some(row) = self.update_status(self.update_gate(state), status_row(), p, cx) {
@@ -280,13 +295,13 @@ impl Shell {
             PlayState::Elsewhere(owner) => {
                 let text = match owner {
                     Owner::Other(i) => match i.source {
-                        Source::Steam => "F1 25 from Steam is running",
-                        Source::EaApp => "F1 25 from the EA app is running",
-                        Source::Unknown => "F1 25 from another folder is running",
+                        Source::Steam => tr("F1 25 from Steam is running"),
+                        Source::EaApp => tr("F1 25 from the EA app is running"),
+                        Source::Unknown => tr("F1 25 from another folder is running"),
                     },
-                    _ => {
-                        "F1 25 is running from a folder the launcher doesn't know · close it to play this copy"
-                    }
+                    _ => tr(
+                        "F1 25 is running from a folder the launcher doesn't know · close it to play this copy",
+                    ),
                 };
                 let row = row
                     .text_color(p.text_muted)
@@ -295,20 +310,20 @@ impl Shell {
                 match owner {
                     Owner::Other(i) => {
                         let dir = i.dir.clone();
-                        row.child(link("switch-to-running", "Switch to it", p).on_click(
+                        row.child(link("switch-to-running", tr("Switch to it"), p).on_click(
                             cx.listener(move |this, _, window, cx| this.use_copy(dir.clone(), window, cx)),
                         ))
                     }
                     _ => row,
                 }
             }
-            PlayState::Restoring => row.child(dot(p.warning)).child("Restoring the game files…"),
+            PlayState::Restoring => row.child(dot(p.warning)).child(tr("Restoring the game files…")),
             PlayState::Building => {
                 let Some(b) = &self.build else {
                     return row;
                 };
                 let text = match self.cancelling {
-                    true => "Cancelling the build…".to_owned(),
+                    true => tr("Cancelling the build…").to_owned(),
                     false => format!(
                         "{} for {} · {}",
                         capitalised(&b.progress()),
@@ -320,7 +335,8 @@ impl Shell {
                     .child(div().min_w_0().truncate().child(text))
                     .when_some(self.wrapper_log(), |d, log| {
                         d.child(
-                            link("launch-log", "Log", p).on_click(move |_, _, cx| cx.open_with_system(&log)),
+                            link("launch-log", tr("Log"), p)
+                                .on_click(move |_, _, cx| cx.open_with_system(&log)),
                         )
                     })
             }
@@ -330,11 +346,15 @@ impl Shell {
                     "{} {}",
                     match self.launch.as_ref().and_then(|l| l.stage.as_deref()) {
                         Some(stage) => stage.to_owned(),
-                        None => format!(
-                            "Starting with profile {}{}…",
-                            self.library.profile.name,
-                            if self.launch_mode().is_vr() { " in VR" } else { "" },
+                        None if !self.use_profiles && self.launch_mode().is_vr() => {
+                            tr("Starting in VR…").to_owned()
+                        }
+                        None if !self.use_profiles => tr("Starting…").to_owned(),
+                        None if self.launch_mode().is_vr() => trf!(
+                            "Starting with profile {name} in VR…",
+                            name = self.library.profile.name
                         ),
+                        None => trf!("Starting with profile {name}…", name = self.library.profile.name),
                     },
                     self.launch
                         .as_ref()
@@ -342,7 +362,9 @@ impl Shell {
                         .unwrap_or_default()
                 ))
                 .when_some(self.launch_log(), |d, log| {
-                    d.child(link("launch-log", "Log", p).on_click(move |_, _, cx| cx.open_with_system(&log)))
+                    d.child(
+                        link("launch-log", tr("Log"), p).on_click(move |_, _, cx| cx.open_with_system(&log)),
+                    )
                 }),
             PlayState::Crashed(session) => {
                 let dir = session.dir.clone();
@@ -352,8 +374,8 @@ impl Shell {
                     .filter(|(d, _)| *d == session.dir)
                     .map(|(_, e)| e);
                 let open =
-                    link("crash-log", "Open logs", p).on_click(move |_, _, cx| cx.open_with_system(&dir));
-                let dismiss = link("dismiss", "Dismiss", p).on_click(cx.listener(|this, _, _, cx| {
+                    link("crash-log", tr("Open logs"), p).on_click(move |_, _, cx| cx.open_with_system(&dir));
+                let dismiss = link("dismiss", tr("Dismiss"), p).on_click(cx.listener(|this, _, _, cx| {
                     this.dismissed = this.session.as_ref().map(|s| s.dir.clone());
                     cx.notify();
                 }));
@@ -362,7 +384,7 @@ impl Shell {
                 }
                 let view = self.crash_view.as_ref().filter(|v| v.dir == session.dir);
                 let details = view.map(|_| {
-                    link("crash-details", "What happened", p).on_click(cx.listener(|this, _, _, cx| {
+                    link("crash-details", tr("What happened"), p).on_click(cx.listener(|this, _, _, cx| {
                         this.crash_open = true;
                         cx.notify();
                     }))
@@ -371,10 +393,10 @@ impl Shell {
                     .map(|v| v.headline())
                     .or_else(|| ending.and_then(|e| e.as_ref().ok()).cloned())
                     .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| "reading the log…".into());
-                let crashed = format!(
-                    "Crashed {}",
-                    session
+                    .unwrap_or_else(|| tr("reading the log…").into());
+                let crashed = trf!(
+                    "Crashed {when}",
+                    when = session
                         .ended
                         .map(|e| ago(game::now_secs() - e))
                         .unwrap_or_default()
@@ -411,54 +433,138 @@ impl Shell {
                 div()
                     .min_w_0()
                     .truncate()
-                    .child("Install it with Steam or the EA app, or locate its folder"),
+                    .child(tr("Install it with Steam or the EA app, or locate its folder")),
             ),
-            PlayState::Detecting => row.text_color(p.text_muted).child("Detecting F1 25…"),
-            PlayState::Checking => row.text_color(p.text_muted).child("Checking conflicts…"),
+            PlayState::Detecting => row.text_color(p.text_muted).child(tr("Detecting F1 25…")),
+            PlayState::Checking => row.text_color(p.text_muted).child(tr("Checking conflicts…")),
+            PlayState::Preparing => row.child(dot(p.warning)).child(tr("Checking addons…")),
             PlayState::Ready => {
+                if let Some(n) = self
+                    .install
+                    .as_ref()
+                    .and_then(|i| crate::unsupported_build::notice(&i.dir.join(swofty_core::GAME_EXE)))
+                {
+                    return row
+                        .items_start()
+                        .child(div().mt(px(6.)).child(dot(p.warning)))
+                        .child(
+                            v_flex()
+                                .min_w_0()
+                                .gap(px(2.))
+                                .child(div().min_w_0().truncate().child(n.headline))
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(p.text_muted)
+                                        .truncate()
+                                        .child(n.detail),
+                                ),
+                        );
+                }
                 if rebuild {
-                    return row.text_color(p.text_muted).child(dot(p.warning)).child(
-                        div().min_w_0().truncate().child(format!(
-                            "Ready · rebuilds {} for {} on launch",
-                            self.library.profile.name,
-                            plural(self.library.rebuild.len(), "changed setting", "changed settings")
-                        )),
+                    let changes = trn(
+                        self.library.rebuild.len(),
+                        "{count} changed setting",
+                        "{count} changed settings",
                     );
+                    let text = match self.use_profiles {
+                        true => trf!(
+                            "Ready · rebuilds {profile} for {changes} on launch",
+                            profile = self.library.profile.name,
+                            changes = changes
+                        ),
+                        false => trf!("Ready · rebuilds for {changes} on launch", changes = changes),
+                    };
+                    return row
+                        .text_color(p.text_muted)
+                        .child(dot(p.warning))
+                        .child(div().min_w_0().truncate().child(text));
                 }
                 if let Some(refused) = self.saves_refused() {
                     let dir = refused.dir.clone();
                     return row
                         .child(dot(p.warning))
+                        .child(div().min_w_0().truncate().child(tr(
+                            "Launcher saves could not be used, so F1 25 closed before loading a save",
+                        )))
                         .child(
-                            div().min_w_0().truncate().child(
-                                "Launcher saves could not be used, so F1 25 closed before loading a save",
+                            link("steam-once", tr("Play once with your Steam saves"), p).on_click(
+                                cx.listener(|this, _, window, cx| this.play_with_steam_saves(window, cx)),
                             ),
                         )
-                        .child(link("steam-once", "Play once with your Steam saves", p).on_click(
-                            cx.listener(|this, _, window, cx| this.play_with_steam_saves(window, cx)),
-                        ))
                         .child(
-                            link("saves-log", "Open logs", p)
+                            link("saves-log", tr("Open logs"), p)
                                 .on_click(move |_, _, cx| cx.open_with_system(&dir)),
                         )
-                        .child(link("saves-dismiss", "Dismiss", p).on_click(cx.listener(
+                        .child(link("saves-dismiss", tr("Dismiss"), p).on_click(cx.listener(
                             |this, _, _, cx| {
                                 this.dismissed = this.session.as_ref().map(|s| s.dir.clone());
                                 cx.notify();
                             },
                         )));
                 }
+                if let Some((names, source, snapshot, at)) = self.saves.banner.as_ref().and_then(|b| b.lost())
+                {
+                    let names = names.join("; ");
+                    let (source, snapshot) = (source.to_owned(), snapshot.to_owned());
+                    return row
+                        .child(dot(p.warning))
+                        .child(div().min_w_0().truncate().child(trf!(
+                            "Addon careers may have been removed from your Steam save: {names}. Last version: {at}",
+                            names = names,
+                            at = swofty_core::vault::human(at)
+                        )))
+                        .child(link("career-restore", tr("Restore"), p).on_click(cx.listener(
+                            move |this, _, window, cx| this.restore_version(&source, &snapshot, window, cx),
+                        )))
+                        .child(link("career-open", tr("Open Career saves"), p).on_click(
+                            cx.listener(|this, _, _, cx| this.open_saves(None, cx)),
+                        ));
+                }
                 if self.saves_await_import() {
                     return row.text_color(p.text_muted).child(dot(p.warning)).child(
                         div()
                             .min_w_0()
                             .truncate()
-                            .child(crate::career_saves::EMPTY_SAVE_SHORT),
+                            .child(crate::career_saves::empty_save_short()),
                     );
                 }
                 row
             }
         }
+    }
+
+    fn save_area(&self, state: &PlayState, p: Palette) -> Option<AnyElement> {
+        if !matches!(
+            state,
+            PlayState::Ready | PlayState::Crashed(_) | PlayState::Preparing
+        ) {
+            return None;
+        }
+        let install = self.install.as_ref()?;
+        let blocked = swofty_core::build_support::blocked(&install.dir.join(swofty_core::GAME_EXE));
+        let line = crate::save_area::line(
+            &self.library.profile,
+            install.source,
+            blocked.as_deref(),
+            self.steam_saves_once,
+        );
+        let colour = if line.warn { p.warning } else { p.text_muted };
+        Some(
+            v_flex()
+                .id("save-area")
+                .flex_shrink_0()
+                .max_w(px(330.))
+                .min_w_0()
+                .gap(px(1.))
+                .text_size(px(12.))
+                .text_color(colour)
+                .child(div().min_w_0().truncate().child(line.headline))
+                .when_some(line.reason, |d, reason| {
+                    d.child(div().min_w_0().truncate().text_color(p.text_muted).child(reason))
+                })
+                .into_any_element(),
+        )
     }
 
     fn saves_await_import(&self) -> bool {
@@ -478,78 +584,13 @@ impl Shell {
         log.is_file().then_some(log)
     }
 
-    pub(crate) fn profile_picker(&self, p: Palette, cx: &mut Context<Self>) -> impl IntoElement {
-        let shell = cx.entity().downgrade();
-        let active = self.library.profile.name.clone();
-        let summary = self.library.active().map(|a| a.summary()).unwrap_or_default();
-        let profiles: Vec<(String, String)> = self
-            .library
-            .profiles
-            .iter()
-            .map(|p| (p.name.clone(), p.summary()))
-            .collect();
-        Button::new("profile-picker")
-            .outline()
-            .h(px(40.))
-            .min_w(px(180.))
-            .child(
-                h_flex().gap(px(8.)).child(avatar(&active, 24., p)).child(
-                    v_flex()
-                        .items_start()
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(active.clone()),
-                        )
-                        .child(div().text_size(px(11.)).text_color(p.text_muted).child(summary)),
-                ),
-            )
-            .dropdown_caret(true)
-            .disabled(matches!(
-                self.play_state(),
-                PlayState::Running | PlayState::Launching | PlayState::Restoring | PlayState::Building
-            ))
-            .dropdown_menu_with_anchor(Anchor::BottomRight, move |mut menu, _, _| {
-                menu = menu.min_w(px(300.)).label("Profile");
-                for (name, summary) in &profiles {
-                    let (shell, target) = (shell.clone(), name.clone());
-                    let (label, summary) = (name.clone(), summary.clone());
-                    menu = menu.item(
-                        PopupMenuItem::element(move |_, _| {
-                            h_flex()
-                                .w_full()
-                                .gap(px(24.))
-                                .justify_between()
-                                .child(label.clone())
-                                .child(div().text_color(p.text_muted).child(summary.clone()))
-                        })
-                        .checked(*name == active)
-                        .on_click(move |_, window, cx| {
-                            shell
-                                .update(cx, |s, cx| s.switch_profile(&target, window, cx))
-                                .ok();
-                        }),
-                    );
-                }
-                let shell = shell.clone();
-                menu.separator().item(
-                    PopupMenuItem::new("Manage profiles…")
-                        .icon(IconName::Settings)
-                        .on_click(move |_, _, cx| {
-                            shell.update(cx, |s, cx| s.go(Page::Profiles, cx)).ok();
-                        }),
-                )
-            })
-    }
-
     fn play_caret(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let shell = cx.entity().downgrade();
         let vr = self.launch_mode().is_vr();
         let start_store = self.start_store;
         let start_label = match self.install.as_ref().map(|i| i.source) {
-            Some(Source::EaApp) => "Start the EA app automatically",
-            _ => "Start Steam automatically",
+            Some(Source::EaApp) => tr("Start the EA app automatically"),
+            _ => tr("Start Steam automatically"),
         };
         Button::new("play-menu")
             .h(px(52.))
@@ -585,11 +626,11 @@ impl Shell {
                 let (vanilla, saves_on) = profile.unwrap_or((true, false));
                 menu.min_w(px(220.))
                     .check_side(Side::Right)
-                    .item(mode("Play", IconName::Play, LaunchMode::Normal))
-                    .item(mode("Play in VR", IconName::RectangleGoggles, LaunchMode::Vr))
+                    .item(mode(tr("Play"), IconName::Play, LaunchMode::Normal))
+                    .item(mode(tr("Play in VR"), IconName::RectangleGoggles, LaunchMode::Vr))
                     .separator()
                     .item(
-                        PopupMenuItem::new("Play with console")
+                        PopupMenuItem::new(tr("Play with console"))
                             .icon(IconName::SquareTerminal)
                             .on_click(move |_, window, cx| {
                                 console
@@ -603,7 +644,7 @@ impl Shell {
                     .separator()
                     .when(!vanilla, |menu| {
                         menu.item(
-                            PopupMenuItem::new("Use launcher saves")
+                            PopupMenuItem::new(tr("Use launcher saves"))
                                 .icon(IconName::Save)
                                 .checked(saves_on)
                                 .on_click(move |_, window, cx| {
@@ -614,7 +655,7 @@ impl Shell {
                         )
                         .when(saves_on, |menu| {
                             menu.item(
-                                PopupMenuItem::new("Play once with your Steam saves")
+                                PopupMenuItem::new(tr("Play once with your Steam saves"))
                                     .icon(IconName::Play)
                                     .on_click(move |_, window, cx| {
                                         once.update(cx, |s, cx| s.play_with_steam_saves(window, cx)).ok();
@@ -634,7 +675,7 @@ impl Shell {
                             }),
                     )
                     .item(
-                        PopupMenuItem::new("Developer mode")
+                        PopupMenuItem::new(tr("Developer mode"))
                             .icon(IconName::SquareTerminal)
                             .checked(dev_mode)
                             .on_click(move |_, window, cx| {
@@ -660,29 +701,71 @@ impl Shell {
             return self.addon_update_button(p, cx);
         }
         let vr = self.launch_mode().is_vr();
+        let starting = self.mp_starting_label();
         let (icon, label, bg, fg, enabled) = match state {
+            PlayState::Ready | PlayState::Crashed(_) if starting.is_some() => (
+                IconName::LoaderCircle,
+                starting.unwrap_or_default(),
+                p.elevated,
+                p.accent,
+                false,
+            ),
             PlayState::Ready | PlayState::Crashed(_) if vr => (
                 IconName::RectangleGoggles,
-                "Play in VR",
+                tr("Play in VR"),
                 p.accent,
                 p.on_accent,
                 true,
             ),
-            PlayState::Ready | PlayState::Crashed(_) => (IconName::Play, "Play", p.accent, p.on_accent, true),
-            PlayState::Launching => (IconName::LoaderCircle, "Launching…", p.elevated, p.accent, false),
-            PlayState::Restoring => (IconName::LoaderCircle, "Restoring…", p.elevated, p.accent, false),
-            PlayState::Building if self.cancelling => {
-                (IconName::LoaderCircle, "Cancelling…", p.elevated, p.accent, false)
+            PlayState::Ready | PlayState::Crashed(_) => {
+                (IconName::Play, tr("Play"), p.accent, p.on_accent, true)
             }
-            PlayState::Building => (IconName::LoaderCircle, "Building…", p.elevated, p.accent, true),
-            PlayState::Running => (IconName::Square, "Stop", p.elevated, p.error, true),
-            PlayState::NotInstalled => (IconName::FolderSearch, "Locate game", p.elevated, p.text, true),
-            PlayState::Detecting | PlayState::Checking => {
-                (IconName::LoaderCircle, "Play", p.elevated, p.text_muted, false)
-            }
-            PlayState::Elsewhere(_) => (IconName::Play, "Play", p.elevated, p.text_muted, false),
+            PlayState::Preparing | PlayState::Launching => (
+                IconName::LoaderCircle,
+                tr("Launching…"),
+                p.elevated,
+                p.accent,
+                false,
+            ),
+            PlayState::Restoring => (
+                IconName::LoaderCircle,
+                tr("Restoring…"),
+                p.elevated,
+                p.accent,
+                false,
+            ),
+            PlayState::Building if self.cancelling => (
+                IconName::LoaderCircle,
+                tr("Cancelling…"),
+                p.elevated,
+                p.accent,
+                false,
+            ),
+            PlayState::Building => (
+                IconName::LoaderCircle,
+                tr("Building…"),
+                p.elevated,
+                p.accent,
+                true,
+            ),
+            PlayState::Running => (IconName::Square, tr("Stop"), p.elevated, p.error, true),
+            PlayState::NotInstalled => (
+                IconName::FolderSearch,
+                tr("Locate game"),
+                p.elevated,
+                p.text,
+                true,
+            ),
+            PlayState::Detecting | PlayState::Checking => (
+                IconName::LoaderCircle,
+                tr("Play"),
+                p.elevated,
+                p.text_muted,
+                false,
+            ),
+            PlayState::Elsewhere(_) => (IconName::Play, tr("Play"), p.elevated, p.text_muted, false),
         };
-        let ready = matches!(state, PlayState::Ready | PlayState::Crashed(_));
+        let ready = matches!(state, PlayState::Ready | PlayState::Crashed(_)) && starting.is_none();
         let missing = matches!(state, PlayState::NotInstalled);
         let running = matches!(state, PlayState::Running);
         let building = matches!(state, PlayState::Building);
@@ -734,7 +817,15 @@ impl Shell {
             .into_any_element()
     }
 
-    fn room_button(&self, state: &PlayState, p: Palette, cx: &mut Context<Self>) -> Option<AnyElement> {
+    /// "Play <host>'s Lobby" while a room is open on the Multiplayer page. `primary` gives it the Play button's
+    /// filled look, for when it stands in for Play.
+    fn room_button(
+        &self,
+        state: &PlayState,
+        primary: bool,
+        p: Palette,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let ready = matches!(
             state,
             PlayState::Ready | PlayState::Running | PlayState::Crashed(_)
@@ -750,29 +841,69 @@ impl Shell {
                 .px(px(18.))
                 .flex_shrink_0()
                 .rounded(px(9.))
-                .border_1()
-                .border_color(p.accent)
-                .text_color(p.accent)
+                .when(primary, |d| {
+                    d.min_w(px(170.))
+                        .bg(p.accent)
+                        .text_color(p.on_accent)
+                        .hover(move |s| s.bg(p.accent_hover))
+                })
+                .when(!primary, |d| {
+                    d.border_1()
+                        .border_color(p.accent)
+                        .text_color(p.accent)
+                        .hover(move |s| s.bg(p.selected))
+                })
                 .flex()
                 .items_center()
                 .justify_center()
                 .gap(px(8.))
                 .cursor_pointer()
-                .hover(move |s| s.bg(p.selected))
                 .child(Icon::new(IconName::Users).size(px(18.)))
                 .child(
                     div()
                         .text_size(px(15.))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child(format!("Play {host}'s Lobby")),
+                        .child(trf!("Play {host}'s Lobby", host = host)),
                 )
                 .on_click(cx.listener(|this, _, window, cx| this.mp_view_play(window, cx)))
                 .into_any_element(),
         )
     }
 
+    fn footer_links(&self, p: Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let tip = crate::send_logs::label();
+        h_flex()
+            .flex_shrink_0()
+            .items_center()
+            .gap(px(18.))
+            .child(
+                h_flex()
+                    .id("send-logs")
+                    .gap(px(6.))
+                    .items_center()
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .text_color(p.text_muted)
+                    .hover(move |s| s.text_color(p.text))
+                    .tooltip(move |window, cx| Tooltip::new(tip).build(window, cx))
+                    .child(Icon::new(crate::send_logs::icon()).size(px(13.)))
+                    .child(crate::send_logs::short_label())
+                    .on_click(cx.listener(|this, _, window, cx| this.send_logs(window, cx))),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(p.text_placeholder)
+                    .child(concat!("v", env!("CARGO_PKG_VERSION"))),
+            )
+    }
+
     pub(crate) fn play_bar(&self, p: Palette, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.play_state();
+        // With a room open on the Multiplayer page and the game ready, the room's button replaces Play.
+        let ready = matches!(state, PlayState::Ready | PlayState::Crashed(_));
+        let room = self.room_button(&state, ready, p, cx);
+        let lobby_only = ready && room.is_some();
         h_flex()
             .h(px(HEIGHT))
             .flex_shrink_0()
@@ -791,8 +922,10 @@ impl Shell {
                     .gap(px(20.))
                     .child(self.game_info(p, wide, cx))
                     .child(self.status(&state, p, cx))
-                    .children(self.room_button(&state, p, cx))
-                    .child(self.big_button(&state, p, cx)),
+                    .children(self.save_area(&state, p))
+                    .children(room)
+                    .child(self.footer_links(p, cx))
+                    .when(!lobby_only, |d| d.child(self.big_button(&state, p, cx))),
             )
     }
 }

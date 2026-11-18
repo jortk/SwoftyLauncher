@@ -13,7 +13,8 @@
 // and its package's resource_path. A livery's archive is routed to the addon's file; a car whose archive is not in
 // the game folder gets its asset group, listing its package's teams/common.erp (or the donor package's) first. Its
 // textures folder is routed file by file over the car's textures<suffix>/ folder. A special livery adds an se_livery
-// row and an unlock row, copied from the first stock special livery of the same car (or the table's first), with the
+// row and an unlock row, copied from the first stock special livery of the same car (or the table's first; then it carries no team
+// customisation, so each driver wears his own look, never another team's kit), with the
 // se_livery id and the unlock statId from their pools.
 
 namespace swofty_core::apply::content {
@@ -169,10 +170,12 @@ inline void lower_livery(const std::string &id, const Value &rec, const std::vec
     std::string from = std::string(SE_LIVERIES) + ".se_livery_0";
     auto count = read(std::string(SE_LIVERIES) + "._se_livery_instancecount_");
     int64_t rows = count ? std::strtoll(count->c_str(), nullptr, 10) : 0;
+    bool own_source = false;
     for (int64_t i = 0; i < rows; i++) {
         std::string at = std::string(SE_LIVERIES) + ".se_livery_" + std::to_string(i);
         if (read(at + ".compatible_vehicle") == car.label) {
             from = at;
+            own_source = true;
             break;
         }
     }
@@ -197,6 +200,8 @@ inline void lower_livery(const std::string &id, const Value &rec, const std::vec
                               {"id", std::to_string(*sid)},
                               {"wep_override", suffix},
                               {"ui_priority", std::to_string(*sid)}});
+    if (!own_source)
+        se["team_customisation"] = std::string();
     if (!picker.empty()) {
         se["name_loc_tag"] = Value(picker);
         se["desc_loc_tag"] = Value(picker);
@@ -230,13 +235,14 @@ inline std::vector<PoolScan> scan_livery_pools(const std::function<std::optional
             top = std::max<int64_t>(top, std::strtoll(v->c_str(), nullptr, 10));
     se.lo = top + 1;
     out.push_back(se);
+    // Every kind of row an unlock folder holds, as the launcher's UNLOCK_KINDS (packages/addon-api/src/ops.rs).
     static constexpr const char *KINDS[] = {
         "consumable_xp_booster", "currency_reward", "unlockable_badge_bg", "unlockable_badge_emblem",
-        "unlockable_casual_footwear", "unlockable_casual_headwear", "unlockable_decal_set", "unlockable_driver",
-        "unlockable_driver_number", "unlockable_eyewear", "unlockable_gloves", "unlockable_head", "unlockable_helmet",
-        "unlockable_item_pack", "unlockable_livery", "unlockable_personal_sticker", "unlockable_podium_emote",
-        "unlockable_pose", "unlockable_se_livery", "unlockable_suit", "unlockable_tops", "unlockable_trousers",
-        "unlockable_victory_vo"};
+        "unlockable_casual_footwear", "unlockable_casual_headwear", "unlockable_decal_group", "unlockable_decal_set",
+        "unlockable_driver", "unlockable_driver_number", "unlockable_eyewear", "unlockable_gloves", "unlockable_head",
+        "unlockable_helmet", "unlockable_item_pack", "unlockable_livery", "unlockable_personal_sticker",
+        "unlockable_podium_emote", "unlockable_pose", "unlockable_se_livery", "unlockable_suit", "unlockable_team",
+        "unlockable_tops", "unlockable_trousers", "unlockable_vehicle", "unlockable_victory_vo"};
     PoolScan un{UNLOCK_IDS, "unlockable_content.unlockable_items", 0, 65535, {}};
     int64_t utop = 0;
     for (int l = 0; l < 8; l++) {

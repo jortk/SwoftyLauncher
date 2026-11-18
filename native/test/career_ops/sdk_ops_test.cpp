@@ -83,11 +83,11 @@ static int apply_teams(SwoftyText request, char *out, size_t cap, size_t *len)
 }
 
 static const SwoftyCareerOps kOps = {1,       available, driver_stat, set_slots, apply_lineup, set_driver_ratings, swap,
-                                     nullptr, nullptr,   nullptr,     nullptr,   nullptr, nullptr, nullptr};
+                                     nullptr, nullptr,   nullptr,     nullptr,   nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 static const SwoftyCareerOps kOps2 = {2,    available,     driver_stat, set_slots, apply_lineup, set_driver_ratings,
-                                      swap, report_season, nullptr,     nullptr,   nullptr,      nullptr, nullptr, nullptr};
+                                      swap, report_season, nullptr,     nullptr,   nullptr,      nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 static const SwoftyCareerOps kOps3 = {3,    available,     driver_stat, set_slots, apply_lineup, set_driver_ratings,
-                                      swap, report_season, apply_teams, nullptr,   nullptr,      nullptr, nullptr, nullptr};
+                                      swap, report_season, apply_teams, nullptr,   nullptr,      nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 
 int main()
 {

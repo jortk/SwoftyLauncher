@@ -560,7 +560,7 @@ void boot16(uint8_t *db)
                 fresh.insert(e.key);
         asks.push_back({a, fresh.size(), by[a].size()});
     }
-    room::Budget budget = room::admit(usable, asks);
+    room::Budget budget = room::admit_whole(usable, asks);
     Tally t;
     for (auto &v : budget.addons) {
         room_report.addons[v.addon] = {v.asked, v.admitted ? v.asked : 0};
@@ -570,7 +570,9 @@ void boot16(uint8_t *db)
         if (!v.admitted) {
             std::string why = std::to_string(v.rows) + " " + names + " database record(s) refused: " +
                               std::to_string(v.asked) + " new key(s), past the database room (" +
-                              std::to_string(left) + " records left this game start)";
+                              std::to_string(left) + " records left this game start, " +
+                              std::to_string(budget.asked_keys) +
+                              " asked); the boot's records are laid out together, so none is applied";
             swofty::log("[registry] register: %s %s", v.addon.c_str(), why.c_str());
             for (auto &r : regs[v.addon])
                 swofty_core::registry::store().note_refusal(v.addon, r, "", "room", why);
@@ -580,7 +582,9 @@ void boot16(uint8_t *db)
         for (auto &e : by[v.addon])
             apply_one(db, e, t);
     }
-    room_report.registry_asked = std::max<uint64_t>(budget.asked_keys + early_refused, ap::scheduler().planned_keys());
+    room_report.registry_planned = ap::scheduler().planned_keys();
+    room_report.registry_counted = budget.asked_keys + early_refused;
+    room_report.registry_asked = std::max<uint64_t>(room_report.registry_counted, room_report.registry_planned);
     room_report.registry_new = sane ? map.count() - before : 0;
     room_report.registry_refused = budget.refused_keys + early_refused;
     room_report.loaded = sane;
@@ -624,14 +628,16 @@ void reserve_target(safetyhook::Context &c)
     uint64_t slots = room::slots_for(want.want);
     room_report.file_records = file;
     room_report.reserved_for = want.want;
+    room_report.slack = want.slack;
+    room_report.registry_planned = keys;
     room_report.presize = slots > room::slots_for(file) ? "applied" : "not_needed";
     if (want.want > c.rcx)
         c.rcx = want.want;
     swofty::log("[assets] gamedb: value map reserved for %llu record(s) (%llu slots, grows at %llu) before load: file "
-                "%llu, older addons' edits %zu, 1.6 records %llu, probes %llu, margin %llu%s",
+                "%llu, older addons' edits %zu, 1.6 records %llu, probes %llu, margin %llu, slack %llu%s",
                 (unsigned long long)want.want, (unsigned long long)slots, (unsigned long long)room::grows_at(slots),
                 (unsigned long long)file, older, (unsigned long long)keys, (unsigned long long)room::PROBE_RECORDS,
-                (unsigned long long)room::MARGIN,
+                (unsigned long long)room::MARGIN, (unsigned long long)want.slack,
                 want.capped ? (" (capped from " + std::to_string(want.capped_from) + ")").c_str() : "");
 }
 

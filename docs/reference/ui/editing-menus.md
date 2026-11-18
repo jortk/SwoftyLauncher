@@ -57,7 +57,7 @@ swofty addons enable author.rnd-layout
 swofty build
 ```
 
-`swofty.rnd-tyres-thermal` ships its fifth R&D tile with these same two operations (`addons/rnd-tyres-thermal/erp/rnd_fifth_pie.json`).
+`swofty.rnd-tyres-thermal` ships its fifth R&D tile with these same two operations (`erp/rnd_fifth_pie.json` in that addon).
 
 ## 1. Open the scene
 

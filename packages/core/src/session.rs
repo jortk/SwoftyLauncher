@@ -67,7 +67,7 @@ pub struct Policy {
     pub save_namespace: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     #[serde(default)]
     pub launch: LaunchConfig,
@@ -83,8 +83,27 @@ pub struct Config {
     pub console: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub developer: bool,
+    /// Opt-in: clear old game session logs each time the launcher starts (see
+    /// `data_usage::prune_sessions`). Off unless the player turns it on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clear_old_session_logs: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub sidebar_list: bool,
+    /// The layout the player chose on first run; `None` until they choose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_mode: Option<UiMode>,
+    /// The interface scale in percent, 1 to 400; `None` is Auto, the scale the display mode gives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_scale: Option<u16>,
+    /// The code of the language the launcher shows; `None` is English.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    /// The version of the welcome wizard the player last finished or skipped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onboarding: Option<u32>,
+    /// Set by "Don't ask again" on the prompt that offers addons and saves found in another folder.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_find_prompt: bool,
     #[serde(default)]
     pub data_version: u32,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -99,9 +118,89 @@ pub struct Config {
     pub discord_username: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub news_seen: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub dismissed_cards: BTreeSet<String>,
     /// The career vault's size cap in MB; 500 when unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vault_cap_mb: Option<u64>,
+    /// Maximum simultaneous Addon Browser install jobs; two when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_jobs: Option<usize>,
+    /// Upload completed Time Trial laps to the Swofty leaderboards while signed in; on unless turned off.
+    #[serde(default = "on", skip_serializing_if = "is_on")]
+    pub time_trial_boards: bool,
+    /// Show the Swofty boards and rival ghosts inside Time Trial; on unless turned off.
+    #[serde(default = "on", skip_serializing_if = "is_on")]
+    pub time_trial_ingame: bool,
+    /// Show the latest Swofty video card on the F1 25 home screen; on unless turned off.
+    #[serde(default = "on", skip_serializing_if = "is_on")]
+    pub home_video: bool,
+    #[serde(default = "on", skip_serializing_if = "is_on")]
+    pub use_profiles: bool,
+    /// Offer Addon Browser updates for installed addons that are off as well; off unless turned on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub update_off_addons: bool,
+}
+
+fn on() -> bool {
+    true
+}
+
+fn is_on(v: &bool) -> bool {
+    *v
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        serde_json::from_str("{}").expect("every field of Config has a default")
+    }
+}
+
+/// The launcher's two layouts: the desktop one, and TV mode for handhelds and
+/// couch play, which scales the interface up and widens the scrollbars.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UiMode {
+    #[default]
+    Pc,
+    Tv,
+}
+
+impl UiMode {
+    pub fn is_tv(self) -> bool {
+        self == Self::Tv
+    }
+}
+
+/// The smallest interface scale in percent.
+pub const UI_SCALE_MIN: u16 = 1;
+
+/// The largest interface scale in percent.
+pub const UI_SCALE_MAX: u16 = 400;
+
+/// `percent` held to the range the launcher supports, so a hand-edited value stays usable.
+pub fn clamp_ui_scale(percent: u16) -> u16 {
+    percent.clamp(UI_SCALE_MIN, UI_SCALE_MAX)
+}
+
+/// The version of the welcome wizard. Raise it to show the wizard once more to everyone.
+pub const ONBOARDING_VERSION: u32 = 2;
+
+impl Config {
+    /// Whether the welcome wizard is due: never seen, or an older version.
+    pub fn needs_onboarding(&self) -> bool {
+        self.onboarding.is_none_or(|seen| seen < ONBOARDING_VERSION)
+    }
+
+    /// The chosen interface scale in percent, held to 1 to 400; `None` is Auto.
+    pub fn ui_scale_percent(&self) -> Option<u16> {
+        self.ui_scale.map(clamp_ui_scale)
+    }
+
+    /// The layout in use: what the player chose, PC until they do.
+    pub fn ui_mode_or_default(&self) -> UiMode {
+        self.ui_mode.unwrap_or_default()
+    }
 }
 
 /// The copies of F1 25 the player added by folder, and the one Play uses.
@@ -126,6 +225,15 @@ impl Games {
 }
 
 impl Config {
+    /// Return a valid limit even if a config was edited by hand.
+    pub fn download_jobs(&self) -> usize {
+        self.download_jobs.unwrap_or(2).clamp(1, 10)
+    }
+
+    pub fn set_download_jobs(&mut self, limit: usize) {
+        self.download_jobs = Some(limit.clamp(1, 10));
+    }
+
     pub fn migrate_games(&mut self) {
         if let Some(dir) = self.game_dir.take() {
             self.games.active.get_or_insert_with(|| dir.clone());
@@ -385,10 +493,21 @@ const HOST_LIB_DIRS: &[&str] = &[
     "/usr/local/lib",
 ];
 
+const SDL3_SONAME: &str = "libSDL3.so.0";
+
 const STEAM_RUNTIME_LIB_DIRS: &[&str] = &[
     "ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu",
     "ubuntu12_32/steam-runtime/amd64/usr/lib/x86_64-linux-gnu",
 ];
+
+/// The 64-bit Steam client's own SDL3, which loads X11, Wayland, udev and
+/// audio at run time and links nothing past libc.
+const STEAM_CLIENT_SDL3: &str = "steamrt64/libSDL3.so.0";
+
+/// The client runtime's platform folders, one per runtime version. Their SDL2
+/// is sdl2-compat, which forwards to whichever `libSDL3.so.0` loads.
+const STEAM_CLIENT_PLATFORMS: &str = "steamrt64/pv-runtime/steam-runtime-steamrt";
+const PLATFORM_LIB_DIR: &str = "files/lib/x86_64-linux-gnu";
 
 /// Proton's HID bus reads wheels and pads through SDL2, which it loads by
 /// soname. Under Steam it comes from Steam's runtime; a direct launch (from
@@ -396,9 +515,10 @@ const STEAM_RUNTIME_LIB_DIRS: &[&str] = &[
 /// joystick Proton does not drive over hidraw (a G920, most wheels) is then
 /// left unclaimed: the evdev side defers it to an SDL side that never
 /// started, so the game sees no wheel. When the host has no 64-bit SDL2,
-/// this links Steam's runtime copy, alone, into `link_dir` and returns
-/// `library_path` with that directory appended; `None` leaves the launch as
-/// it was.
+/// this links Steam's copy into `link_dir` and returns `library_path` with
+/// that directory appended; `None` leaves the launch as it was. Steam's copy
+/// is the old runtime's SDL2 where the client still has it, else the 64-bit
+/// client's SDL3 under its runtime's sdl2-compat.
 pub fn sdl_library_path(library_path: Option<&str>, steam_root: &Path, link_dir: &Path) -> Option<String> {
     sdl_library_path_in(library_path, HOST_LIB_DIRS, steam_root, link_dir)
 }
@@ -417,17 +537,55 @@ fn sdl_library_path_in(
     if searched.any(|d| is_elf64(&Path::new(d).join(SDL2_SONAME))) {
         return None;
     }
-    let source = STEAM_RUNTIME_LIB_DIRS
-        .iter()
-        .map(|d| steam_root.join(d).join(SDL2_SONAME))
-        .find(|p| is_elf64(p))?;
-    link_library(&source, link_dir).ok()?;
+    for (source, soname) in steam_sdl(steam_root)? {
+        link_library(&source, &link_dir.join(soname)).ok()?;
+    }
     let dir = link_dir.display().to_string();
     Some(if current.is_empty() {
         dir
     } else {
         format!("{current}:{dir}")
     })
+}
+
+fn steam_sdl(steam_root: &Path) -> Option<Vec<(PathBuf, &'static str)>> {
+    if let Some(sdl2) = STEAM_RUNTIME_LIB_DIRS
+        .iter()
+        .map(|d| steam_root.join(d).join(SDL2_SONAME))
+        .find(|p| is_elf64(p))
+    {
+        return Some(vec![(sdl2, SDL2_SONAME)]);
+    }
+    let sdl3 = steam_root.join(STEAM_CLIENT_SDL3);
+    if !is_elf64(&sdl3) {
+        return None;
+    }
+    let mut platforms: Vec<PathBuf> = std::fs::read_dir(steam_root.join(STEAM_CLIENT_PLATFORMS))
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.contains("_platform_"))
+        })
+        .collect();
+    platforms.sort();
+    let sdl2 = platforms.iter().rev().find_map(|p| {
+        let mut libs: Vec<PathBuf> = std::fs::read_dir(p.join(PLATFORM_LIB_DIR))
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|f| {
+                f.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with(SDL2_SONAME))
+            })
+            .collect();
+        libs.sort();
+        libs.into_iter().find(|f| is_elf64(f))
+    })?;
+    Some(vec![(sdl2, SDL2_SONAME), (sdl3, SDL3_SONAME)])
 }
 
 fn is_elf64(path: &Path) -> bool {
@@ -439,17 +597,18 @@ fn is_elf64(path: &Path) -> bool {
 }
 
 #[cfg(unix)]
-fn link_library(source: &Path, dir: &Path) -> std::io::Result<()> {
-    let link = dir.join(source.file_name().unwrap_or_default());
-    if std::fs::read_link(&link).ok().as_deref() == Some(source) {
+fn link_library(source: &Path, link: &Path) -> std::io::Result<()> {
+    if std::fs::read_link(link).ok().as_deref() == Some(source) {
         return Ok(());
     }
-    std::fs::create_dir_all(dir)?;
-    match std::fs::remove_file(&link) {
+    if let Some(dir) = link.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    match std::fs::remove_file(link) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
         _ => {}
     }
-    std::os::unix::fs::symlink(source, &link)
+    std::os::unix::fs::symlink(source, link)
 }
 
 #[cfg(not(unix))]
@@ -512,7 +671,7 @@ impl Ending {
 
 /// An exit code a crash leaves: an error NTSTATUS (0xC0000000 and up) other
 /// than -1, or an unhandled breakpoint.
-/// The exit code the core closes F1 25 with when it stops a Grand Prix load that would crash
+/// The exit code the core closes F1 25 with when it stops a Grand Prix or Driver Career load that would crash
 /// (native/src/core/era_logic.hpp `CONTINUE_STOP_EXIT`).
 pub const CORE_STOPPED_LOAD: i32 = 92;
 
@@ -590,8 +749,8 @@ impl SessionEnd {
                 Ending::Stopped,
                 None,
                 format!(
-                    "the core closed F1 25 at the session load (exit code {c}) instead of letting it crash: the Grand \
-                     Prix save names a grid or a track this build doesn't have, and loader.log's [era] line says which"
+                    "the core closed F1 25 at the session load (exit code {c}) instead of letting it crash: the save \
+                     names a grid, a list or a track this build doesn't have, and loader.log's [era] line says which"
                 ),
             );
         }
@@ -623,6 +782,9 @@ impl SessionEnd {
                 None,
                 format!("F1 25 closed with code {c} after its Insufficient Storage dialog"),
             );
+        }
+        if let Some(sentence) = crate::fast_fail::sentence(u) {
+            return end(Ending::Crash, Some(u), sentence);
         }
         if crash_code(u) {
             return end(
@@ -826,12 +988,222 @@ mod tests {
     }
 
     #[test]
+    fn config_remembers_and_clamps_download_job_limit() {
+        let mut config: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.download_jobs(), 2);
+        assert!(!serde_json::to_string(&config).unwrap().contains("download_jobs"));
+        config.set_download_jobs(8);
+        let json = serde_json::to_string(&config).unwrap();
+        assert_eq!(serde_json::from_str::<Config>(&json).unwrap().download_jobs(), 8);
+        config.set_download_jobs(0);
+        assert_eq!(config.download_jobs(), 1);
+        config.set_download_jobs(100);
+        assert_eq!(config.download_jobs(), 10);
+        let edited: Config = serde_json::from_str(r#"{"download_jobs":100}"#).unwrap();
+        assert_eq!(edited.download_jobs(), 10);
+    }
+
+    #[test]
+    fn ui_mode_is_unchosen_until_the_player_picks() {
+        let config = Config::default();
+        assert_eq!(config.ui_mode, None);
+        assert_eq!(config.ui_mode_or_default(), UiMode::Pc);
+        assert!(!serde_json::to_string(&config).unwrap().contains("ui_mode"));
+        let old: Config = serde_json::from_str(r#"{ "developer": true }"#).unwrap();
+        assert_eq!(old.ui_mode, None);
+    }
+
+    #[test]
+    fn onboarding_is_due_until_the_current_version_is_seen() {
+        let mut config = Config::default();
+        assert!(config.needs_onboarding());
+        assert!(!serde_json::to_string(&config).unwrap().contains("onboarding"));
+        config.onboarding = Some(ONBOARDING_VERSION - 1);
+        assert!(config.needs_onboarding());
+        config.onboarding = Some(ONBOARDING_VERSION);
+        assert!(!config.needs_onboarding());
+        let back: Config = serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+        assert_eq!(back.onboarding, Some(ONBOARDING_VERSION));
+        let old: Config = serde_json::from_str(r#"{ "ui_mode": "tv" }"#).unwrap();
+        assert!(old.needs_onboarding());
+    }
+
+    #[test]
+    fn ui_mode_round_trips() {
+        for mode in [UiMode::Pc, UiMode::Tv] {
+            let config = Config {
+                ui_mode: Some(mode),
+                ..Config::default()
+            };
+            let json = serde_json::to_string(&config).unwrap();
+            let back: Config = serde_json::from_str(&json).unwrap();
+            assert_eq!(back.ui_mode, Some(mode));
+            assert_eq!(back.ui_mode_or_default(), mode);
+        }
+        let tv: Config = serde_json::from_str(r#"{ "ui_mode": "tv" }"#).unwrap();
+        assert!(tv.ui_mode_or_default().is_tv());
+        assert!(!UiMode::Pc.is_tv());
+    }
+
+    #[test]
+    fn ui_scale_is_auto_until_chosen_and_round_trips() {
+        let config = Config::default();
+        assert_eq!(config.ui_scale, None);
+        assert_eq!(config.ui_scale_percent(), None);
+        assert!(!serde_json::to_string(&config).unwrap().contains("ui_scale"));
+        for percent in [1, 75, 90, 100, 110, 125, 150, 237, 400] {
+            let config = Config {
+                ui_scale: Some(percent),
+                ..Config::default()
+            };
+            let back: Config = serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+            assert_eq!(back.ui_scale_percent(), Some(percent));
+        }
+        let old: Config = serde_json::from_str(r#"{ "ui_mode": "tv" }"#).unwrap();
+        assert_eq!(old.ui_scale, None);
+    }
+
+    #[test]
+    fn ui_scale_is_held_to_one_through_four_hundred() {
+        assert_eq!(clamp_ui_scale(0), 1);
+        assert_eq!(clamp_ui_scale(1), 1);
+        assert_eq!(clamp_ui_scale(237), 237);
+        assert_eq!(clamp_ui_scale(400), 400);
+        assert_eq!(clamp_ui_scale(60000), 400);
+        let low: Config = serde_json::from_str(r#"{ "ui_scale": 0 }"#).unwrap();
+        assert_eq!(low.ui_scale_percent(), Some(1));
+        let high: Config = serde_json::from_str(r#"{ "ui_scale": 9000 }"#).unwrap();
+        assert_eq!(high.ui_scale_percent(), Some(400));
+    }
+
+    #[test]
+    fn config_remembers_the_language() {
+        let mut config = Config::default();
+        assert!(!serde_json::to_string(&config).unwrap().contains("language"));
+        config.language = Some("ru".into());
+        let json = serde_json::to_string(&config).unwrap();
+        let loaded = serde_json::from_str::<Config>(&json).unwrap();
+        assert_eq!(loaded.language.as_deref(), Some("ru"));
+    }
+
+    #[test]
     fn config_keeps_console_flag() {
         let mut config = Config::default();
         assert!(!serde_json::to_string(&config).unwrap().contains("console"));
         config.console = true;
         let json = serde_json::to_string(&config).unwrap();
         assert!(serde_json::from_str::<Config>(&json).unwrap().console);
+    }
+
+    #[test]
+    fn profiles_are_on_unless_turned_off() {
+        assert!(Config::default().use_profiles);
+        assert!(serde_json::from_str::<Config>("{}").unwrap().use_profiles);
+        let json = serde_json::to_string(&Config {
+            use_profiles: false,
+            ..Config::default()
+        })
+        .unwrap();
+        assert!(json.contains(r#""use_profiles":false"#));
+        assert!(!serde_json::from_str::<Config>(&json).unwrap().use_profiles);
+        assert!(
+            !serde_json::to_string(&Config::default())
+                .unwrap()
+                .contains("use_profiles")
+        );
+    }
+
+    #[test]
+    fn off_addons_are_left_out_of_updates_unless_turned_on() {
+        assert!(!Config::default().update_off_addons);
+        assert!(!serde_json::from_str::<Config>("{}").unwrap().update_off_addons);
+        assert!(
+            !serde_json::to_string(&Config::default())
+                .unwrap()
+                .contains("update_off_addons")
+        );
+        let on = Config {
+            update_off_addons: true,
+            ..Config::default()
+        };
+        let json = serde_json::to_string(&on).unwrap();
+        assert!(json.contains(r#""update_off_addons":true"#));
+        assert!(serde_json::from_str::<Config>(&json).unwrap().update_off_addons);
+    }
+
+    #[test]
+    fn time_trial_boards_is_on_unless_turned_off() {
+        assert!(Config::default().time_trial_boards);
+        assert!(serde_json::from_str::<Config>("{}").unwrap().time_trial_boards);
+        assert!(
+            !serde_json::to_string(&Config::default())
+                .unwrap()
+                .contains("time_trial")
+        );
+        let off = Config {
+            time_trial_boards: false,
+            ..Config::default()
+        };
+        let json = serde_json::to_string(&off).unwrap();
+        assert!(json.contains(r#""time_trial_boards":false"#));
+        assert!(!serde_json::from_str::<Config>(&json).unwrap().time_trial_boards);
+    }
+
+    #[test]
+    fn time_trial_ingame_is_on_unless_turned_off() {
+        assert!(Config::default().time_trial_ingame);
+        assert!(
+            !serde_json::to_string(&Config::default())
+                .unwrap()
+                .contains("time_trial_ingame")
+        );
+        let off = Config {
+            time_trial_ingame: false,
+            ..Config::default()
+        };
+        let json = serde_json::to_string(&off).unwrap();
+        assert!(json.contains(r#""time_trial_ingame":false"#));
+        assert!(!serde_json::from_str::<Config>(&json).unwrap().time_trial_ingame);
+    }
+
+    #[test]
+    fn home_video_is_on_unless_turned_off() {
+        assert!(Config::default().home_video);
+        assert!(
+            !serde_json::to_string(&Config::default())
+                .unwrap()
+                .contains("home_video")
+        );
+        let off = Config {
+            home_video: false,
+            ..Config::default()
+        };
+        let json = serde_json::to_string(&off).unwrap();
+        assert!(json.contains(r#""home_video":false"#));
+        assert!(!serde_json::from_str::<Config>(&json).unwrap().home_video);
+    }
+
+    #[test]
+    fn old_session_logs_are_kept_unless_clearing_is_turned_on() {
+        assert!(!Config::default().clear_old_session_logs);
+        let old: Config = serde_json::from_str(r#"{ "developer": true }"#).unwrap();
+        assert!(!old.clear_old_session_logs);
+        assert!(
+            !serde_json::to_string(&old)
+                .unwrap()
+                .contains("clear_old_session_logs")
+        );
+        let on = Config {
+            clear_old_session_logs: true,
+            ..Config::default()
+        };
+        let json = serde_json::to_string(&on).unwrap();
+        assert!(json.contains(r#""clear_old_session_logs":true"#), "{json}");
+        assert!(
+            serde_json::from_str::<Config>(&json)
+                .unwrap()
+                .clear_old_session_logs
+        );
     }
 
     #[test]
@@ -891,6 +1263,19 @@ mod tests {
         config.news_seen.insert("discord".into());
         let back: Config = serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
         assert!(back.news_seen.contains("discord"));
+    }
+
+    #[test]
+    fn config_remembers_dismissed_cards() {
+        let mut config = Config::default();
+        assert!(
+            !serde_json::to_string(&config)
+                .unwrap()
+                .contains("dismissed_cards")
+        );
+        config.dismissed_cards.insert("discord-banner".into());
+        let back: Config = serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+        assert!(back.dismissed_cards.contains("discord-banner"));
     }
 
     fn strings(args: &[&str]) -> Vec<String> {
@@ -1030,6 +1415,50 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn sdl_comes_from_the_64_bit_clients_sdl3_when_the_old_runtime_is_gone() {
+        let root = std::env::temp_dir().join(format!("swofty-sdl3-{}", std::process::id()));
+        std::fs::remove_dir_all(&root).ok();
+        let steam = root.join("steam");
+        let links = root.join("data").join(RUNTIME_LIBS_DIR);
+        let elf64 = b"\x7fELF\x02\x01\x01\0".as_slice();
+        let platform = |version: &str| {
+            steam
+                .join(STEAM_CLIENT_PLATFORMS)
+                .join(format!("steamrt3c_platform_3c.0.{version}"))
+                .join(PLATFORM_LIB_DIR)
+        };
+        for (version, file) in [
+            ("20260119.1", "libSDL2-2.0.so.0.3200.10"),
+            ("20261103.2", "libSDL2-2.0.so.0.3200.74"),
+        ] {
+            std::fs::create_dir_all(platform(version)).unwrap();
+            std::fs::write(platform(version).join(file), elf64).unwrap();
+        }
+        std::fs::create_dir_all(
+            steam
+                .join(STEAM_CLIENT_PLATFORMS)
+                .join("steamrt3c_platform_3c.0.20991231.9"),
+        )
+        .unwrap();
+
+        assert_eq!(sdl_library_path_in(None, &[], &steam, &links), None);
+
+        std::fs::write(steam.join(STEAM_CLIENT_SDL3), elf64).unwrap();
+        let path = sdl_library_path_in(Some("/proton/lib"), &[], &steam, &links);
+        assert_eq!(path, Some(format!("/proton/lib:{}", links.display())));
+        assert_eq!(
+            std::fs::read_link(links.join(SDL2_SONAME)).unwrap(),
+            platform("20261103.2").join("libSDL2-2.0.so.0.3200.74")
+        );
+        assert_eq!(
+            std::fs::read_link(links.join(SDL3_SONAME)).unwrap(),
+            steam.join(STEAM_CLIENT_SDL3)
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
     #[test]
     fn cpu_lists() {
         assert_eq!(parse_cpu_list("0-2,5"), Some(vec![0, 1, 2, 5]));
@@ -1080,7 +1509,10 @@ mod tests {
 
         let end = SessionEnd::resolve(Some(-1073740791), "", None, None);
         assert_eq!((end.end, end.crash_code), (Ending::Crash, Some(0xc000_0409)));
-        assert!(end.reason.contains("stack buffer overrun"), "{}", end.reason);
+        assert_eq!(
+            end.reason,
+            "F1 25 stopped itself after detecting a corrupted stack or an invalid call (0xc0000409)"
+        );
         for code in [0xc0e9_0002u32, 0xcfff_ffff, 0xc000_001d, 0x8000_0003] {
             assert_eq!(
                 SessionEnd::resolve(Some(code as i32), "", None, None).end,
@@ -1128,7 +1560,7 @@ mod tests {
     }
 
     #[test]
-    fn a_grand_prix_load_the_core_stopped_is_named() {
+    fn a_load_the_core_stopped_is_named() {
         let end = SessionEnd::resolve(Some(CORE_STOPPED_LOAD), "", None, Some(&seen(ATTACHED)));
         assert_eq!(end.end, Ending::Stopped);
         assert!(

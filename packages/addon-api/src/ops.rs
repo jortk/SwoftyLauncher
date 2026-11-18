@@ -51,6 +51,20 @@ fn patterns<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<S
     Ok(v)
 }
 
+/// A file named by `operations.hud`: `hud.element` records keyed by record id, in the shape of a
+/// registry data file. Other registries in the same file are left to the registry loader.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct HudFile {
+    #[serde(default, rename = "hud.element")]
+    pub elements: BTreeMap<String, serde_json::Value>,
+}
+
+impl HudFile {
+    pub fn parse(text: &str) -> Result<Self> {
+        serde_json::from_str(text).map_err(|e| Error::Other(format!("hud file: {e}")))
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum CopyMode {
@@ -77,6 +91,27 @@ pub struct DbReport {
     pub added_rows: Vec<AddedRow>,
     /// Each `add-row` whose `stat_id` a row added earlier held, or the game can't read, in order.
     pub moved_stat_ids: Vec<MovedStatId>,
+    /// Each record a `set`, `put-record` or `remove-record` changed, in order.
+    pub rewrites: Vec<Rewrite>,
+}
+
+/// A record an op changed: its value before and after, as text; `None` when it was missing or was removed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rewrite {
+    pub key: u64,
+    pub was: Option<String>,
+    pub now: Option<String>,
+}
+
+fn rewrote(cx: &mut Cx, key: u64, was: Option<&[u8]>, now: Option<&[u8]>) {
+    if was != now {
+        let text = |v: &[u8]| String::from_utf8_lossy(v).into_owned();
+        cx.report.rewrites.push(Rewrite {
+            key,
+            was: was.map(text),
+            now: now.map(text),
+        });
+    }
 }
 
 /// An `add-row` that set a `stat_id` a row added earlier holds, or one above the table's
@@ -84,14 +119,17 @@ pub struct DbReport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MovedStatId {
     pub row: String,
-    /// The row's id key: `stat_id`, or `statId` in `game_setup.scenarios`.
+    /// The row's id key: `stat_id`, or `statId` in `game_setup.scenarios` and unlock lists.
     pub field: &'static str,
     pub label: Option<String>,
     pub old: i64,
     pub new: i64,
-    /// The row added earlier that holds `old`; `None` when `old` is above the ceiling.
+    /// The row added earlier that holds `old` (in an unlock list, also a stock row); `None` when
+    /// `old` is above the ceiling or kept for `record`.
     pub holder: Option<String>,
     pub holder_label: Option<String>,
+    /// The record of the core's registry `old` is kept for in `ids.json`.
+    pub record: Option<String>,
 }
 
 /// The highest `stat_id` the game reads for a row of a table it keeps the id of in a byte, and
@@ -102,7 +140,41 @@ pub struct StatIdCeiling {
     pub from: Option<i64>,
 }
 
+/// The record that lists the virtual entrant lists (comma-separated labels) for the build's settle step.
+pub const VIRTUAL_LISTS: &str = "swofty.virtual_entrant_lists";
+const VIRTUAL_LISTS_TAG: u8 = 4;
+
+fn virtual_lists(db: &Db) -> Vec<String> {
+    db.text(fnv1a64(VIRTUAL_LISTS))
+        .map(|t| {
+            t.split(',')
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 const STAT_ID_CEILINGS: &[(&str, &str, StatIdCeiling)] = &[
+    // Vehicle and team ids are 14 bits in the game's packed keys (0x3fff = none), like driver ids; the core's
+    // registry pools end at the same 16382 (VEHICLE_STAT_MAX / TEAM_STAT_MAX in apply/content/lower.hpp).
+    (
+        "entrants.vehicles",
+        "vehicle",
+        StatIdCeiling {
+            max: 16382,
+            from: None,
+        },
+    ),
+    (
+        "entrants.teams",
+        "team",
+        StatIdCeiling {
+            max: 16382,
+            from: None,
+        },
+    ),
     // VehicleIdentity +0xcd8 and VehiclePackageRow +0x0 are u8, 0xff = none.
     (
         "entrants.vehicles.vehicle_packages",
@@ -167,11 +239,24 @@ const STAT_ID_CEILINGS: &[(&str, &str, StatIdCeiling)] = &[
         "season",
         StatIdCeiling { max: 31, from: None },
     ),
+    // The Time Trial leaderboard descriptor id is read as a byte (list +0xe0) and goes into the board name LBV<id><track><D|W>.
+    (
+        "leaderboards",
+        "leaderboard_descriptor",
+        StatIdCeiling { max: 255, from: None },
+    ),
     // Each game setup mode names its entrant setup mode; kept to the mode mask's range with it.
     (
         "entrants.entrant_setup_modes",
         "entrant_setup_mode",
         StatIdCeiling { max: 31, from: None },
+    ),
+    // The F1 Life scene holds two car customisation slots (+0xd00, +0xe20) and writes car group `stat_id`
+    // into slot `stat_id` with no bounds check (0x14252ccd0 on build 26566308).
+    (
+        "customisation.customisation_cars",
+        "customisation_car_group",
+        StatIdCeiling { max: 1, from: None },
     ),
 ];
 
@@ -179,8 +264,74 @@ const STAT_ID_CEILINGS: &[(&str, &str, StatIdCeiling)] = &[
 pub fn stat_id_field(table: &str, row: &str) -> &'static str {
     match (table, row) {
         ("game_setup.scenarios", "scenario") | ("game_setup.seasons", "season") => "statId",
+        _ if unlock_list(table).is_some() => "statId",
         _ => "stat_id",
     }
+}
+
+const UNLOCK_LISTS: &str = "unlockable_content.unlockable_items.unlockable_item_list_";
+
+/// The name the row ids of an unlock list go under: one id space for every folder and kind of the
+/// list, kept as `<list>.unlockable_item`, as in
+/// `unlockable_content.unlockable_items.unlockable_item_list_2.unlockable_item`.
+pub const UNLOCK_ROW: &str = "unlockable_item";
+
+/// The highest `statId` the launcher gives an unlock item, the top of the core's livery unlock pool.
+pub const UNLOCK_STAT_MAX: i64 = 65535;
+
+/// Where a fresh unlock `statId` starts when the list's stock rows stay below it. Game updates add their
+/// unlock rows right above the highest stock id (`toro_rosso_barcelona_26` took 5280 in Steam build
+/// 26566308), so an id just above it is the next update's.
+pub const UNLOCK_FRESH_FROM: i64 = 10000;
+
+/// The kinds of rows an unlock list's folders hold, each a table `<folder>.<kind>` with a `statId`.
+pub const UNLOCK_KINDS: &[&str] = &[
+    "consumable_xp_booster",
+    "currency_reward",
+    "unlockable_badge_bg",
+    "unlockable_badge_emblem",
+    "unlockable_casual_footwear",
+    "unlockable_casual_headwear",
+    "unlockable_decal_group",
+    "unlockable_decal_set",
+    "unlockable_driver",
+    "unlockable_driver_number",
+    "unlockable_eyewear",
+    "unlockable_gloves",
+    "unlockable_head",
+    "unlockable_helmet",
+    "unlockable_item_pack",
+    "unlockable_livery",
+    "unlockable_personal_sticker",
+    "unlockable_podium_emote",
+    "unlockable_pose",
+    "unlockable_se_livery",
+    "unlockable_suit",
+    "unlockable_team",
+    "unlockable_tops",
+    "unlockable_trousers",
+    "unlockable_vehicle",
+    "unlockable_victory_vo",
+];
+
+/// The unlock list `unlockable_content.unlockable_items.unlockable_item_list_<n>` whose folder
+/// `table` (`….unlockable_item_list_<n>.folder_<m>`) is.
+pub fn unlock_list(table: &str) -> Option<&str> {
+    let rest = table.strip_prefix(UNLOCK_LISTS)?;
+    let (n, folder) = rest.split_once('.')?;
+    let m = folder.strip_prefix("folder_")?;
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    (digits(n) && digits(m)).then(|| &table[..UNLOCK_LISTS.len() + n.len()])
+}
+
+/// Whether `table` (`<table>.<row>`, as [`RowIds`] keys name it) is an unlock list's id space,
+/// `<list>.`[`UNLOCK_ROW`].
+pub fn is_unlock_ids(table: &str) -> bool {
+    table
+        .strip_prefix(UNLOCK_LISTS)
+        .and_then(|r| r.strip_suffix(UNLOCK_ROW))
+        .and_then(|n| n.strip_suffix('.'))
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// The [`StatIdCeiling`] of `table`'s rows named `row`, for a table the game keeps the id of in a byte.
@@ -189,6 +340,30 @@ pub fn stat_id_ceiling(table: &str, row: &str) -> Option<StatIdCeiling> {
         .iter()
         .find(|(t, r, _)| *t == table && *r == row)
         .map(|(_, _, c)| *c)
+}
+
+/// Why `table`'s ceiling is where it is, for tables whose limit an addon author can't work around by
+/// picking another id: appended to the "no free stat_id" error so the message says what to change.
+pub fn stat_id_ceiling_reason(table: &str, row: &str) -> Option<&'static str> {
+    match (table, row) {
+        ("customisation.customisation_cars", "customisation_car_group") => Some(concat!(
+            "the F1 Life scene behind the main menu has two car slots and indexes them by the car ",
+            "group's stat_id, so a third car group crashes the game at the main menu; leave the car ",
+            "groups alone or edit one of the two"
+        )),
+        ("game_setup.game_setup_modes", "game_setup_mode")
+        | ("entrants.entrant_setup_modes", "entrant_setup_mode") => Some(concat!(
+            "the game keeps setup modes in a 32-bit mask (bit = stat_id) and stops at boot with ",
+            "'invalid bitset position' above 31, so no install holds more than 32; share a mode ",
+            "instead of adding one per box or season (list-append the entrant list to swofty_f1 ",
+            "or to one mode the addons share)"
+        )),
+        ("game_setup.seasons", "season") => Some(concat!(
+            "the game keeps seasons in a 32-bit mask (bit = statId) and stops at boot with ",
+            "'invalid bitset position' above 31; reuse a stock season row instead of adding one"
+        )),
+        _ => None,
+    }
 }
 
 /// Whether a fresh row of `table`'s rows named `row` may not take `id`: driver ids 254 and 255, and any with a low byte of 0xff.
@@ -256,6 +431,13 @@ pub enum DbOp {
         key: String,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         allow_stock_removal: bool,
+    },
+    /// Marks the entrant list labelled `list` as virtual: the build moves its row above the table's count, so the
+    /// game loads no list object for it and it takes no stat id and no entrant setup mode slot. The core reads it
+    /// into `swofty_virtual_list` when a box naming it is pressed. Put it before the `add-row` that adds the list:
+    /// that row then passes the 255 ceiling of `entrants.entrant_lists`.
+    VirtualList {
+        list: String,
     },
 }
 
@@ -523,6 +705,12 @@ pub trait RowIds {
     /// holds and `free` accepts, moved to `key`, and the key that held it.
     fn reclaim(&self, table: &str, row: &str, key: &str, free: &dyn Fn(i64) -> bool)
     -> Option<(i64, String)>;
+
+    /// The record of the core's registry that `id` of `table`'s rows named `row` is kept for, when saves
+    /// hold the table's ids and the record is another addon's with a row label other than `label`.
+    fn registry_record(&self, _table: &str, _row: &str, _label: Option<&str>, _id: i64) -> Option<String> {
+        None
+    }
 }
 
 /// A row's claimed key, its kept id, and the id the profile's last build gave a row with its label.
@@ -971,6 +1159,80 @@ pub fn no_row(e: &Error) -> bool {
     matches!(e, Error::Resolve(m) if m.contains(&format!(": {NO_ROW}")))
 }
 
+/// A selector segment of a path: it picks the row `{table}.{row}_{i}` whose `field` is `want`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Selector {
+    pub table: String,
+    pub row: String,
+    pub field: String,
+    pub want: String,
+}
+
+impl Selector {
+    /// The key of row `i`'s `field`.
+    pub fn field_key(&self, i: usize) -> u64 {
+        row_name(&Base::Path(self.table.clone()), i, &self.row).key(&format!(".{}", self.field))
+    }
+
+    /// The key of the table's row count; `None` for a table of numbered rows, which has none.
+    pub fn count_key(&self) -> Option<u64> {
+        (!self.row.is_empty()).then(|| fnv1a64(instance_count_path(&self.table, &self.row)))
+    }
+}
+
+/// The selector segments of a [`no_row`] error's path, in order, ending with the one that matched no row.
+/// A segment after another selector has its table from the error, so only the failing one comes after one.
+pub fn no_row_selectors(e: &Error) -> Vec<Selector> {
+    let Error::Resolve(m) = e else {
+        return Vec::new();
+    };
+    let Some((upto, scope)) = m.split_once(&format!(": {NO_ROW}")) else {
+        return Vec::new();
+    };
+    let upto = upto.rsplit(": ").next().unwrap_or(upto);
+    let resolved = scope.strip_prefix(" in ").and_then(|s| s.rsplit_once('.'));
+    let mut out = Vec::new();
+    let mut plain = Some(String::new());
+    let mut rest = Some(upto);
+    while let Some(p) = rest {
+        let Ok((seg, tail)) = first_segment(p) else {
+            return Vec::new();
+        };
+        rest = tail;
+        let Some((field, want)) = seg.select else {
+            if let Some(path) = plain.as_mut() {
+                if !path.is_empty() {
+                    path.push('.');
+                }
+                path.push_str(seg.name);
+            }
+            continue;
+        };
+        let (table, row) = match (rest, resolved, plain.take()) {
+            (None, Some((table, row)), _) => (table.to_owned(), row.to_owned()),
+            (_, _, Some(path)) if path.is_empty() => (seg.name.to_owned(), String::new()),
+            (_, _, Some(path)) => (path, seg.name.to_owned()),
+            (_, _, None) => continue,
+        };
+        if table.starts_with('{') {
+            continue;
+        }
+        out.push(Selector {
+            table,
+            row,
+            field: field.to_owned(),
+            want: want.to_owned(),
+        });
+    }
+    out
+}
+
+/// Whether `e` is an `add-row` that found no free `stat_id` in the vehicle or team table, up to the highest the game reads.
+pub fn ids_exhausted(e: &Error) -> bool {
+    matches!(e, Error::Resolve(m)
+        if m.contains(": entrants.vehicles has no free stat_id") || m.contains(": entrants.teams has no free stat_id"))
+}
+
 fn resolve_path(db: &Db, path: &str) -> Result<Base> {
     resolve_path_with(db, path, true)
 }
@@ -1171,13 +1433,17 @@ fn hex_bytes(key: &str, value: &str) -> Result<Vec<u8>> {
         .collect()
 }
 
-/// The ids `add-row` ops in `ops` set on their rows, as `("<table>.<row>", id)`.
+/// The ids `add-row` ops in `ops` set on their rows, as `("<table>.<row>", id)`; a row of an unlock
+/// list as `("<list>.unlockable_item", id)`, since the list's folders and kinds share one id space.
 pub fn explicit_stat_ids(ops: &DbOps) -> impl Iterator<Item = (String, i64)> + '_ {
     ops.ops.iter().filter_map(|op| match op {
         DbOp::AddRow { table, from, set, .. } => {
             let row = add_row_name(table, from)?;
             let id = set.get(stat_id_field(table, row))?.trim().parse().ok()?;
-            Some((format!("{table}.{row}"), id))
+            Some(match unlock_list(table) {
+                Some(list) => (format!("{list}.{UNLOCK_ROW}"), id),
+                None => (format!("{table}.{row}"), id),
+            })
         }
         _ => None,
     })
@@ -1239,19 +1505,22 @@ fn apply(db: &mut Db, op: &DbOp, names: &dyn FieldNames, cx: &mut Cx) -> Result<
                 true => resolve_path(db, &format!("{select}.{field}"))?.key(""),
                 false => resolve_row(db, select)?.field(field),
             };
-            match db.get_mut(key) {
-                Some(r) => r.value = value.into_bytes(),
+            let value = value.into_bytes();
+            let was = match db.get_mut(key) {
+                Some(r) => Some(std::mem::replace(&mut r.value, value.clone())),
                 None if *create => {
                     let tag =
                         tag.ok_or_else(|| Error::Resolve(format!("{select}.{field}: create needs type")))?;
                     db.push(Record {
                         key,
                         tag,
-                        value: value.into_bytes(),
+                        value: value.clone(),
                     });
+                    None
                 }
                 None => return Err(Error::Resolve(format!("{select}.{field}: no such key"))),
-            }
+            };
+            rewrote(cx, key, was.as_deref(), Some(&value));
             Ok(Some(key))
         }
         DbOp::AddRow {
@@ -1296,18 +1565,39 @@ fn apply(db: &mut Db, op: &DbOp, names: &dyn FieldNames, cx: &mut Cx) -> Result<
         DbOp::PutRecord { key, tag, value } => {
             let value = hex_bytes(key, value)?;
             let k = resolve_key(db, key)?;
-            match db.get_mut(k) {
+            let was = match db.get_mut(k) {
                 Some(r) => {
                     r.tag = *tag;
-                    r.value = value;
+                    Some(std::mem::replace(&mut r.value, value.clone()))
                 }
+                None => {
+                    db.push(Record {
+                        key: k,
+                        tag: *tag,
+                        value: value.clone(),
+                    });
+                    None
+                }
+            };
+            rewrote(cx, k, was.as_deref(), Some(&value));
+            Ok(Some(k))
+        }
+        DbOp::VirtualList { list } => {
+            let key = fnv1a64(VIRTUAL_LISTS);
+            let mut labels = virtual_lists(db);
+            if !labels.iter().any(|l| l == list) {
+                labels.push(list.clone());
+            }
+            let value = labels.join(",").into_bytes();
+            match db.get_mut(key) {
+                Some(r) => r.value = value,
                 None => db.push(Record {
-                    key: k,
-                    tag: *tag,
+                    key,
+                    tag: VIRTUAL_LISTS_TAG,
                     value,
                 }),
             }
-            Ok(Some(k))
+            Ok(Some(key))
         }
         DbOp::RemoveRecord {
             key,
@@ -1328,7 +1618,9 @@ fn apply(db: &mut Db, op: &DbOp, names: &dyn FieldNames, cx: &mut Cx) -> Result<
                 cx.report.track_removals += 1;
                 return Ok(None);
             }
+            let was = db.get(k).map(|r| r.value.clone());
             db.remove(k);
+            rewrote(cx, k, was.as_deref(), None);
             Ok(Some(k))
         }
     }
@@ -1490,11 +1782,18 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
     let row = add_row_name(&path, src_path)
         .ok_or_else(|| Error::Resolve(format!("{from} is not a row of {table}")))?;
     let count_path = instance_count_path(&path, row);
-    let n = db.instance_count(&path, row).ok_or_else(|| {
+    let counted = db.instance_count(&path, row).ok_or_else(|| {
         Error::Resolve(format!(
             "{count_path}: missing; add-row needs the table's real path"
         ))
     })?;
+    let mut n = counted;
+    while db
+        .get(fnv1a64(format!("{path}.{row}_{n}._metadata_")))
+        .is_some_and(|r| !names.stock(r.key))
+    {
+        n += 1;
+    }
     let listed = names.fields(table, row).or_else(|| names.fields(&path, row));
     let mode = copy.unwrap_or(CopyMode::All);
     let mut found = Walk::default();
@@ -1520,6 +1819,12 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
         return Err(Error::Resolve(format!("{table}.{row}: unknown field {f}")));
     }
     let what = format!("add-row {dst_path} (from {from})");
+    if n > counted {
+        cx.report.lines.push(format!(
+            "{what}: {path}'s count is {counted} but rows {counted} to {} already hold another addon's records; adds after them and raises the count",
+            n - 1
+        ));
+    }
     if !found.uncatalogued.is_empty() {
         let shapes: Vec<&String> = found.uncatalogued.iter().collect();
         cx.warn(format!(
@@ -1576,7 +1881,9 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
     let stat_key = dst.field("stat_id");
     let indexed = || db.stat_ids(names, &path, row, n).indexed();
     let top_level = row_shape(&dst_path).matches("_N").count() == 1;
+    let unlock = unlock_list(&path);
     let fresh = match (stat_id, set.contains_key("stat_id")) {
+        _ if unlock.is_some() => false,
         (_, true) | (Some(StatIdMode::Keep), _) => false,
         (Some(StatIdMode::Fresh), false) => true,
         (None, false) => {
@@ -1593,7 +1900,11 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
             indexed && top_level
         }
     };
-    let ceiling = stat_id_ceiling(&path, row).filter(|_| top_level);
+    let virtual_row = path == "entrants.entrant_lists"
+        && set
+            .get("_metadata_")
+            .is_some_and(|l| virtual_lists(db).contains(l));
+    let ceiling = stat_id_ceiling(&path, row).filter(|_| top_level && !virtual_row);
     let field = stat_id_field(&path, row);
     let kept = names.row_ids().filter(|_| top_level);
     let label = rows
@@ -1610,9 +1921,9 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
     };
     // The next id above the table's highest, or the lowest free one when that passes the ceiling.
     // A moved id, and any id under the ceiling, passes over the ids later addons set on their rows.
-    let next = |moving: bool| -> Result<(i64, Option<String>)> {
+    let next = || -> Result<(i64, Option<String>)> {
         let mut top = db.stat_ids(names, &path, row, n).max.map_or(0, |m| m + 1);
-        while (moving && later(top)) || stat_id_unusable(&path, row, top) {
+        while later(top) || stat_id_unusable(&path, row, top) {
             top += 1;
         }
         match ceiling {
@@ -1626,9 +1937,10 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
                 })
                 .ok_or_else(|| {
                     Error::Resolve(format!(
-                        "{what}: {path} has no free {} up to {}, the highest the game reads",
+                        "{what}: {path} has no free {} up to {}, the highest the game reads{}",
                         stat_id_field(&path, row),
-                        c.max
+                        c.max,
+                        stat_id_ceiling_reason(&path, row).map_or(String::new(), |r| format!(" ({r})"))
                     ))
                 }),
             _ => Ok((top, None)),
@@ -1638,9 +1950,9 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
     // its label, else the next free id above the table's rows in load order as builds before 1.6.10 gave
     // it (so a fresh install gives a save from then its ids back); a full table takes back an id kept for
     // an addon the build leaves out.
-    let give = |moving: bool| -> Result<(i64, Option<String>)> {
+    let give = || -> Result<(i64, Option<String>)> {
         let Some((k, label)) = kept.zip(label.as_deref()) else {
-            return next(moving);
+            return next();
         };
         let claimed = k.claim(&path, row, label);
         let key = claimed.key.as_str();
@@ -1659,10 +1971,13 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
             ))
         };
         let blocked = |id: i64| -> Option<String> {
-            unfit(id).or_else(|| {
-                k.taken(&path, row, key, id)
-                    .then(|| "is kept for another row or held by a record of the core's registry".to_owned())
-            })
+            unfit(id)
+                .or_else(|| later(id).then(|| "is set by a later addon".to_owned()))
+                .or_else(|| {
+                    k.taken(&path, row, key, id).then(|| {
+                        "is kept for another row or held by a record of the core's registry".to_owned()
+                    })
+                })
         };
         let mut notes = Vec::new();
         let mut from = IdFrom::Next;
@@ -1683,7 +1998,7 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
         }
         let top = db.stat_ids(names, &path, row, n).max.map_or(0, |m| m + 1);
         let picked = (top..=ceiling.map_or(i64::MAX, |c| c.max))
-            .find(|id| blocked(*id).is_none() && !(moving && later(*id)))
+            .find(|id| blocked(*id).is_none())
             .or_else(|| {
                 ceiling.and_then(|c| {
                     free_stat_id(db, names, &path, row, n, c, &|id| {
@@ -1703,8 +2018,9 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
                 let free = |id: i64| unfit(id).is_none() && !later(id);
                 let Some((id, held_by)) = k.reclaim(&path, row, key, &free) else {
                     return Err(Error::Resolve(format!(
-                        "{what}: {path} has no free {field} up to {}, the highest the game reads",
-                        ceiling.map_or(i64::MAX, |c| c.max)
+                        "{what}: {path} has no free {field} up to {}, the highest the game reads{}",
+                        ceiling.map_or(i64::MAX, |c| c.max),
+                        stat_id_ceiling_reason(&path, row).map_or(String::new(), |r| format!(" ({r})"))
                     )));
                 };
                 let max = ceiling.map_or(String::new(), |c| format!(" up to {}", c.max));
@@ -1720,7 +2036,7 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
     };
     if fresh && let Some(i) = rows.iter().position(|r| r.key == stat_key) {
         let old = String::from_utf8_lossy(&rows[i].value).into_owned();
-        let (next, passed) = give(false)?;
+        let (next, passed) = give()?;
         rows[i].value = next.to_string().into_bytes();
         cx.report.lines.push(match passed {
             Some(why) => format!("{what}: stat_id {next} (the source's is {old}; {why})"),
@@ -1734,25 +2050,33 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
             old,
             None,
             None,
+            None,
             format!("is above {}, the highest the game reads", c.max),
         )),
         // Stock scenarios share statId 14, but the core keeps an id pool for them.
-        (Some(old), _) if top_level && (field != "stat_id" || indexed()) => {
-            added_holder(db, names, &path, row, n, old).map(|holder| {
-                let label = db.text(fnv1a64(format!("{holder}._metadata_")));
-                let why = format!(
-                    "is taken by {holder} ({})",
-                    label.as_deref().unwrap_or("no label")
-                );
-                (old, Some(holder), label, why)
-            })
+        (Some(old), _) if top_level && unlock.is_none() && (field != "stat_id" || indexed()) => {
+            added_holder(db, names, &path, row, n, old)
+                .map(|holder| {
+                    let label = db.text(fnv1a64(format!("{holder}._metadata_")));
+                    let why = format!(
+                        "is taken by {holder} ({})",
+                        label.as_deref().unwrap_or("no label")
+                    );
+                    (old, Some(holder), label, None, why)
+                })
+                // A career holds the id the core gave a registry record, so the copy takes another.
+                .or_else(|| {
+                    let record = kept?.registry_record(&path, row, label.as_deref(), old)?;
+                    let why = format!("is kept for {record}, a record of the core's registry");
+                    Some((old, None, None, Some(record), why))
+                })
         }
         _ => None,
     };
-    if let Some((old, holder, holder_label, why)) = moved
+    if let Some((old, holder, holder_label, record, why)) = moved
         && let Some(r) = rows.iter_mut().find(|r| r.key == id_key)
     {
-        let (new, note) = give(true)?;
+        let (new, note) = give()?;
         r.value = new.to_string().into_bytes();
         let label = set.get("_metadata_").cloned();
         cx.report.lines.push(match note {
@@ -1769,7 +2093,21 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
             new,
             holder,
             holder_label,
+            record,
         });
+    }
+    if let Some(list) = unlock {
+        let unlock_row = UnlockRow {
+            list,
+            folder: &path,
+            kind: row,
+            dst: &dst,
+            dst_path: &dst_path,
+            what: &what,
+            set,
+            stat_id,
+        };
+        unlock_stat_id(db, names, cx, &unlock_row, &mut rows)?;
     }
     cx.report
         .lines
@@ -1799,10 +2137,301 @@ fn add_row(db: &mut Db, names: &dyn FieldNames, cx: &mut Cx, op: AddRow) -> Resu
     Ok(())
 }
 
+// A row `add-row` adds to a folder of an unlock list.
+struct UnlockRow<'a> {
+    list: &'a str,
+    folder: &'a str,
+    kind: &'a str,
+    dst: &'a Row,
+    dst_path: &'a str,
+    what: &'a str,
+    set: &'a BTreeMap<String, String>,
+    stat_id: Option<StatIdMode>,
+}
+
+// The statIds the rows of an unlock list hold, across all its folders and kinds.
+struct UnlockIds {
+    // Each id and the row holding it, a stock row before an added one, and whether that row is stock.
+    held: HashMap<i64, (String, bool)>,
+    // The highest id a stock or track row holds, -1 for none.
+    stock_top: i64,
+}
+
+impl UnlockIds {
+    fn read(db: &Db, names: &dyn FieldNames, list: &str, kind: &str) -> Self {
+        let mut ids = Self {
+            held: HashMap::new(),
+            stock_top: -1,
+        };
+        let extra = (!UNLOCK_KINDS.contains(&kind)).then_some(kind);
+        for f in 0..db.instance_count(list, "folder").unwrap_or(0) {
+            let folder = format!("{list}.folder_{f}");
+            for kind in UNLOCK_KINDS.iter().copied().chain(extra) {
+                let Some(rows) = db.instance_count(&folder, kind) else {
+                    continue;
+                };
+                for i in 0..rows {
+                    let row = format!("{folder}.{kind}_{i}");
+                    let key = fnv1a64(format!("{row}.statId"));
+                    let Some(id) = db.text(key).and_then(|v| v.trim().parse::<i64>().ok()) else {
+                        continue;
+                    };
+                    let stock = names.stock(key) || names.track(key);
+                    if stock {
+                        ids.stock_top = ids.stock_top.max(id);
+                    }
+                    match ids.held.entry(id) {
+                        std::collections::hash_map::Entry::Vacant(v) => {
+                            v.insert((row, stock));
+                        }
+                        std::collections::hash_map::Entry::Occupied(mut o) => {
+                            if stock && !o.get().1 {
+                                o.insert((row, stock));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ids
+    }
+
+    // Why the row `key` can't take `id`, if it can't.
+    fn blocked(
+        &self,
+        db: &Db,
+        names: &dyn FieldNames,
+        list: &str,
+        key: Option<&str>,
+        id: i64,
+    ) -> Option<String> {
+        if !(0..=UNLOCK_STAT_MAX).contains(&id) {
+            return Some(format!("is outside 0 to {UNLOCK_STAT_MAX}"));
+        }
+        if let Some((row, stock)) = self.held.get(&id) {
+            let label = db.text(fnv1a64(format!("{row}._metadata_")));
+            let whose = if *stock { "the game's row" } else { "row" };
+            return Some(format!(
+                "is held by {whose} {row} ({})",
+                label.as_deref().unwrap_or("no label")
+            ));
+        }
+        if names.reserved(list, UNLOCK_ROW, id) {
+            return Some("is set by a later addon".to_owned());
+        }
+        let kept = names.row_ids().zip(key);
+        if kept.is_some_and(|(k, key)| k.taken(list, UNLOCK_ROW, key, id)) {
+            return Some("is kept for another row or held by a record of the core's registry".to_owned());
+        }
+        None
+    }
+}
+
+// Gives the unlock row `u` a `statId` of its own when its `set` leaves the id out (unless
+// `"stat_id": "keep"`) or sets one another row of the list holds: the id the install keeps for it, else
+// the lowest id from UNLOCK_FRESH_FROM (or above the list's stock rows) to UNLOCK_STAT_MAX that no row of
+// the list holds, no later addon sets and row-ids.json keeps for no other row, else one kept for an addon
+// the build leaves out.
+fn unlock_stat_id(
+    db: &mut Db,
+    names: &dyn FieldNames,
+    cx: &mut Cx,
+    u: &UnlockRow,
+    rows: &mut [Record],
+) -> Result<()> {
+    let Some(i) = rows.iter().position(|r| r.key == u.dst.field("statId")) else {
+        return Ok(());
+    };
+    let source = String::from_utf8_lossy(&rows[i].value).trim().to_owned();
+    let asked = u.set.get("statId").map(|v| v.trim().parse::<i64>());
+    let ids = UnlockIds::read(db, names, u.list, u.kind);
+    let clash = match asked {
+        None if u.stat_id == Some(StatIdMode::Keep) => return Ok(()),
+        None => None,
+        // Not a number, or below 0 (some stock rows hold -1): left as the addon set it.
+        Some(Err(_)) => return Ok(()),
+        Some(Ok(old)) if old < 0 => return Ok(()),
+        Some(Ok(old)) => match ids.held.get(&old) {
+            Some(held) => Some((old, held.clone())),
+            None => return Ok(()),
+        },
+    };
+    let label = rows
+        .iter()
+        .find(|r| r.key == u.dst.field("_metadata_"))
+        .map(|r| r.text().into_owned());
+    let kept = names.row_ids().zip(label.as_deref());
+    let claimed = kept.map(|(k, label)| k.claim(u.list, UNLOCK_ROW, &format!("{}/{label}", u.kind)));
+    let key = claimed.as_ref().map(|c| c.key.as_str());
+    let blocked = |id: i64| ids.blocked(db, names, u.list, key, id);
+    let keep = |id: i64, from: IdFrom| {
+        if let (Some((k, _)), Some(key)) = (kept, key) {
+            k.keep(u.list, UNLOCK_ROW, key, id, from);
+        }
+    };
+    let mut notes = Vec::new();
+    let mut from = IdFrom::Next;
+    let mut given = None;
+    match claimed.as_ref().and_then(|c| c.kept) {
+        Some(id) => match blocked(id) {
+            None => {
+                given = Some(id);
+                notes.push("kept from row-ids.json".to_owned());
+            }
+            Some(why) => {
+                notes.push(format!("{id}, kept for it, {why}"));
+                from = IdFrom::Moved;
+            }
+        },
+        None => {
+            if let Some(id) = claimed
+                .as_ref()
+                .and_then(|c| c.seed)
+                .filter(|id| blocked(*id).is_none())
+            {
+                keep(id, IdFrom::Seeded);
+                given = Some(id);
+                notes.push("as the last build gave it".to_owned());
+            }
+        }
+    }
+    let new = match given {
+        Some(id) => id,
+        None => {
+            let low = (ids.stock_top + 1).max(0);
+            let start = low.max(UNLOCK_FRESH_FROM);
+            let picked = (start..=UNLOCK_STAT_MAX)
+                .chain(low..start)
+                .find(|id| blocked(*id).is_none());
+            let id = match picked {
+                Some(id) => id,
+                None => {
+                    let free = |id: i64| {
+                        (0..=UNLOCK_STAT_MAX).contains(&id)
+                            && !ids.held.contains_key(&id)
+                            && !names.reserved(u.list, UNLOCK_ROW, id)
+                    };
+                    let reclaimed = match (kept, key) {
+                        (Some((k, _)), Some(key)) => k.reclaim(u.list, UNLOCK_ROW, key, &free),
+                        _ => None,
+                    };
+                    let Some((id, held_by)) = reclaimed else {
+                        return Err(Error::Resolve(format!(
+                            "{}: {} has no free statId up to {UNLOCK_STAT_MAX} in any of its folders",
+                            u.what, u.list
+                        )));
+                    };
+                    notes.push(format!(
+                        "no other id up to {UNLOCK_STAT_MAX} is free; reused from {held_by}, which this build leaves out"
+                    ));
+                    from = IdFrom::Reused;
+                    id
+                }
+            };
+            if from != IdFrom::Reused {
+                keep(id, from);
+            }
+            id
+        }
+    };
+    rows[i].value = new.to_string().into_bytes();
+    let note = (!notes.is_empty()).then(|| notes.join("; "));
+    let what = u.what;
+    let Some((old, (holder, _))) = clash else {
+        cx.report.lines.push(match note {
+            Some(note) => format!("{what}: statId {new} (the source's is {source}; {note})"),
+            None => format!("{what}: statId {new} (the source's is {source})"),
+        });
+        return Ok(());
+    };
+    let holder_label = db.text(fnv1a64(format!("{holder}._metadata_")));
+    let why = format!(
+        "is taken by {holder} ({})",
+        holder_label.as_deref().unwrap_or("no label")
+    );
+    cx.report.lines.push(match note {
+        Some(note) => format!("{what}: statId {old} {why}; statId {new} ({note})"),
+        None => format!("{what}: statId {old} {why}; statId {new}"),
+    });
+    db.moved.insert(
+        (format!("{}.{}", u.folder, u.kind), old.to_string()),
+        new.to_string(),
+    );
+    cx.report.moved_stat_ids.push(MovedStatId {
+        row: u.dst_path.to_owned(),
+        field: "statId",
+        label: u.set.get("_metadata_").cloned(),
+        old,
+        new,
+        holder: Some(holder),
+        holder_label,
+        record: None,
+    });
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::asset::{FileKind, OpFile};
+
+    #[test]
+    fn mask_tables_say_why_their_ceiling_is_31() {
+        for (t, r) in [
+            ("game_setup.game_setup_modes", "game_setup_mode"),
+            ("entrants.entrant_setup_modes", "entrant_setup_mode"),
+            ("game_setup.seasons", "season"),
+        ] {
+            assert_eq!(stat_id_ceiling(t, r).map(|c| c.max), Some(31), "{t}");
+            assert!(
+                stat_id_ceiling_reason(t, r).is_some_and(|w| w.contains("32-bit mask")),
+                "{t}"
+            );
+        }
+        assert_eq!(stat_id_ceiling_reason("entrants.vehicles", "vehicle"), None);
+    }
+
+    #[test]
+    fn a_third_car_group_fails_the_build_instead_of_the_main_menu() {
+        const CARS: &str = "customisation.customisation_cars";
+        let mut db = table(CARS, "customisation_car_group", &[0, 1]);
+        let stock: HashSet<u64> = db.records.iter().map(|r| r.key).collect();
+        let err = apply_db_ops_report(
+            &mut db,
+            &add_rows(CARS, "customisation_car_group", &[("sw12_cars", None)]),
+            &stock,
+            &mut DbReport::default(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("has no free stat_id up to 1"), "{err}");
+        assert!(err.contains("crashes the game at the main menu"), "{err}");
+    }
+
+    #[test]
+    fn unlock_folders_name_their_list_and_share_its_stat_id_space() {
+        let list = "unlockable_content.unlockable_items.unlockable_item_list_2";
+        assert_eq!(unlock_list(&format!("{list}.folder_23")), Some(list));
+        assert_eq!(unlock_list(list), None);
+        assert_eq!(unlock_list(&format!("{list}.folder_x")), None);
+        assert_eq!(unlock_list(&format!("{list}.folder_2.more")), None);
+        assert_eq!(
+            stat_id_field(&format!("{list}.folder_0"), "unlockable_suit"),
+            "statId"
+        );
+        assert!(is_unlock_ids(&format!("{list}.{UNLOCK_ROW}")));
+        assert!(!is_unlock_ids("entrants.teams.team"));
+        let ops: DbOps = serde_json::from_str(&format!(
+            r#"{{"schema_version":1,"ops":[
+            {{"op":"add-row","table":"{list}.folder_23","from":"{list}.folder_23.unlockable_se_livery_0","set":{{"_metadata_":"a","statId":"7"}}}},
+            {{"op":"add-row","table":"{list}.folder_1","from":"{list}.folder_1.unlockable_suit[_metadata_=x]","set":{{"_metadata_":"b"}}}}]}}"#
+        ))
+        .unwrap();
+        assert_eq!(
+            explicit_stat_ids(&ops).collect::<Vec<_>>(),
+            [(format!("{list}.unlockable_item"), 7)]
+        );
+    }
 
     fn db() -> Gvdb {
         let mut records = vec![Record::new("entrants.teams._team_instancecount_", 0, "2")];
@@ -1932,8 +2561,60 @@ mod tests {
         let taken = ops(
             r#"{"schema_version":1,"ops":[{"op":"add-row","table":"entrants.teams","from":"entrants.teams.team_0"}]}"#,
         );
-        let err = apply_db_ops(&mut db, &taken, &names()).unwrap_err();
-        assert!(err.to_string().contains("already exists"), "{err}");
+        let mut report = DbReport::default();
+        apply_db_ops_report(&mut db, &taken, &names(), &mut report).unwrap();
+        assert_eq!(db.instance_count("entrants.teams", "team"), Some(4));
+        assert_eq!(
+            db.get_text("entrants.teams.team_2._metadata_").as_deref(),
+            Some("stale")
+        );
+        assert!(db.get("entrants.teams.team_3._metadata_").is_some());
+    }
+
+    #[test]
+    fn add_row_adds_after_rows_another_addon_left_above_the_count() {
+        let mut db = db();
+        for i in [2, 3] {
+            db.records.push(Record::new(
+                &format!("entrants.teams.team_{i}._metadata_"),
+                4,
+                format!("other_{i}"),
+            ));
+        }
+        let stock: HashSet<u64> = db
+            .records
+            .iter()
+            .filter(|r| !r.text().starts_with("other_"))
+            .map(|r| r.key)
+            .collect();
+        let add = ops(
+            r#"{"schema_version":1,"fields":{"entrants.teams.team":["_metadata_","stat_id","display_name_code"]},
+            "ops":[{"op":"add-row","table":"entrants.teams","from":"entrants.teams.team_0",
+            "set":{"_metadata_":"mine"}}]}"#,
+        );
+        let mut report = DbReport::default();
+        apply_db_ops_report(&mut db, &add, &stock, &mut report).unwrap();
+        assert_eq!(
+            db.get_text("entrants.teams.team_2._metadata_").as_deref(),
+            Some("other_2")
+        );
+        assert_eq!(
+            db.get_text("entrants.teams.team_3._metadata_").as_deref(),
+            Some("other_3")
+        );
+        assert_eq!(
+            db.get_text("entrants.teams.team_4._metadata_").as_deref(),
+            Some("mine")
+        );
+        assert_eq!(db.instance_count("entrants.teams", "team"), Some(5));
+        assert!(
+            report
+                .lines
+                .iter()
+                .any(|l| l.contains("rows 2 to 3 already hold")),
+            "{:?}",
+            report.lines
+        );
     }
 
     #[test]
@@ -2273,6 +2954,76 @@ mod tests {
                 .contains("bad selector")
         );
         assert!(set("track_data.game_setup..TrackDataSet[_metadata_=f1]").contains("empty segment"));
+    }
+
+    #[test]
+    fn no_row_errors_give_their_selectors() {
+        let fail = |select: &str| {
+            let op = DbOp::Set {
+                select: select.to_owned(),
+                field: "track".into(),
+                value: Some("x".into()),
+                value_from: None,
+                datasets: Vec::new(),
+                create: false,
+                tag: None,
+            };
+            no_row_selectors(&apply_db_op(&mut track_db(), &op, &names()).unwrap_err())
+        };
+        let sel = |table: &str, row: &str, want: &str| Selector {
+            table: table.into(),
+            row: row.into(),
+            field: "_metadata_".into(),
+            want: want.into(),
+        };
+        assert_eq!(
+            fail("track_data.game_setup.TrackDataSet[_metadata_=f9].TrackData[_metadata_=suzuka]"),
+            [sel(SETS, "TrackDataSet", "f9")]
+        );
+        assert_eq!(
+            fail("track_data.game_setup.TrackDataSet[_metadata_=f1_2026].TrackData[_metadata_=okayama]"),
+            [
+                sel(SETS, "TrackDataSet", "f1_2026"),
+                sel(&format!("{SETS}.TrackDataSet_1"), "TrackData", "okayama")
+            ]
+        );
+        let s = sel(SETS, "TrackDataSet", "f1_2026");
+        assert_eq!(
+            s.field_key(1),
+            fnv1a64(format!("{SETS}.TrackDataSet_1._metadata_"))
+        );
+        assert_eq!(
+            s.count_key(),
+            Some(fnv1a64(instance_count_path(SETS, "TrackDataSet")))
+        );
+        assert!(no_row_selectors(&Error::Resolve("t.x: no such key".into())).is_empty());
+    }
+
+    #[test]
+    fn reports_the_records_ops_change() {
+        let mut db = track_db();
+        let ops = ops(&format!(
+            r#"{{"schema_version":1,"ops":[
+            {{"op":"put-record","key":"{SETS}.TrackDataSet_1._metadata_","type":4,"value":"6631"}},
+            {{"op":"put-record","key":"{SETS}.TrackDataSet_0._metadata_","type":4,"value":"6631"}},
+            {{"op":"set","select":"{SETS}.TrackDataSet_0.TrackData_0","field":"track","value":"x"}},
+            {{"op":"remove-record","key":"{SETS}.TrackDataSet_0.TrackData_1.track"}}]}}"#
+        ));
+        let mut report = DbReport::default();
+        apply_db_ops_lenient(&mut db, &ops, &names(), &mut report);
+        let rw = |path: &str, was: Option<&str>, now: Option<&str>| Rewrite {
+            key: fnv1a64(format!("{SETS}.{path}")),
+            was: was.map(String::from),
+            now: now.map(String::from),
+        };
+        assert_eq!(
+            report.rewrites,
+            [
+                rw("TrackDataSet_1._metadata_", Some("f1_2026"), Some("f1")),
+                rw("TrackDataSet_0.TrackData_0.track", Some("melbourne"), Some("x")),
+                rw("TrackDataSet_0.TrackData_1.track", Some("okayama"), None),
+            ]
+        );
     }
 
     #[test]
@@ -2616,6 +3367,80 @@ mod tests {
         }
     }
 
+    struct Reserved {
+        inner: Stocked,
+        ids: Vec<(String, i64)>,
+    }
+
+    impl FieldNames for Reserved {
+        fn fields(&self, table: &str, row: &str) -> Option<Vec<String>> {
+            self.inner.fields(table, row)
+        }
+
+        fn row_keys(&self, shape: &str) -> Option<&[String]> {
+            self.inner.row_keys(shape)
+        }
+
+        fn stock(&self, key: u64) -> bool {
+            self.inner.stock(key)
+        }
+
+        fn reserved(&self, table: &str, row: &str, id: i64) -> bool {
+            self.ids.contains(&(format!("{table}.{row}"), id))
+        }
+    }
+
+    #[test]
+    fn a_free_stat_id_skips_the_id_a_later_addon_pins() {
+        let mut db = modes(["3", "7"]);
+        let names = Reserved {
+            inner: stocked(&db),
+            ids: vec![("modes.mode".to_owned(), 8)],
+        };
+        let mut report = DbReport::default();
+        apply_db_ops_report(&mut db, &add_labelled("early", "", ""), &names, &mut report).unwrap();
+        assert_eq!(db.get_text("modes.mode_2.stat_id").as_deref(), Some("9"));
+        let mut report = DbReport::default();
+        apply_db_ops_report(
+            &mut db,
+            &add_labelled("late", r#","stat_id":"8""#, ""),
+            &names,
+            &mut report,
+        )
+        .unwrap();
+        assert_eq!(db.get_text("modes.mode_3.stat_id").as_deref(), Some("8"));
+        assert!(report.moved_stat_ids.is_empty(), "{:?}", report.moved_stat_ids);
+    }
+
+    #[test]
+    fn two_pins_on_the_same_stat_id_still_conflict() {
+        let mut db = modes(["3", "7"]);
+        let names = Reserved {
+            inner: stocked(&db),
+            ids: vec![("modes.mode".to_owned(), 40)],
+        };
+        let mut report = DbReport::default();
+        apply_db_ops_report(
+            &mut db,
+            &add_labelled("a", r#","stat_id":"40""#, ""),
+            &names,
+            &mut report,
+        )
+        .unwrap();
+        let mut report = DbReport::default();
+        apply_db_ops_report(
+            &mut db,
+            &add_labelled("b", r#","stat_id":"40""#, ""),
+            &names,
+            &mut report,
+        )
+        .unwrap();
+        assert_eq!(db.get_text("modes.mode_2.stat_id").as_deref(), Some("40"));
+        assert_ne!(db.get_text("modes.mode_3.stat_id").as_deref(), Some("40"));
+        assert_eq!(report.moved_stat_ids.len(), 1);
+        assert_eq!(report.moved_stat_ids[0].old, 40);
+    }
+
     fn add_labelled(label: &str, stat_id: &str, then: &str) -> DbOps {
         ops(&format!(
             r#"{{"schema_version":1,"ops":[{{"op":"add-row","table":"modes","from":"modes.mode[_metadata_=f1]",
@@ -2649,6 +3474,7 @@ mod tests {
                 new: 9,
                 holder: Some("modes.mode_2".into()),
                 holder_label: Some("first".into()),
+                record: None,
             }]
         );
         assert!(
@@ -2789,6 +3615,80 @@ mod tests {
     }
 
     #[test]
+    fn a_virtual_entrant_list_passes_the_byte_ceiling_its_row_never_reaches() {
+        const LISTS: &str = "entrants.entrant_lists";
+        let mut db = table(LISTS, "entrant_list", &[0, 255]);
+        let stock: HashSet<u64> = db.records.iter().map(|r| r.key).collect();
+        let full = apply_db_ops_report(
+            &mut db.clone(),
+            &add_rows(LISTS, "entrant_list", &[("season_1960", None)]),
+            &stock,
+            &mut DbReport::default(),
+        )
+        .unwrap_err();
+        assert!(
+            full.to_string().contains("has no free stat_id up to 255"),
+            "{full}"
+        );
+        let mut ops = add_rows(LISTS, "entrant_list", &[("season_1960", None)]);
+        ops.ops.insert(
+            0,
+            DbOp::VirtualList {
+                list: "season_1960".into(),
+            },
+        );
+        apply_db_ops_report(&mut db, &ops, &stock, &mut DbReport::default()).unwrap();
+        assert_eq!(db.get_text(VIRTUAL_LISTS).as_deref(), Some("season_1960"));
+        assert_eq!(
+            db.get_text("entrants.entrant_lists.entrant_list_2._metadata_")
+                .as_deref(),
+            Some("season_1960")
+        );
+        assert_eq!(ids(&db, LISTS, "entrant_list"), [0, 255, 256]);
+    }
+
+    #[test]
+    fn leaderboard_descriptor_ids_stay_in_the_byte_the_game_reads() {
+        const BOARDS: &str = "leaderboards";
+        assert_eq!(
+            stat_id_ceiling(BOARDS, "leaderboard_descriptor"),
+            Some(StatIdCeiling { max: 255, from: None })
+        );
+        let mut db = table(BOARDS, "leaderboard_descriptor", &[0, 1, 3, 2, 5]);
+        let stock: HashSet<u64> = db.records.iter().map(|r| r.key).collect();
+        let rows = [("swofty_a", None), ("swofty_b", None), ("swofty_c", Some(300))];
+        let mut report = DbReport::default();
+        apply_db_ops_report(
+            &mut db,
+            &add_rows(BOARDS, "leaderboard_descriptor", &rows),
+            &stock,
+            &mut report,
+        )
+        .unwrap();
+        assert_eq!(
+            ids(&db, BOARDS, "leaderboard_descriptor"),
+            [0, 1, 3, 2, 5, 6, 7, 8]
+        );
+        assert_eq!(
+            db.get_text("leaderboards.leaderboard_descriptor_5._metadata_")
+                .as_deref(),
+            Some("swofty_a")
+        );
+        let labels: Vec<String> = (0..260).map(|i| format!("box_{i}")).collect();
+        let many: Vec<(&str, Option<i64>)> = labels.iter().map(|l| (l.as_str(), None)).collect();
+        let mut full = table(BOARDS, "leaderboard_descriptor", &[0, 1, 3, 2, 5]);
+        let stock: HashSet<u64> = full.records.iter().map(|r| r.key).collect();
+        let err = apply_db_ops_report(
+            &mut full,
+            &add_rows(BOARDS, "leaderboard_descriptor", &many),
+            &stock,
+            &mut DbReport::default(),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("has no free stat_id up to 255"), "{err}");
+    }
+
+    #[test]
     fn package_ids_under_the_ceiling_stay_as_they_were() {
         let mut db = table(PACKAGES, "vehicle_package", &[2, 5, 58]);
         let stock: HashSet<u64> = db.records.iter().map(|r| r.key).collect();
@@ -2854,6 +3754,7 @@ mod tests {
                 new: 59,
                 holder: None,
                 holder_label: None,
+                record: None,
             }]
         );
     }

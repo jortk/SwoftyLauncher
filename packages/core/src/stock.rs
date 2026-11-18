@@ -5,7 +5,9 @@
 //! every file Steam installed is checked by size. A file that differs stops
 //! the session untouched: the launcher can only undo its own changes on top
 //! of an unmodified game, so the player verifies the game files in Steam
-//! first.
+//! first. A DLL of Steam's that is present but differs is a third-party
+//! replacement (an upscaler build, a VR runtime, a graphics hook): it is
+//! logged and never stops the session. A missing one still does.
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -41,14 +43,27 @@ fn is_eac(rel: &str) -> bool {
     !rel.contains('/') && rel.to_ascii_lowercase().starts_with("eaanticheat.")
 }
 
-/// VR tools (OpenComposite and other OpenVR runtimes) replace `openvr_api.dll`
-/// in the game folder. A replaced one is logged and never blocks.
-pub const VR_RUNTIME: &str = "openvr_api.dll";
+/// Whether `rel` is a DLL, by its extension in any case. A DLL of Steam's
+/// that differs from Steam's copy is a third-party replacement, such as
+/// OpenComposite's `openvr_api.dll`, an FSR 4 build of
+/// `amd_fidelityfx_dx12.dll` or a DLSS swap.
+fn is_dll(rel: &str) -> bool {
+    Path::new(rel)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
+}
 
-fn is_vr_runtime(rel: &str) -> bool {
-    rel.rsplit('/')
-        .next()
-        .is_some_and(|name| name.eq_ignore_ascii_case(VR_RUNTIME))
+/// Upscaler drop-ins (FSR 4 builds such as HelixSR) replace the game's
+/// `amd_fidelityfx_dx12.dll` in the game folder. The launcher never writes or
+/// restores it, and no addon or profile can replace it.
+pub const UPSCALER_DROP_INS: &[&str] = &["amd_fidelityfx_dx12.dll"];
+
+pub(crate) fn is_upscaler_drop_in(rel: &str) -> bool {
+    !rel.contains('/')
+        && !rel.contains('\\')
+        && UPSCALER_DROP_INS
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(rel))
 }
 
 fn modified_secs(path: &Path) -> Option<f64> {
@@ -288,24 +303,24 @@ pub struct Foreign {
     pub modified: Option<f64>,
 }
 
-/// An `EAAntiCheat.*` file in the game root whose size differs from Steam's.
-/// It is reported and does not block.
+/// A file of Steam's that differs from Steam's copy without blocking: an
+/// `EAAntiCheat.*` file in the game root, or a third-party DLL.
 #[derive(Debug, Clone, PartialEq)]
-pub struct EacDrift {
+pub struct Drifted {
     pub rel: String,
     pub size: Option<u64>,
     pub steam: u64,
 }
 
 /// What `check` found: the files that are not Steam's, the EA AntiCheat files
-/// and the VR runtime that drifted without blocking, and what it did to the
-/// baseline on the way.
+/// and the third-party DLLs that differ without blocking, and what it did to
+/// the baseline on the way.
 #[derive(Debug, Default, PartialEq)]
 pub struct Checked {
     pub foreign: Vec<String>,
     pub detail: Vec<Foreign>,
-    pub eac: Vec<EacDrift>,
-    pub vr: Vec<EacDrift>,
+    pub eac: Vec<Drifted>,
+    pub third_party: Vec<Drifted>,
     pub missing: Vec<String>,
     pub proven: usize,
     pub rerecorded: Vec<String>,
@@ -319,7 +334,8 @@ pub struct Checked {
 /// backed up again from the game folder. Until a sweep has passed for this
 /// game build, every file Steam installed is also checked for its size; a
 /// file the launcher itself left behind is left to the install, which clears
-/// it. The game folder is only read.
+/// it. A DLL that is present and differs is third-party and never foreign; a
+/// missing one is. The game folder is only read.
 pub fn check(data: &Path, game: &Game, depots: &Depots) -> Result<Checked> {
     let mut out = Checked::default();
     let launcher = game.dir.join(EAC_LAUNCHER);
@@ -357,8 +373,8 @@ pub fn check(data: &Path, game: &Game, depots: &Depots) -> Result<Checked> {
             r.sha256 = sha256;
             r.source = Source::Depot;
             out.rerecorded.push(rel);
-        } else if is_vr_runtime(&rel) {
-            out.vr.push(EacDrift {
+        } else if is_dll(&rel) {
+            out.third_party.push(Drifted {
                 size: std::fs::metadata(&live).ok().map(|m| m.len()),
                 steam: e.size,
                 rel,
@@ -391,15 +407,15 @@ pub fn check(data: &Path, game: &Game, depots: &Depots) -> Result<Checked> {
                 continue;
             }
             if is_eac(rel) {
-                out.eac.push(EacDrift {
+                out.eac.push(Drifted {
                     rel: rel.clone(),
                     size,
                     steam: e.size,
                 });
                 continue;
             }
-            if is_vr_runtime(rel) {
-                out.vr.push(EacDrift {
+            if size.is_some() && is_dll(rel) {
+                out.third_party.push(Drifted {
                     rel: rel.clone(),
                     size,
                     steam: e.size,
@@ -422,7 +438,7 @@ pub fn check(data: &Path, game: &Game, depots: &Depots) -> Result<Checked> {
     out.foreign.dedup();
     out.detail.sort_by(|a, b| a.rel.cmp(&b.rel));
     out.eac.sort_by(|a, b| a.rel.cmp(&b.rel));
-    out.vr.sort_by(|a, b| a.rel.cmp(&b.rel));
+    out.third_party.sort_by(|a, b| a.rel.cmp(&b.rel));
     if baseline != loaded {
         baseline.save(data)?;
     }
@@ -465,6 +481,14 @@ impl Report {
         }
     }
 
+    pub fn mixed(&self) -> bool {
+        if self.missing {
+            return false;
+        }
+        let (changed, missing) = split_absent(&self.detail);
+        !changed.is_empty() && !missing.is_empty()
+    }
+
     pub fn fix(&self) -> Fix {
         fix_for(self.version.as_deref())
     }
@@ -499,6 +523,21 @@ impl Report {
     }
 
     pub fn text(&self) -> String {
+        let (changed, missing) = split_absent(&self.detail);
+        if self.missing || (!missing.is_empty() && changed.is_empty() && missing.len() == self.files.len()) {
+            return format!(
+                "F1 25 was not started. {}. {}.",
+                missing_subject(&self.files),
+                capitalise(&missing_fix(self.files.len(), self.version.as_deref()))
+            );
+        }
+        if !missing.is_empty() {
+            return format!(
+                "F1 25 was not started. {} changed outside the launcher and {}. Verifying the game files in Steam puts Steam's copies back: open {STEAM_VERIFY_URL}, or right-click F1 25 in Steam > Properties > Installed Files > Verify integrity of game files. Then press Play again.",
+                changed_count(changed.len()),
+                missing_subject(&missing)
+            );
+        }
         format!(
             "F1 25 was not started. {} {} changed outside the launcher, usually by a mod copied \
              into the game folder by hand. Verifying the game files in Steam puts Steam's copies \
@@ -507,6 +546,20 @@ impl Report {
             names(&self.files),
             if self.files.len() == 1 { "was" } else { "were" }
         )
+    }
+}
+
+fn capitalise(s: &str) -> String {
+    let mut c = s.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
+}
+
+fn changed_count(n: usize) -> String {
+    match n {
+        1 => "1 game file was".to_owned(),
+        n => format!("{n} game files were"),
     }
 }
 
@@ -531,12 +584,44 @@ pub fn fix_for(version: Option<&str>) -> Fix {
 }
 
 pub fn missing_text(files: &[String], version: Option<&str>) -> String {
-    let are = if files.len() == 1 { "is" } else { "are" };
     format!(
-        "{} {are} missing from the game folder; nothing in the game folder was changed; {}, then try again",
-        names(files),
+        "{} from the game folder; nothing in the game folder was changed; {}, then try again",
+        missing_subject(files),
         missing_fix(files.len(), version)
     )
+}
+
+fn missing_subject(files: &[String]) -> String {
+    match files.len() {
+        1 => format!("{} is missing", names(files)),
+        2 | 3 => format!("{} are missing", names(files)),
+        n => format!("{n} game files are missing"),
+    }
+}
+
+/// Split the files a check flagged into those whose bytes differ from Steam's
+/// and those that are not in the game folder at all.
+pub fn split_absent(detail: &[Foreign]) -> (Vec<String>, Vec<String>) {
+    let (absent, changed): (Vec<&Foreign>, Vec<&Foreign>) = detail.iter().partition(|f| f.size.is_none());
+    let rels = |v: Vec<&Foreign>| v.into_iter().map(|f| f.rel.clone()).collect();
+    (rels(changed), rels(absent))
+}
+
+pub fn changed_and_missing_text(changed: &[String], missing: &[String], version: Option<&str>) -> String {
+    format!(
+        "{} not the copy Steam installed, usually after a mod was copied into the game folder by hand, and {}; nothing in the game folder was changed; {}, then try again",
+        changed_subject(changed),
+        missing_subject(missing),
+        missing_fix(changed.len() + missing.len(), version)
+    )
+}
+
+fn changed_subject(files: &[String]) -> String {
+    match files.len() {
+        1 => format!("{} is", names(files)),
+        2 | 3 => format!("{} are", names(files)),
+        n => format!("{n} game files are"),
+    }
 }
 
 /// How to put `n` missing game files back on a game of `version`.
@@ -566,5 +651,58 @@ pub fn names(files: &[String]) -> String {
         [a, b] => format!("{a} and {b}"),
         [a, b, c] => format!("{a}, {b} and {c}"),
         [a, b, c, rest @ ..] => format!("{a}, {b}, {c} and {} more files", rest.len()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dlls_are_matched_by_extension_in_any_case_and_folder() {
+        for rel in [
+            "openvr_api.dll",
+            "AMD_FidelityFX_DX12.DLL",
+            "nvngx_dlss.Dll",
+            "bin/vendor.dll",
+            "bin\\vendor.dll",
+        ] {
+            assert!(is_dll(rel), "{rel}");
+        }
+        for rel in [
+            crate::GAME_EXE,
+            "amd_fidelityfx_dx12.dll.bak",
+            "readme.dll.txt",
+            "dll",
+            "2025_asset_groups/ui_package/databases.erp",
+        ] {
+            assert!(!is_dll(rel), "{rel}");
+        }
+    }
+
+    #[test]
+    fn the_drop_in_names_are_root_level_and_case_insensitive() {
+        assert!(is_upscaler_drop_in("amd_fidelityfx_dx12.dll"));
+        assert!(is_upscaler_drop_in("AMD_FidelityFX_DX12.DLL"));
+        assert!(!is_upscaler_drop_in("bin/amd_fidelityfx_dx12.dll"));
+        assert!(!is_upscaler_drop_in("bin\\amd_fidelityfx_dx12.dll"));
+        assert!(!is_upscaler_drop_in("amd_fidelityfx_dx12.dll.bak"));
+        assert!(!is_upscaler_drop_in("amd_fidelityfx_upscaler_dx12.dll"));
+    }
+
+    #[test]
+    fn the_protected_files_are_never_drop_ins() {
+        for name in [
+            crate::GAME_EXE,
+            crate::entitlement::STEAM_API,
+            crate::install::PROXY,
+        ] {
+            assert!(!is_upscaler_drop_in(name), "{name}");
+            assert!(
+                !UPSCALER_DROP_INS.iter().any(|n| n.eq_ignore_ascii_case(name)),
+                "{name}"
+            );
+        }
+        assert!(!is_upscaler_drop_in("swofty/addons/core/swofty_core.dll"));
     }
 }

@@ -22,6 +22,9 @@ struct PartsRegister;
 namespace swofty::sounds::events {
 struct BundleResolve;
 }
+namespace swofty::laps::events {
+struct Sealing;
+}
 namespace swofty::career::events {
 struct AddActivity;
 struct StandingsRebuild;
@@ -68,5 +71,7 @@ bool car_damage(const swofty::cars::live::Car &car, uint32_t part, float amount)
 bool session_pit(uint32_t car, uint32_t previous, uint32_t status);
 bool session_pit_stop(uint32_t car, uint32_t stops);
 bool session_lap(uint32_t car);
+bool laps_sealing(swofty::laps::events::Sealing &payload);
+bool laps_recorded(const char *path, int32_t time_ms, int32_t valid);
 
 }

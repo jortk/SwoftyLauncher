@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use swofty_addon::launcher::Claim;
 
 use crate::manifest::MANIFEST_FILE;
-use crate::registry::Registry;
+use crate::profile::Profile;
+use crate::registry::{Entry, Registry};
 use crate::{Error, Result};
 
 pub const ADDON_EXTENSION: &str = "swoftyaddon";
@@ -18,12 +19,24 @@ pub enum Route {
     Importer(String),
 }
 
-pub fn route(registry: &Registry, path: &Path) -> Option<Route> {
+/// Who may be asked about a drop. Claiming and importing run a helper's own
+/// program, so a helper must be on in `profile`, or always on: an installed
+/// addon runs nothing until the player turns it on.
+fn may_import(entry: &Entry, profile: &Profile) -> bool {
+    entry.plugin.is_none() || entry.locked || profile.enabled().any(|id| id == entry.id())
+}
+
+pub fn route(registry: &Registry, profile: &Profile, path: &Path) -> Option<Route> {
     let mut claims = vec![(Route::Addon, addon_claim(path))];
-    claims.extend(registry.iter().filter_map(|e| {
-        let claim = e.addon.importer()?.claims(path);
-        Some((Route::Importer(e.id().to_owned()), claim))
-    }));
+    claims.extend(
+        registry
+            .iter()
+            .filter(|e| may_import(e, profile))
+            .filter_map(|e| {
+                let claim = e.addon.importer()?.claims(path);
+                Some((Route::Importer(e.id().to_owned()), claim))
+            }),
+    );
     if let Some((route, _)) = claims.iter().find(|(_, c)| *c == Claim::Yes) {
         return Some(route.clone());
     }
@@ -34,11 +47,15 @@ pub fn route(registry: &Registry, path: &Path) -> Option<Route> {
     }
 }
 
-pub fn route_all(registry: &Registry, paths: &[PathBuf]) -> (Vec<(Route, Vec<PathBuf>)>, Vec<PathBuf>) {
+pub fn route_all(
+    registry: &Registry,
+    profile: &Profile,
+    paths: &[PathBuf],
+) -> (Vec<(Route, Vec<PathBuf>)>, Vec<PathBuf>) {
     let mut batches: Vec<(Route, Vec<PathBuf>)> = Vec::new();
     let mut unclaimed = Vec::new();
     for path in paths {
-        match route(registry, path) {
+        match route(registry, profile, path) {
             Some(r) => match batches.iter_mut().find(|(b, _)| *b == r) {
                 Some((_, batch)) => batch.push(path.clone()),
                 None => batches.push((r, vec![path.clone()])),
@@ -303,7 +320,8 @@ mod tests {
         std::fs::write(root.join("notes.txt"), "x").unwrap();
         let store = Store::new(root.join("data")).with_builtins(vec![fake("t.mods", "serps", "zip")]);
         let reg = Registry::load(&store).unwrap();
-        let at = |name: &str| route(&reg, &root.join(name));
+        let profile = Profile::new("t");
+        let at = |name: &str| route(&reg, &profile, &root.join(name));
         assert_eq!(at("my-addon"), Some(Route::Addon));
         assert_eq!(at("pack.swoftyaddon"), Some(Route::Addon));
         assert_eq!(at("legacy.swoftymod"), Some(Route::Addon));
@@ -319,7 +337,7 @@ mod tests {
             .iter()
             .map(|n| root.join(n))
             .collect();
-        let (batches, unclaimed) = route_all(&reg, &paths);
+        let (batches, unclaimed) = route_all(&reg, &profile, &paths);
         assert_eq!(
             batches,
             [
@@ -334,9 +352,9 @@ mod tests {
         let two = Store::new(root.join("data"))
             .with_builtins(vec![fake("t.mods", "serps", "zip"), fake("t.more", "lng", "zip")]);
         let reg = Registry::load(&two).unwrap();
-        assert_eq!(route(&reg, &root.join("other.zip")), None);
+        assert_eq!(route(&reg, &profile, &root.join("other.zip")), None);
         assert_eq!(
-            route(&reg, &root.join("livery.serps")),
+            route(&reg, &profile, &root.join("livery.serps")),
             Some(Route::Importer("t.mods".into()))
         );
         std::fs::remove_dir_all(&root).ok();

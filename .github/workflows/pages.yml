@@ -31,6 +31,13 @@ jobs:
           save-cache: false
           require-lockfile: true
 
+      # RevIQ keeps the seller list at this address. The committed copy stays when the fetch fails.
+      - name: Refresh ads.txt
+        run: |
+          if curl -fsSL --max-time 20 https://rev.iq/f1.swofty.net/ads.txt -o ads.txt.new && grep -q '^rev.iq,' ads.txt.new; then
+            mv ads.txt.new docs/public/ads.txt
+          fi
+
       - name: Build
         run: pnpm --filter @f1modmanager/docs docs:build
 

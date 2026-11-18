@@ -2,11 +2,13 @@
 //! as a big section of its own.
 
 use std::time::{Duration, Instant};
+use swofty_i18n::{tr, trf};
 
+use crate::notices::{Notification, Notify};
+use crate::scale::px;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Disableable, WindowExt, v_flex};
+use gpui_kit::component::{Disableable, v_flex};
 use gpui_kit::*;
 use swofty_core::managed;
 use swofty_core::profile::VANILLA;
@@ -43,28 +45,35 @@ impl Shell {
         let adding = self.updates.adding;
         let (title, body, button) = if !installed {
             (
-                format!("Install {}", managed::NAME),
-                format!(
-                    "{} is an addon by Team Simplified. Its Simplified Importer turns mods made for the game \
-                     folder into Swofty addons. The launcher downloads it from GitHub.",
-                    managed::NAME
+                trf!("Install {name}", name = managed::NAME),
+                trf!(
+                    "{name} is an addon by Team Simplified. Its Simplified Importer turns mods made for the game folder into Swofty addons. The launcher downloads it from GitHub.",
+                    name = managed::NAME
                 ),
                 Button::new("importer-install")
                     .primary()
                     .icon(IconName::Download)
-                    .label(if adding { "Installing…" } else { "Install" })
+                    .label(if adding {
+                        tr("Installing…")
+                    } else {
+                        tr("Install")
+                    })
                     .loading(adding)
                     .disabled(adding)
                     .on_click(cx.listener(|this, _, window, cx| this.install_importer(window, cx))),
             )
         } else {
             (
-                format!("Turn on {}", managed::NAME),
-                format!("{} is off in {}.", managed::NAME, self.library.profile.name),
+                trf!("Turn on {name}", name = managed::NAME),
+                trf!(
+                    "{name} is off in {name2}.",
+                    name = managed::NAME,
+                    name2 = self.library.profile.name
+                ),
                 Button::new("importer-on")
                     .primary()
                     .icon(IconName::Power)
-                    .label("Turn on")
+                    .label(tr("Turn on"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.set_addon_enabled(managed::ID, true, window, cx)
                     })),
@@ -72,7 +81,7 @@ impl Shell {
         };
         v_flex()
             .size_full()
-            .child(self.header(Page::Importer.label(), "Team Simplified".to_owned(), div(), p))
+            .child(self.header(Page::Importer.label(), tr("Team Simplified").to_owned(), div(), p))
             .child(self.empty(IconName::FolderInput, title, body, button, p))
             .into_any_element()
     }
@@ -85,32 +94,34 @@ impl Shell {
             .find(|p| !p.vanilla())
             .map(|p| p.name.clone());
         let button = match modded {
-            Some(name) => Button::new("importer-use-profile")
+            Some(name) if self.use_profiles => Button::new("importer-use-profile")
                 .primary()
                 .icon(IconName::Layers)
-                .label(format!("Use {name}"))
+                .label(trf!("Use {name}", name = name))
                 .on_click(cx.listener(move |this, _, window, cx| this.switch_profile(&name, window, cx))),
-            None => Button::new("importer-profiles")
+            _ => Button::new("importer-profiles")
                 .outline()
                 .icon(IconName::Layers)
-                .label("Profiles")
-                .on_click(cx.listener(|this, _, _, cx| this.go(Page::Profiles, cx))),
+                .label(match self.use_profiles {
+                    true => tr("Profiles"),
+                    false => tr("Addons"),
+                })
+                .on_click(cx.listener(|this, _, _, cx| this.go(Page::Addons, cx))),
         };
         let action = v_flex().items_center().gap(px(12.)).child(button).child(
-            div()
-                .text_size(px(12.))
-                .text_color(p.text_placeholder)
-                .child("Imported mods are listed here once a modded profile is active."),
+            div().text_size(px(12.)).text_color(p.text_placeholder).child(tr(
+                "Imported mods are listed here once a modded profile is active.",
+            )),
         );
         v_flex()
             .size_full()
-            .child(self.header(Page::Importer.label(), "Team Simplified".to_owned(), div(), p))
+            .child(self.header(Page::Importer.label(), tr("Team Simplified").to_owned(), div(), p))
             .child(self.empty(
                 IconName::ShieldCheck,
-                "Vanilla stays stock",
-                format!(
-                    "The {VANILLA} profile plays F1 25 as it shipped, without addons, so mods aren't \
-                     imported or turned on here."
+                tr("Vanilla stays stock"),
+                trf!(
+                    "The {profile} profile plays F1 25 as it shipped, without addons, so mods aren't imported or turned on here.",
+                    profile = VANILLA
                 ),
                 action,
                 p,
@@ -147,8 +158,12 @@ impl Shell {
                         if s.importer_section().is_none() && !s.vanilla() {
                             s.set_addon_enabled(managed::ID, true, window, cx);
                         }
-                        window.push_notification(
-                            Notification::success(format!("Installed {} {version}", managed::NAME)),
+                        window.notify(
+                            Notification::success(trf!(
+                                "Installed {name} {version}",
+                                name = managed::NAME,
+                                version = version
+                            )),
                             cx,
                         );
                     }
@@ -156,8 +171,9 @@ impl Shell {
                         crate::app_log::action("install addon")
                             .addon(managed::ID)
                             .failed(&e);
-                        window.push_notification(
-                            Notification::error(e).title(format!("Could not install {}", managed::NAME)),
+                        window.notify(
+                            Notification::error(e)
+                                .title(trf!("Could not install {name}", name = managed::NAME)),
                             cx,
                         )
                     }

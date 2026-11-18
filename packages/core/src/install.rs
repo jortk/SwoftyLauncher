@@ -108,6 +108,7 @@ pub enum Drift {
     OpenJournal(String),
     NewBuild { baseline: String, current: String },
     LeftInPlace(String),
+    Stranded(String),
     NoOriginal(String),
 }
 
@@ -125,6 +126,10 @@ impl std::fmt::Display for Drift {
             Drift::LeftInPlace(p) => write!(
                 f,
                 "{p} changed since it was written (game update?); left in place"
+            ),
+            Drift::Stranded(p) => write!(
+                f,
+                "{p} is not what the earlier session wrote in the old game folder nor its original; left in place"
             ),
             Drift::NoOriginal(p) => write!(
                 f,
@@ -184,6 +189,12 @@ pub struct Installer<'a> {
     /// Files copied so far, of how many, after each one.
     pub progress: &'a dyn Fn(usize, usize),
     pub free_space: fn(&Path) -> Option<u64>,
+    /// The volume a folder is on; tells Play whether the build output and the
+    /// game folder are on different drives.
+    pub volume: fn(&Path) -> Option<crate::disk::Volume>,
+    /// Copy every file instead of hard-linking build outputs; set by
+    /// `SWOFTY_INSTALL_COPY=1`.
+    pub copy_only: bool,
 }
 
 const PROGRESS_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
@@ -192,9 +203,59 @@ const PROGRESS_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
 /// temporary copy.
 const STATE_PER_FILE: u64 = 2048;
 
+/// Where each placed file is in the link cache by game path, how many files
+/// the sync copied and reused, and why there is no cache when it failed.
+#[derive(Default)]
+struct LinkCache {
+    via: BTreeMap<String, PathBuf>,
+    synced: Option<(usize, usize)>,
+    failure: Option<String>,
+}
+
 fn quiet(_: &str) {}
 
 fn unwatched(_: usize, _: usize) {}
+
+fn link_replacing(src: &Path, path: &Path) -> std::io::Result<()> {
+    let tmp = path.with_file_name(format!(
+        ".{}.swofty-link",
+        path.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    std::fs::remove_file(&tmp).ok();
+    std::fs::hard_link(src, &tmp)?;
+    let renamed = match std::fs::rename(&tmp, path) {
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && crate::clear_readonly(path) => {
+            std::fs::rename(&tmp, path)
+        }
+        r => r,
+    };
+    if renamed.is_err() {
+        std::fs::remove_file(&tmp).ok();
+    }
+    renamed
+}
+
+pub(crate) fn copy_replacing(src: &Path, path: &Path) -> std::io::Result<()> {
+    let tmp = path.with_file_name(format!(
+        ".{}.swofty-copy",
+        path.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    std::fs::remove_file(&tmp).ok();
+    if let Err(e) = std::fs::copy(src, &tmp) {
+        std::fs::remove_file(&tmp).ok();
+        return Err(e);
+    }
+    let renamed = match std::fs::rename(&tmp, path) {
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && crate::clear_readonly(path) => {
+            std::fs::rename(&tmp, path)
+        }
+        r => r,
+    };
+    if renamed.is_err() {
+        std::fs::remove_file(&tmp).ok();
+    }
+    renamed
+}
 
 fn rel_parts(rel: &str) -> Vec<String> {
     let parts: Vec<&str> = rel.split('/').collect();
@@ -279,6 +340,17 @@ pub fn add_override(text: &str) -> Option<String> {
     Some(format!("{}{sep}{OVERRIDE_VALUE}\n{}", &text[..at], &text[at..]))
 }
 
+/// Whether `path` holds, byte for byte, the proxy this launcher ships. A
+/// proxy the launcher's records account for is gone before this is asked:
+/// the rollback and the sweep removed it.
+fn shipped_proxy(path: &Path) -> Result<bool> {
+    let Some(shipped) = crate::builtin::loader_dir().and_then(|d| sha256_opt(&d.join(PROXY)).ok().flatten())
+    else {
+        return Ok(false);
+    };
+    Ok(sha256_opt(path)?.is_some_and(|now| now == shipped))
+}
+
 /// user.reg without the version.dll override, and without F1_25.exe's
 /// section when nothing else is set in it; None when the section sets other
 /// DLLs but not version.dll.
@@ -311,6 +383,8 @@ impl<'a> Installer<'a> {
             out: &quiet,
             progress: &unwatched,
             free_space: crate::disk::free_space,
+            volume: crate::disk::volume,
+            copy_only: std::env::var_os("SWOFTY_INSTALL_COPY").is_some_and(|v| v == "1"),
         }
     }
 
@@ -347,7 +421,6 @@ impl<'a> Installer<'a> {
             if sessions_only && !j.session {
                 continue;
             }
-            self.check_stranded(&j, hashes)?;
             let (id, profile, session) = (j.id.clone(), j.profile.clone(), j.session);
             let changes = j.entries.len();
             let (drift, kept) = self.rollback(j, hashes)?;
@@ -363,44 +436,14 @@ impl<'a> Installer<'a> {
         Ok(out)
     }
 
-    /// A journal written for a game folder that is gone rolls back here only
-    /// when every file it finished holds what it wrote or the original, or
-    /// when none of them is here at all.
-    fn check_stranded(&self, j: &Journal, hashes: &mut Hashes) -> Result<()> {
-        let Some(was) = j.game.as_deref() else {
-            return Ok(());
-        };
-        if was.join(crate::GAME_EXE).is_file() || crate::copies::same_dir(was, &self.game.dir) {
-            return Ok(());
-        }
-        let (mut changed, mut here) = (0, 0);
-        for e in j.entries.iter().filter(|e| e.state == State::Done) {
-            if !matches!(e.op, Op::ReplaceFile | Op::CreateFile) {
-                continue;
-            }
-            let now = hashes.sha256_opt(&self.path(&e.path))?;
-            if now.is_some() && (now == e.after || e.op == Op::CreateFile) {
-                here += 1;
-            }
-            let fits = now == e.after
-                || match e.op {
-                    Op::ReplaceFile => now.is_some() && now == e.before,
-                    _ => now.is_none(),
-                };
-            if !fits {
-                changed += 1;
-            }
-        }
-        if changed == 0 || here == 0 {
-            return Ok(());
-        }
-        Err(Error::Other(format!(
-            "an earlier session's undo record is for F1 25 in {}, which is gone, and {changed} of its file(s) in {} \
-             don't match it, so nothing was rolled back. Move the F1 25 folder back to {} and try again",
-            was.display(),
-            self.game.dir.display(),
-            was.display()
-        )))
+    /// A journal written for a game folder that no longer has the game, as
+    /// after Steam moved the library or the game was reinstalled elsewhere.
+    /// Only the files here that still hold exactly what it wrote are its to
+    /// roll back; the rest stay and are reported.
+    fn stranded(&self, j: &Journal) -> bool {
+        j.game.as_deref().is_some_and(|was| {
+            !was.join(crate::GAME_EXE).is_file() && !crate::copies::same_dir(was, &self.game.dir)
+        })
     }
 
     fn rollback(&self, j: Journal, hashes: &mut Hashes) -> Result<(Vec<Drift>, Vec<String>)> {
@@ -410,8 +453,24 @@ impl<'a> Installer<'a> {
             addon_storage::save_current(self.data, id)?;
         }
         crate::stdlib::careers::sync(self.data, Some(&self.game.dir), Some(&j.profile)).ok();
+        if j.session {
+            let log =
+                std::fs::read_to_string(self.game.dir.join(crate::session::LOADER_LOG)).unwrap_or_default();
+            crate::stdlib::careers::record_session(self.data, &j.profile, &log, || {
+                crate::build::stock_max_ids(self.data, self.game)
+            })
+            .ok();
+        }
         let mut report = Vec::new();
+        let stranded = self.stranded(&j);
         let same_build = j.build_id == self.game.identity.build_id;
+        let left = |path: &str| {
+            if stranded {
+                Drift::Stranded(path.to_owned())
+            } else {
+                Drift::LeftInPlace(path.to_owned())
+            }
+        };
         for e in j.entries.iter().rev() {
             match e.op {
                 Op::ReplaceFile => {
@@ -421,22 +480,27 @@ impl<'a> Installer<'a> {
                     if now.as_deref() == Some(before) {
                         continue;
                     }
-                    let ours = now == e.after || e.state == State::Pending;
+                    let ours = now == e.after || (!stranded && e.state == State::Pending);
                     if ours && same_build {
                         self.restore_original(before, &path)?;
                         hashes.wrote(&path, before);
                     } else {
-                        report.push(Drift::LeftInPlace(e.path.clone()));
+                        report.push(left(&e.path));
                     }
                 }
                 Op::CreateFile => {
                     let path = self.path(&e.path);
                     match hashes.sha256_opt(&path)? {
                         None => {}
-                        Some(now) if e.state == State::Pending || Some(&now) == e.after.as_ref() => {
+                        Some(now)
+                            if Some(&now) == e.after.as_ref()
+                                || (!stranded
+                                    && (e.state == State::Pending
+                                        || e.path == crate::shaders::LIVE_FILE)) =>
+                        {
                             with_retry(&path, || crate::remove_placed(&path))?;
                         }
-                        Some(_) => report.push(Drift::LeftInPlace(e.path.clone())),
+                        Some(_) => report.push(left(&e.path)),
                     }
                 }
                 Op::CreateDir => {
@@ -537,6 +601,13 @@ impl<'a> Installer<'a> {
     /// open journal accounts for: a session that lost its journal left them.
     /// Only files that still hold exactly the recorded bytes are touched.
     pub fn sweep(&self) -> Result<Vec<String>> {
+        let mut hashes = Hashes::load(self.data);
+        let result = self.sweep_with(&mut hashes);
+        hashes.save();
+        result
+    }
+
+    fn sweep_with(&self, hashes: &mut Hashes) -> Result<Vec<String>> {
         let mut placed = Placed::load(self.data)?;
         if placed.files.is_empty() && placed.registry.is_none() {
             return Ok(Vec::new());
@@ -568,11 +639,12 @@ impl<'a> Installer<'a> {
                 continue;
             }
             let path = self.path(&f.path);
-            if sha256_opt(&path)?.as_deref() == Some(f.sha256.as_str()) {
+            if hashes.sha256_opt(&path)?.as_deref() == Some(f.sha256.as_str()) {
                 if f.replaced {
                     match baseline.files.get(&f.path) {
                         Some(rec) if self.objects().has(&rec.sha256) => {
                             self.restore_original(&rec.sha256, &path)?;
+                            hashes.wrote(&path, &rec.sha256);
                             notes.push(format!("put the original {} back", f.path));
                         }
                         _ => {
@@ -608,7 +680,7 @@ impl<'a> Installer<'a> {
     }
 
     /// Move what the session left in the loader folder (its logs, diagnostic
-    /// dumps and crash reports with their minidumps) to `logs`, and remove the
+    /// dumps, load-stall reports and crash reports with their minidumps) to `logs`, and remove the
     /// folders it leaves empty, once no journal is open. Returns how many files
     /// moved.
     pub fn tidy(&self, logs: &Path) -> Result<usize> {
@@ -629,7 +701,8 @@ impl<'a> Installer<'a> {
             let path = e.path();
             let name = e.file_name();
             let name = name.to_string_lossy();
-            let crash = name.starts_with("crash-") && (name.ends_with(".txt") || name.ends_with(".dmp"));
+            let crash =
+                crate::crash_report::is_crash_name(&name) || crate::crash_report::is_stall_name(&name);
             let output = crash
                 || path
                     .extension()
@@ -681,6 +754,17 @@ impl<'a> Installer<'a> {
 
     fn apply_with(&self, plan: &Plan, hashes: &mut Hashes) -> Result<()> {
         self.roll_back_with(false, hashes)?;
+        // A live shader config left behind by a session that ended without its rollback is the launcher's
+        // own; no session runs during an apply.
+        let live = self.path(crate::shaders::LIVE_FILE);
+        if live.is_file() {
+            with_retry(&live, || crate::remove_placed(&live))?;
+            for dir in live.ancestors().skip(1).take(2) {
+                if std::fs::remove_dir(dir).is_err() {
+                    break;
+                }
+            }
+        }
         if plan.is_vanilla() {
             return Ok(());
         }
@@ -751,6 +835,17 @@ impl<'a> Installer<'a> {
 
     fn place(&self, plan: &Plan, hashes: &mut Hashes, loaded: Baseline) -> Result<()> {
         crate::now_doing("checking the game files");
+        if let Some(rel) = plan
+            .data
+            .keys()
+            .chain(plan.added.keys())
+            .chain(plan.loader.keys())
+            .find(|rel| crate::stock::is_upscaler_drop_in(rel))
+        {
+            return Err(Error::Resolve(format!(
+                "{rel} is an upscaler drop-in file and stays as the player put it; no addon or profile can replace it"
+            )));
+        }
         let objects = self.objects();
         let mut baseline = loaded.clone();
         let mut placed = Placed::load(self.data)?;
@@ -961,37 +1056,78 @@ impl<'a> Installer<'a> {
             .collect();
         crate::now_doing("copying the mods into the game folder");
         let (mut n, mut copied, mut told) = (0, 0, std::time::Instant::now());
+        let built = crate::store::overlay_root(self.data);
+        let mut linking = !self.copy_only;
+        let (mut linked, mut linked_cache, mut link_failure) = (0usize, 0usize, None::<String>);
+        let LinkCache {
+            via,
+            synced: cached,
+            failure: cache_failure,
+        } = if linking {
+            self.link_cache(&built, &j.entries, &sources)
+        } else {
+            LinkCache::default()
+        };
         for i in 0..j.entries.len() {
             self.step(&mut n)?;
             let e = &j.entries[i];
             let path = self.path(&e.path);
+            let mut link = |src: &Path, replacing: bool| -> bool {
+                let cache = via.get(e.path.as_str());
+                if !linking || (cache.is_none() && !src.starts_with(&built)) {
+                    return false;
+                }
+                let from_cache = cache.is_some();
+                let src = cache.map_or(src, |p| p.as_path());
+                let made = if replacing {
+                    link_replacing(src, &path)
+                } else {
+                    std::fs::hard_link(src, &path)
+                };
+                match made {
+                    Ok(()) => {
+                        linked_cache += usize::from(from_cache);
+                        true
+                    }
+                    Err(err) => {
+                        link_failure = Some(err.to_string());
+                        linking = false;
+                        false
+                    }
+                }
+            };
             match e.op {
                 Op::ReplaceFile => {
                     let src = sources[e.path.as_str()];
-                    match std::fs::copy(src, &path) {
-                        Err(err)
-                            if err.kind() == std::io::ErrorKind::PermissionDenied
-                                && crate::clear_readonly(&path) =>
-                        {
-                            std::fs::copy(src, &path)
-                        }
-                        r => r,
+                    if link(src, true) {
+                        linked += 1;
+                        hashes.wrote(src, e.after.as_deref().expect("a placed file has after"));
+                    } else {
+                        copy_replacing(src, &path)
+                            .map_err(|err| crate::quarantine::copy_error(&e.path, &path, err))?;
+                        crate::clear_readonly(&path);
                     }
-                    .map_err(|err| crate::quarantine::copy_error(&e.path, &path, err))?;
-                    crate::clear_readonly(&path);
                 }
                 Op::CreateDir => std::fs::create_dir(&path).map_err(io_err(&path))?,
                 // Windows refused the file as a threat. The entry stays pending, so
                 // the rollback clears whatever was left, and the check before the
                 // game starts finds the file missing and refuses the launch with
                 // the antivirus report instead of a bare copy error here.
-                Op::CreateFile => match std::fs::copy(sources[e.path.as_str()], &path) {
-                    Err(err) if crate::quarantine::is_virus_error(&err) => continue,
-                    r => {
-                        r.map_err(io_err(&path))?;
-                        crate::clear_readonly(&path);
+                Op::CreateFile => {
+                    let src = sources[e.path.as_str()];
+                    if link(src, false) {
+                        linked += 1;
+                        hashes.wrote(src, e.after.as_deref().expect("a placed file has after"));
+                    } else {
+                        match copy_replacing(src, &path) {
+                            Err(err) if crate::quarantine::is_virus_error(&err) => continue,
+                            r => {
+                                r.map_err(io_err(&path))?;
+                                crate::clear_readonly(&path);
+                            }
+                        }
                     }
-                },
+                }
                 Op::RegistryOverride => {
                     if let Some((reg, text, out)) = &registry
                         && out != text
@@ -1014,6 +1150,33 @@ impl<'a> Installer<'a> {
                 told = std::time::Instant::now();
             }
         }
+        let mode = match (&link_failure, self.copy_only) {
+            (_, true) => "copy (SWOFTY_INSTALL_COPY=1)".to_owned(),
+            (Some(why), _) if cached.is_some() => format!("copy (link cache link failed: {why})"),
+            (None, _) if cached.is_some() => {
+                let (made, kept) = cached.unwrap_or_default();
+                (self.out)(&format!(
+                    "installing: {linked} linked ({linked_cache} from the link cache: {made} copied into it, {kept} reused), {} copied",
+                    copied - linked
+                ));
+                String::new()
+            }
+            (None, _) if linked == 0 && cache_failure.is_some() => {
+                format!(
+                    "copy (link cache unavailable: {})",
+                    cache_failure.as_deref().unwrap_or_default()
+                )
+            }
+            (Some(why), _) => format!("copy (hard link failed: {why})"),
+            (None, _) if linked == 0 => "copy (no build output to link)".to_owned(),
+            (None, _) => "hard links".to_owned(),
+        };
+        if !mode.is_empty() {
+            (self.out)(&format!(
+                "installing: {mode}; {linked} file(s) linked, {} copied",
+                copied - linked
+            ));
+        }
         let planned: BTreeSet<String> = sources.keys().map(|rel| placed::key(rel)).collect();
         for id in addon_storage::ids(sources.keys().copied()) {
             addon_storage::load_profile(self.data, &id, &plan.profile)?;
@@ -1034,13 +1197,80 @@ impl<'a> Installer<'a> {
         j.commit()
     }
 
+    /// Brings the link cache on the game's drive up to date for the files
+    /// that can't be linked straight from the build output: all of them when
+    /// the build output is on another drive than the game folder, else the
+    /// ones from outside it, such as loose addon files. Returns where each is
+    /// in the cache, what the sync did, and why there is no cache when it
+    /// could not be made.
+    fn link_cache(
+        &self,
+        built: &Path,
+        entries: &[crate::journal::Entry],
+        sources: &BTreeMap<&str, &PathBuf>,
+    ) -> LinkCache {
+        let apart = crate::link_cache::apart((self.volume)(built), (self.volume)(&self.game.dir));
+        let srcs: Vec<(&str, &Path)> = entries
+            .iter()
+            .filter(|e| matches!(e.op, Op::ReplaceFile | Op::CreateFile))
+            .map(|e| (e.path.as_str(), sources[e.path.as_str()].as_path()))
+            .filter(|(_, s)| apart == Some(true) || !s.starts_with(built))
+            .collect();
+        if srcs.is_empty() {
+            if crate::link_cache::dir(&self.game.dir).exists() {
+                crate::link_cache::remove(&self.game.dir);
+            }
+            return LinkCache::default();
+        }
+        crate::now_doing("copying the mods to the game drive");
+        let mut told = std::time::Instant::now();
+        let synced = crate::link_cache::sync(&self.game.dir, &srcs, self.free_space, &mut |done, total| {
+            (self.progress)(done, total);
+            if told.elapsed() >= PROGRESS_EVERY {
+                (self.out)(&format!(
+                    "installing: {done} of {total} file(s) copied into the link cache"
+                ));
+                told = std::time::Instant::now();
+            }
+        });
+        match synced {
+            Ok(s) => LinkCache {
+                via: s.files,
+                synced: Some((s.copied, s.reused)),
+                failure: None,
+            },
+            Err(why) => {
+                (self.out)(&format!(
+                    "installing: link cache unavailable ({why}); copying instead"
+                ));
+                LinkCache {
+                    failure: Some(why),
+                    ..LinkCache::default()
+                }
+            }
+        }
+    }
+
     pub fn restore(&self) -> Result<Vec<Drift>> {
+        self.restore_setting_aside().map(|(report, _)| report)
+    }
+
+    /// [`restore`](Self::restore), and where in the set-aside folder it moved
+    /// a `version.dll` that is not the launcher's own: another tool's proxy,
+    /// such as an ASI loader or a renamed upscaler, is kept, never deleted.
+    pub fn restore_setting_aside(&self) -> Result<(Vec<Drift>, Option<PathBuf>)> {
         let mut report = self.recover()?;
         self.sweep()?;
         let proxy = self.path(PROXY);
         let baseline = self.baseline()?;
+        let mut set_aside = None;
         if proxy.is_file() && !baseline.files.contains_key(PROXY) {
-            with_retry(&proxy, || std::fs::remove_file(&proxy))?;
+            if shipped_proxy(&proxy)? {
+                with_retry(&proxy, || std::fs::remove_file(&proxy))?;
+            } else {
+                set_aside = Some(self.set_proxy_aside(&proxy)?);
+            }
+            report.retain(|d| !matches!(d, Drift::LeftInPlace(p) | Drift::Stranded(p) if p == PROXY));
         }
         let loader = self.path(LOADER_DIR);
         if loader.is_dir() {
@@ -1058,7 +1288,7 @@ impl<'a> Installer<'a> {
                     crate::move_file(&e.path(), &logs.join(e.file_name()))?;
                 }
             }
-            with_retry(&loader, || std::fs::remove_dir_all(&loader))?;
+            addon_storage::clear_tree(&loader)?;
         }
         if let Some(reg) = &self.game.user_reg
             && let Ok(text) = std::fs::read_to_string(reg)
@@ -1067,14 +1297,31 @@ impl<'a> Installer<'a> {
             self.objects().put_file(reg)?;
             std::fs::write(reg, out).map_err(io_err(reg))?;
         }
+        let mut hashes = Hashes::load(self.data);
         for (rel, rec) in &baseline.files {
             let path = self.path(rel);
-            if sha256_opt(&path)?.as_deref() != Some(rec.sha256.as_str()) {
+            if hashes.sha256_opt(&path)?.as_deref() != Some(rec.sha256.as_str()) {
                 self.objects().restore_to(&rec.sha256, &path)?;
+                hashes.wrote(&path, &rec.sha256);
             }
         }
+        hashes.save();
         report.extend(self.verify()?);
-        Ok(report)
+        Ok((report, set_aside))
+    }
+
+    /// Move `proxy` to a folder of its own under the set-aside folder.
+    fn set_proxy_aside(&self, proxy: &Path) -> Result<PathBuf> {
+        let dir = crate::recovery::set_aside_dir(self.data);
+        let mut stamp = crate::update::now_secs();
+        while dir.join(stamp.to_string()).join(PROXY).exists() {
+            stamp += 1;
+        }
+        let to = dir.join(stamp.to_string()).join(PROXY);
+        let parent = to.parent().expect("has parent");
+        std::fs::create_dir_all(parent).map_err(io_err(parent))?;
+        crate::move_file(proxy, &to)?;
+        Ok(to)
     }
 
     pub fn verify(&self) -> Result<Vec<Drift>> {
@@ -1090,10 +1337,14 @@ impl<'a> Installer<'a> {
                 Some(_) => {}
             }
         }
-        for rel in [PROXY, LOADER_DIR] {
-            if self.path(rel).exists() && !baseline.files.contains_key(rel) {
-                out.push(Drift::Addition(rel.into()));
-            }
+        if self.path(PROXY).exists() && !baseline.files.contains_key(PROXY) {
+            out.push(Drift::Addition(PROXY.into()));
+        }
+        if self.path(LOADER_DIR).exists()
+            && !baseline.files.contains_key(LOADER_DIR)
+            && let Some(rel) = self.added_file(&baseline, LOADER_DIR)
+        {
+            out.push(Drift::Addition(rel));
         }
         for f in Placed::load(self.data)?.files.values() {
             if f.replaced
@@ -1125,6 +1376,24 @@ impl<'a> Installer<'a> {
             });
         }
         Ok(out)
+    }
+
+    /// The first file under the folder `rel` that the baseline has no original for, or `rel` itself
+    /// when it is not a folder that can be listed. A folder that holds only empty folders has none.
+    fn added_file(&self, baseline: &Baseline, rel: &str) -> Option<String> {
+        let Ok(rd) = std::fs::read_dir(self.path(rel)) else {
+            return Some(rel.to_owned());
+        };
+        let mut entries: Vec<std::fs::DirEntry> = rd.flatten().collect();
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        entries.into_iter().find_map(|e| {
+            let child = format!("{rel}/{}", e.file_name().to_string_lossy());
+            if e.file_type().is_ok_and(|t| t.is_dir()) {
+                self.added_file(baseline, &child)
+            } else {
+                (!baseline.files.contains_key(&child)).then_some(child)
+            }
+        })
     }
 }
 
@@ -1182,6 +1451,55 @@ mod tests {
             Source::Steam
         );
         assert_eq!(Source::detect(&root.join("bare/F1 25")), Source::Unknown);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_link_cache_copy_reports_its_progress() {
+        let root = std::env::temp_dir().join(format!("swofty-link-progress-{}", std::process::id()));
+        std::fs::remove_dir_all(&root).ok();
+        let built = root.join("built");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let game = Game {
+            dir: root.join("game"),
+            user_reg: None,
+            identity: Identity {
+                build_id: "1".into(),
+                exe_sha256: String::new(),
+            },
+        };
+        std::fs::create_dir_all(&game.dir).unwrap();
+        let mut entries = Vec::new();
+        let mut files = Vec::new();
+        for n in 0..3u32 {
+            let src = outside.join(format!("f{n}.bin"));
+            std::fs::write(&src, [n as u8; 8]).unwrap();
+            entries.push(crate::journal::Entry {
+                seq: n,
+                op: Op::CreateFile,
+                path: format!("mods/f{n}.bin"),
+                before: None,
+                after: None,
+                state: crate::journal::State::Pending,
+            });
+            files.push(src);
+        }
+        let sources: BTreeMap<&str, &PathBuf> = entries
+            .iter()
+            .map(|e| e.path.as_str())
+            .zip(files.iter())
+            .collect();
+        let seen = std::cell::RefCell::new(Vec::new());
+        let progress = |done: usize, total: usize| seen.borrow_mut().push((done, total));
+        let inst = Installer {
+            progress: &progress,
+            free_space: |_| None,
+            ..Installer::new(&root, &game)
+        };
+        let cache = inst.link_cache(&built, &entries, &sources);
+        assert_eq!(cache.synced, Some((3, 0)), "{:?}", cache.failure);
+        assert_eq!(seen.into_inner(), [(1, 3), (2, 3), (3, 3)]);
         std::fs::remove_dir_all(&root).ok();
     }
 
@@ -1306,6 +1624,163 @@ mod tests {
             format!("WINE REGISTRY Version 2\n\n{OVERRIDE_HEADER}\n{OVERRIDE_VALUE}\n")
         );
         assert_eq!(remove_override(&fresh).unwrap(), "WINE REGISTRY Version 2\n");
+    }
+
+    struct Stranded {
+        root: PathBuf,
+        data: PathBuf,
+        game: Game,
+    }
+
+    impl Stranded {
+        /// A journal for `old/F1 25`, which is gone, whose files are now in
+        /// `moved/F1 25`: `a` and `c` hold what it wrote, `b` and `d` hold
+        /// something else, `e` was still pending, and `f` already holds its
+        /// original.
+        fn new(name: &str, build_id: &str) -> Self {
+            let root = std::env::temp_dir().join(format!("swofty-stranded-{name}-{}", std::process::id()));
+            std::fs::remove_dir_all(&root).ok();
+            let data = root.join("data");
+            let dir = root.join("moved/F1 25");
+            let objects = Objects {
+                root: data.join("baseline/objects"),
+            };
+            let mut shas = BTreeMap::new();
+            for (key, body) in [
+                ("orig-a", "orig-a"),
+                ("orig-b", "orig-b"),
+                ("orig-e", "orig-e"),
+                ("orig-f", "orig-f"),
+            ] {
+                let src = root.join("src").join(key);
+                std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+                std::fs::write(&src, body).unwrap();
+                shas.insert(key, objects.put_file(&src).unwrap());
+            }
+            for key in ["mod-a", "mod-b", "mod-c", "mod-d", "mod-e"] {
+                shas.insert(key, sha256_bytes(key.as_bytes()));
+            }
+            for (rel, body) in [
+                (crate::GAME_EXE, "exe"),
+                ("a.erp", "mod-a"),
+                ("b.erp", "from-elsewhere"),
+                ("swofty/c.dll", "mod-c"),
+                ("swofty/d.dll", "another-d"),
+                ("e.erp", "partial-e"),
+                ("f.erp", "orig-f"),
+            ] {
+                let p = dir.join(rel);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(p, body).unwrap();
+            }
+            let mut j = Journal::create(&data, "MODDED", "1", true).unwrap();
+            j.game = Some(root.join("old/F1 25"));
+            let sha = |k: &str| Some(shas[k].clone());
+            j.begin_all([
+                (Op::ReplaceFile, "a.erp".to_owned(), sha("orig-a"), sha("mod-a")),
+                (Op::ReplaceFile, "b.erp".to_owned(), sha("orig-b"), sha("mod-b")),
+                (Op::CreateFile, "swofty/c.dll".to_owned(), None, sha("mod-c")),
+                (Op::CreateFile, "swofty/d.dll".to_owned(), None, sha("mod-d")),
+                (Op::ReplaceFile, "e.erp".to_owned(), sha("orig-e"), sha("mod-e")),
+                (Op::ReplaceFile, "f.erp".to_owned(), sha("orig-f"), sha("mod-e")),
+            ])
+            .unwrap();
+            for i in [0, 1, 2, 3, 5] {
+                j.done(i).unwrap();
+            }
+            j.commit().unwrap();
+            let game = Game {
+                dir,
+                user_reg: None,
+                identity: Identity {
+                    build_id: build_id.into(),
+                    exe_sha256: String::new(),
+                },
+            };
+            Self { root, data, game }
+        }
+
+        fn read(&self, rel: &str) -> Option<String> {
+            std::fs::read_to_string(self.game.dir.join(rel)).ok()
+        }
+    }
+
+    impl Drop for Stranded {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.root).ok();
+        }
+    }
+
+    #[test]
+    fn a_journal_for_a_folder_that_is_gone_rolls_back_only_what_is_provably_ours() {
+        let f = Stranded::new("moved", "1");
+        let rolled = Installer::new(&f.data, &f.game).roll_back(true).unwrap();
+        assert_eq!(rolled.len(), 1);
+        let mut drift = rolled[0].drift.clone();
+        drift.sort_by_key(|d| d.to_string());
+        assert_eq!(
+            drift,
+            [
+                Drift::Stranded("b.erp".into()),
+                Drift::Stranded("e.erp".into()),
+                Drift::Stranded("swofty/d.dll".into()),
+            ]
+        );
+        assert_eq!(f.read("a.erp").as_deref(), Some("orig-a"));
+        assert_eq!(f.read("b.erp").as_deref(), Some("from-elsewhere"));
+        assert_eq!(f.read("swofty/c.dll"), None);
+        assert_eq!(f.read("swofty/d.dll").as_deref(), Some("another-d"));
+        assert_eq!(f.read("e.erp").as_deref(), Some("partial-e"));
+        assert_eq!(f.read("f.erp").as_deref(), Some("orig-f"));
+        assert!(Journal::open(&f.data).unwrap().is_empty());
+        assert_eq!(
+            Drift::Stranded("b.erp".into()).to_string(),
+            "b.erp is not what the earlier session wrote in the old game folder nor its original; left in place"
+        );
+    }
+
+    #[test]
+    fn a_journal_for_a_folder_that_is_gone_leaves_a_newer_build_alone_and_closes() {
+        let f = Stranded::new("rebuilt", "2");
+        let rolled = Installer::new(&f.data, &f.game).roll_back(true).unwrap();
+        let mut drift = rolled[0].drift.clone();
+        drift.sort_by_key(|d| d.to_string());
+        assert_eq!(
+            drift,
+            [
+                Drift::Stranded("a.erp".into()),
+                Drift::Stranded("b.erp".into()),
+                Drift::Stranded("e.erp".into()),
+                Drift::Stranded("swofty/d.dll".into()),
+            ]
+        );
+        assert_eq!(f.read("a.erp").as_deref(), Some("mod-a"));
+        assert_eq!(
+            f.read("swofty/c.dll"),
+            None,
+            "an added file it wrote is removed on any build"
+        );
+        assert!(Journal::open(&f.data).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_journal_whose_folder_still_has_the_game_treats_pending_files_as_its_own() {
+        let f = Stranded::new("still-there", "1");
+        let old = f.root.join("old/F1 25");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join(crate::GAME_EXE), "exe").unwrap();
+        let rolled = Installer::new(&f.data, &f.game).roll_back(true).unwrap();
+        let mut drift = rolled[0].drift.clone();
+        drift.sort_by_key(|d| d.to_string());
+        assert_eq!(
+            drift,
+            [
+                Drift::LeftInPlace("b.erp".into()),
+                Drift::LeftInPlace("swofty/d.dll".into()),
+            ]
+        );
+        assert_eq!(f.read("e.erp").as_deref(), Some("orig-e"));
+        assert!(Journal::open(&f.data).unwrap().is_empty());
     }
 
     #[test]

@@ -551,6 +551,26 @@ def gen_set(build):
     return bindgen.build_set(overlays[build], bindings, build == kb_name)
 
 
+def pe_stamp(path):
+    with open(path, 'rb') as f:
+        return parse_headers(f.read(0x1000))['stamp']
+
+
+def is_kb_build(path):
+    import bindgen
+    return pe_stamp(path) == bindgen.load()[0]['pe_timestamp']
+
+
+def gen_set_for(img):
+    import bindgen
+    kb_build, bindings, _, _ = bindgen.load()
+    kb_name, overlays = bindgen.load_overlays(kb_build)
+    for name, overlay in overlays.items():
+        if overlay['build']['pe_timestamp'] == img.stamp:
+            return bindgen.build_set(overlay, bindings, name == kb_name)
+    raise SystemExit(f'bindverify: no overlay in re/db/builds has PE timestamp {img.stamp}')
+
+
 def verify(image, doc, exe_size=None):
     img = image if isinstance(image, Image) else Image(image)
     return Resolver(img, doc, exe_size).run()

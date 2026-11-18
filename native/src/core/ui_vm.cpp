@@ -735,6 +735,31 @@ bool ui_vm_set_path(const std::string &path, int type, const void *value)
     return false;
 }
 
+uintptr_t ui_vm_node_token(const std::string &path)
+{
+    if (!g_Vm_Registry.address() || !a_path)
+        return 0;
+    void *reg = *g_Vm_Registry;
+    if (!reg)
+        return 0;
+    auto *root = *reinterpret_cast<uint8_t **>(static_cast<uint8_t *>(reg) + 8);
+    if (!root)
+        return 0;
+    void **node = reinterpret_cast<Path_t *>(a_path)(reg, root + 8, path.c_str());
+    return node && *node ? reinterpret_cast<uintptr_t>(*node) : 0;
+}
+
+uintptr_t ui_vm_epoch()
+{
+    if (!g_Vm_Registry.address())
+        return 0;
+    void *reg = *g_Vm_Registry;
+    if (!reg)
+        return 0;
+    auto *root = *reinterpret_cast<uint8_t **>(static_cast<uint8_t *>(reg) + 8);
+    return reinterpret_cast<uintptr_t>(reg) * 31u + reinterpret_cast<uintptr_t>(root);
+}
+
 void *ui_vm_message_system()
 {
     if (!ui_system || !swofty::mem::readable(ui_system, sizeof(void *)) || !*ui_system)

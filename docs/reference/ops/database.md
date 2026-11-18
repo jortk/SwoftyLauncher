@@ -157,6 +157,28 @@ bad record key <key>
 
 A `remove-record` whose key is already absent is a no-op, and the build prints `<addon id>: <key>: already removed`.
 
+### virtual-list
+
+```jsonc
+{ "op": "virtual-list", "list": "f5_1959" }   // before the add-row that adds the entrant list f5_1959
+```
+
+Marks an entrant list your addon adds as virtual. The game loads every row of `entrants.entrant_lists` below the table's count as a list, keeps its stat id in a byte (255 at most) and lets an entrant setup mode hold 32 lists, so a big season pack runs out of both. A virtual list takes neither:
+
+- The `add-row` that adds it passes the 255 ceiling.
+- After every addon's database ops, the build moves its row, entrant rows included, to `entrant_list_10000` and up, puts the table's last added row in its place and lowers the count. The game never loads it.
+- The build takes its label out of every content set's and entrant setup mode's list fields.
+- A box that names it shows when `swofty_virtual_list` is offered under `swofty_f1`. When the box is pressed, the core reads the virtual row into `swofty_virtual_list` and selects that list; the next press puts the host's own entrants back.
+
+The build prints one line per list and a summary:
+
+```text
+virtual list f5_1959: 312 key(s) moved from entrants.entrant_lists.entrant_list_301 to entrants.entrant_lists.entrant_list_10000
+virtual lists: 76 moved above the count (230 lists left for the game), 2 list field(s) no longer name them
+```
+
+A stock list stays where it is, and nothing moves when the table's last row is a stock list.
+
 ### Removing stock records
 
 A `remove-record` of a key in the game's stock database is skipped. The build warns once per addon with the count:
@@ -252,10 +274,10 @@ A copy keeps its id from build to build, so a career keeps its cars, teams and d
 - A copy the file has no id for takes, at a profile's first build with the file, the id the profile's last build gave the row with its label, or, for a new profile, the newest build of any profile. The last build's rows are read from its database file and from the database edits in its `swofty/assets.json`, where a build that loads the database in game puts them.
 - Any other new copy takes the next free id above the table's rows, in load order, as builds before 1.6.10 gave it, passing over the ids the file keeps for other rows and the ids the core's `ids.json` holds. A fresh install with the same addons in the same order gives a save made before 1.6.10 its ids back, and two installs that build the same addons in the same order from an empty file get the same ids.
 - An addon that is turned off or removed keeps its rows' ids. Turned back on, its rows get them back. An update that adds a row gives the new row a new id and leaves the others alone.
-- A kept id that a row of the database, the core's `ids.json` or the table's ceiling now rules out moves to the next free id.
+- A kept id that a row of the database, the core's `ids.json` or the table's ceiling now rules out moves to the next free id, in that profile only. The new id is kept under `profiles.<profile>` in the file; the install-wide id stays in `rows`, so every other profile keeps the id its careers hold, and a profile with no entry of its own reads the install-wide one. The id a row moved from is kept as an alias in the same place.
 - 1.6.10 and 1.6.11 gave new copies an id from the hash of their key and kept none of the ids earlier builds gave. The first build after them puts those rows back once: each takes the id the newest game session log from before 1.6.10 (`$DATA/sessions/<stamp>/loader.log`) shows for its label, and a row no log shows takes the next free id in load order again. An addon whose hashed team ids a session loaded since 1.6.10, while none loaded its earlier ones, keeps the hashed ids.
 - The file keeps every id a row had before the one it keeps (the ids 1.6.10 and 1.6.11 hashed, the ids a row moved from). Each build writes them to `swofty/id_aliases.json` as `{ "version": 1, "tables": { "teams": { "646": 518 }, "vehicles": {}, "drivers": {} } }`, earlier id to current id. When a Grand Prix is continued and no entrant list holds the saved entrants' teams, the core maps the saved entrants' team, vehicle and driver ids through it and loads the list that holds the mapped teams, so a Grand Prix started on 1.6.10 or 1.6.11 loads on a later build.
-- A table with no free id left takes the lowest id kept for an addon the build leaves out.
+- A table with no free id left takes the lowest id kept for an addon the build leaves out, then the lowest id `ids.json` holds for a record of an addon the build leaves out that no career uses.
 - Two copies with one label in one addon's table are `<label>` and `<label>#2`.
 
 The build prints where each id came from:
@@ -284,17 +306,20 @@ The game keeps the id of some tables in one byte, and of game setup modes and se
 | --- | --- |
 | `entrants.vehicles.vehicle_packages.vehicle_package_N` | 254 |
 | `entrants.drivers.driver_N` | 16382 |
+| `entrants.vehicles.vehicle_N` | 16382 |
+| `entrants.teams.team_N` | 16382 |
 | `entrants.engines.Engine_N` | 254 |
 | `entrants.characters.character_N` | 254 |
 | `entrants.animation.driver_animation_sets.driver_animation_set_N` | 254 |
 | `entrants.entrant_lists.entrant_list_N` | 255 |
 | `entrants.nationality.nationality_N` | 255 |
+| `leaderboards.leaderboard_descriptor_N` | 255 |
 | `game_setup.scenarios.scenario_N` (`statId`) | 254 |
 | `game_setup.game_setup_modes.game_setup_mode_N` | 31 |
 | `game_setup.seasons.season_N` (`statId`) | 31 |
 | `entrants.entrant_setup_modes.entrant_setup_mode_N` | 31 |
 
-A game setup mode or season id above 31 stops the game at boot. A driver id is 16 bits in memory and 14 in saves and net messages, so 16382 is the highest; a copy takes 208 to 253 first, then 256 upward.
+A leaderboard descriptor's id is the byte that names the Time Trial board (`LBV<id><track><D|W>`) and splits the cars and times of the lists that point at it ([Leaderboards](/std/content#leaderboards)). A game setup mode or season id above 31 stops the game at boot. A driver id is 16 bits in memory and 14 in saves and net messages, so 16382 is the highest; vehicle and team ids are packed the same way in the game's keys; a copy takes 208 to 253 first, then 256 upward.
 
 When the next id above the table's highest would pass it, the copy gets the lowest id above the stock rows' highest that no row holds, and a driver the lowest free id from 208. The build prints it:
 
@@ -316,9 +341,45 @@ A `stat_id` in `set` above the table's highest moves the same way, and the build
 my-addon: stat_id 300 of my_car is above 254, the highest the game reads in entrants.vehicles.vehicle_packages.vehicle_package; the build gave it stat_id 59. The addon's author should leave stat_id out of add-row
 ```
 
+A `stat_id` in `set` that the core's `ids.json` keeps for another addon's registry record, in a table whose ids careers hold (teams, vehicles, drivers, driver heads, entrant lists, scenarios), moves the same way, and the build warns:
+
+```text
+my-addon: stat_id 247 of my_driver is the id careers hold for other-addon/their_driver; the build gave it stat_id 256. The addon's author should leave stat_id out of add-row
+```
+
 A `statId` in `set` on a `game_setup.scenarios` row moves the same way when a row added earlier holds it or it is above 254, and `[statId=<id>]` selectors follow. A scenario copy without a `statId` in `set` keeps its source's.
 
 The conflicts report counts each clash as a database conflict between the two addons. The id a copy moves to depends on the addons before it in the load order, so a career made with one load order expects that order's ids. An id that a stock row holds stays as set. A copy into a nested table, such as an entrant of an entrant list, keeps its source's id; the build prints a line when the nested table's ids were all different.
+
+#### Unlock items
+
+The rows of `unlockable_content.unlockable_items.unlockable_item_list_<n>.folder_<m>.<kind>` (`unlockable_livery`, `unlockable_se_livery`, `unlockable_decal_set`, `unlockable_suit` and every other kind) carry a `statId` that must be unique within the unlock list, across all its folders and kinds ([Sponsors](/reference/data/sponsors#ids)). Leave `statId` out of `set` and the launcher gives the row one:
+
+| An `add-row` into an unlock folder | `statId` of the copy |
+| --- | --- |
+| no `statId` in `set` | the id the install keeps for the row, else a free one ([Kept ids](#kept-ids)) |
+| `"stat_id": "keep"` and no `statId` in `set` | the source row's |
+| a `statId` in `set` that no row of the list holds | as set |
+| a `statId` in `set` that a stock row or a row added earlier holds | a free one, with a warning |
+
+A free id is the lowest from 10000 (or above the list's highest stock id, should that ever pass 10000) up to 65535 that no row of the list holds, no addon later in the load order sets on an unlock row of the list, `row-ids.json` keeps for no other row, and the core's `ids.json` holds for no registry livery's unlock row (`livery.unlock`, one pool for all lists, [Liveries](/std/systems/liveries)). Ids from 10000 stay clear of the game: an update adds its unlock rows right above the highest stock id, as Steam build 26566308 added `toro_rosso_barcelona_26` with 5280. Each unlock list is its own id space, so a decal set added to lists 1 and 2 can get the same id in both. When no id up to 65535 is free, the row takes an id kept for an addon the build leaves out, then the `add-row` fails.
+
+The id is kept in `row-ids.json` under `<addon>/<list>.unlockable_item/<kind>/<label>`, for example `my-addon/unlockable_content.unlockable_items.unlockable_item_list_2.unlockable_item/unlockable_se_livery/my_livery`, so it stays the same at every build, whatever the profile, the load order or the other addons, and moving the row to another folder keeps it. The build prints where each id came from:
+
+```text
+my-addon: add-row unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery_22 (from unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery[_metadata_=toro_rosso_miami_26]): statId 10000 (the source's is 5274)
+my-addon: add-row unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery_22 (from unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery[_metadata_=toro_rosso_miami_26]): statId 10000 (the source's is 5274; kept from row-ids.json)
+```
+
+A `statId` in `set` that another row of the list holds moves, unlike a `stat_id` a stock row holds: two unlock rows with one id hide each other, and a game update can give a stock row the id an addon picked. The copy gets an id of its own, kept from then on, a `[statId=<id>]` selector later in the same file finds the copy, and the build warns:
+
+```text
+my-addon: add-row unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery_22 (from …): statId 5280 is taken by unlockable_content.unlockable_items.unlockable_item_list_2.folder_23.unlockable_se_livery_21 (toro_rosso_barcelona_26); statId 10000
+my-addon: statId 5280 of my_livery is taken by toro_rosso_barcelona_26 from the game; the build gave it statId 10000. The addon's author should leave statId out of add-row
+my-addon: statId 5281 of my_livery is taken by f1_sticker from other-addon; the build gave it statId 10001. The addon's author should leave statId out of add-row
+```
+
+A clash with another addon's row counts as a database conflict between the two addons. A `statId` below 0 or one that is not a number stays as set.
 
 An `unlockable_se_livery` row added to an `unlockable_content.unlockable_items.unlockable_item_list_<n>.folder_<m>` table, by `add-row` or by `put-record`, unlocks the new special livery. The build writes the row's ownership key, the djb2 hash of `eSELivery` and the row's `_metadata_`, to the `owned_items` block of `swofty/settings.json`, and `swofty_core.dll` reports that key as owned to the livery picker. A key that any stock database value also gives is left out with a warning.
 
@@ -376,6 +437,21 @@ Every row of these tables holds the four keys `colour_1_default`, `colour_2_defa
 - At boot, `Sess_Apply_ContentAvailability` calls `Game_Build_CustomisationCatalogue` (`0x1414059c0`). It builds the four names from the format string `colour_%u_default` and reads each of them on every row with `Gdb_Get_FieldInt`, with no check for a missing key (`0x1414078f2` to `0x1414078fa` for gloves, the same for the other tables). A row that lacks any of the four crashes the game at boot with an access violation at `F1_25.exe+0x14078fa`.
 - A customisable suit design gives an AI driver's suit its colours from `colour_1_default` to `colour_3_default`. An AI driver in `tier01_livery76` wears its `#e5e5e5`, `#0e3858` and `#ffb43f` (`-1710619`, `-15845288`, `-19393`).
 - `add-row` copies the four keys of any of these rows, empty text included, and swofty_core applies a copied empty value as the game's 0. Launcher 1.4.0 and earlier copy them only from a `fields` list, and on the runtime route their swofty_core ignores the empty values: `edit … ignored: an int needs integer text (the game parses it with atoi), got ''`.
+
+### Team kit of a special livery
+
+Every row of `customisation.custom_se_liveries.se_liveries` holds a `team_customisation`: the label of a team kit row, `entrants.team_customisation.team_customisation_for_year_N.team_customisation_M`. The 21 stock rows name kits such as `2025-mclarensilverstone` and `2026-tororosso`.
+
+- A kit label is not the car's folder name. The 2026 kits of Alpine, Aston Martin, Racing Bulls and Cadillac are `2026-renault`, `2026-forceindia`, `2026-tororosso` and `2026-cadillac`; their car folders are `lotus`, `force_india`, `toro_rosso` and `gm_cadillac`.
+- At boot, `Sess_Apply_ContentAvailability` (`0x1413e4cf0`) reads each row's `team_customisation` and skips the row when it is empty (`0x1413e9764`). Otherwise it finds the kit row with that label, by `strcmp` over every year (`0x1424aca70`), and reads the kit's `official_driver_customisations` with no check for a kit it did not find (`0x1413e9785` to `0x1413e9797`). A row that names no kit crashes the game at boot with an access violation at `F1_25.exe+0x13e9797`.
+- `Game_Build_CustomisationCatalogue` (`0x1414059c0`) reads the same value and also skips an empty one (`0x1414173a0`).
+- The build checks every special livery row after all database operations. It empties a `team_customisation` that labels no kit row, and warns with the addon that wrote the value:
+
+```text
+More Liveries: special livery lotus_lx02 has team_customisation 2026-lotus, and entrants.team_customisation has no row with that label; the value is left empty (the game crashes at start-up on a team kit it cannot find)
+```
+
+Take the label from the kit row whose `linked_team` is the car's team.
 
 ### The side-data check
 
@@ -518,12 +594,25 @@ A `db` [option](/reference/addons/manifest#options) changes operations at build 
 
 - <span v-pre>`{{id}}`</span> in any string is replaced with the option's value: `true` or `false`, the number, or the choice value.
 - `"when": { "id": value }` keeps the operation only when every listed option has that value.
+- `"addon"` in a `when` keeps the operation only while that addon is on in the profile and the build: an addon id, `{ "id", "version" }` with a semver range, or a list of them that must all be on. It combines with the option values.
+- A `when` at the top of the file applies to every operation in it.
 
 ```json
 { "op": "set", "select": "rules.stop_go_penalty", "field": "penalty_duration", "value": "{{penalty_seconds}}" },
 { "op": "set", "select": "entrants.teams.team[_metadata_=gm_cadillac_26]", "field": "display_name_code", "value": "CAD",
-  "when": { "short_names": true } }
+  "when": { "short_names": true } },
+{ "op": "set", "select": "f2.calendar.round[_metadata_=round_6]", "field": "track", "value": "istanbul_park",
+  "when": { "addon": "track.istanbul_park", "istanbul_park": true } }
 ```
+
+A bad `addon` value fails the build and names it:
+
+```text
+miguelvf3.f2-revamp: when.addon: "Istanbul Park" is not an addon id
+miguelvf3.f2-revamp: when.addon: "versoin" is not a key of an addon; use id and version
+```
+
+A toggle with [`needs`](/reference/addons/manifest#options) reads as off while an addon it needs is off. [Content that needs another addon](/reference/addons/settings#content-that-needs-another-addon) has a full example. A launcher before 1.9.34 fails the build on `addon` in a `when` and on a `when` at the top of a file.
 
 Changing a `db` option marks the profile for a rebuild. The next launch, or `swofty build`, applies it.
 

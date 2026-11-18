@@ -560,7 +560,7 @@ bool bind_all(std::string &why)
 namespace runtime {
 
 // Names the category value the next setupFromUnranked applies, for a host that skips the Car Category screen
-// (netplay_room.cpp): what a press on an addon box remembers. An empty value drops any earlier choice, so a
+// (the session host's car_category): what a press on an addon box remembers. An empty value drops any earlier choice, so a
 // stock host starts from the stock index. False, with the reason, when the value cannot be applied.
 bool car_category_choose(const std::string &value, std::string &why)
 {

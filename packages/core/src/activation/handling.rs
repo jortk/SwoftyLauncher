@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value};
 use swofty_formats::bxml::{Document, Element, Kind};
 use swofty_formats::erp::{Entry, ErpFile, Resource};
+use swofty_formats::pkg::{self, Node, Pkg, Val};
 
+use crate::activation::wheel_check;
 use crate::{Result, io_err};
 
 pub const REGISTRY: &str = "vehicle.handling";
@@ -94,6 +96,7 @@ pub enum Step {
         up: Vec<f64>,
         down: Vec<f64>,
     },
+    OwnGears,
     DrsHardware(bool),
     Upgrade {
         name: String,
@@ -438,6 +441,9 @@ impl Plan {
             if let Some(ratios) = ratios {
                 self.steps.push(Step::Gears { ratios, up, down });
             }
+            if fields.contains_key("ratios") || fields.contains_key("final_drive_ratio") {
+                self.steps.push(Step::OwnGears);
+            }
         }
     }
 
@@ -550,6 +556,7 @@ impl Plan {
                 Step::Leaf(l) => apply_leaf(root, l, &mut out),
                 Step::Remove(section) => remove_section(root, section, &mut out),
                 Step::Gears { ratios, up, down } => apply_gears(root, ratios, up, down, &mut out),
+                Step::OwnGears => own_gears(root, &mut out),
                 Step::Upgrade {
                     name,
                     section,
@@ -816,6 +823,28 @@ fn apply_gears(root: &mut Element, ratios: &[f64], up: &[f64], down: &[f64], out
     ));
 }
 
+fn own_gears(root: &mut Element, out: &mut Applied) {
+    let Some(box_) = root.children.iter_mut().find(|c| is_el(c, "GearBox")) else {
+        return;
+    };
+    match find_key(box_, "AllowGearRatioTuning") {
+        Some(i) if box_.children[i].attr(b"value") == Some(&b"false"[..]) => return,
+        Some(i) => box_.children[i].set_attr(b"value", b"false"),
+        None => {
+            let like = box_
+                .children
+                .iter()
+                .find(|c| c.kind == Kind::Element && c.attr(b"value").is_some());
+            let leaf = new_leaf(like, "AllowGearRatioTuning", "false");
+            box_.children.push(leaf);
+        }
+    }
+    out.changed = true;
+    out.lines.push(
+        "GearBox: AllowGearRatioTuning false, so the car drives these ratios and not the setup's".into(),
+    );
+}
+
 pub fn edit_vtf_data(data: &[u8], plan: &Plan) -> Result<Option<(Vec<u8>, Applied)>> {
     let mut doc = Document::parse(data)?;
     let applied = plan.apply(&mut doc.root);
@@ -856,17 +885,104 @@ pub struct HandlingMap {
     pub target: Target,
     pub plan: Plan,
     pub resources: Option<Vec<String>>,
+    pub base: Option<String>,
+}
+
+const BASE_KEY: &str = "baseVtfAsset";
+const CAR_LAYER: &str = "-carmodel.layer";
+
+fn base_of<'a>(bases: &[(&str, &'a str)], vtf: &str) -> Option<&'a str> {
+    bases
+        .iter()
+        .find(|(name, _)| vtf == *name || vtf.ends_with(name))
+        .map(|(_, base)| *base)
+}
+
+fn base_layer(data: &[u8], bases: &[(&str, &str)]) -> Result<Option<(Vec<u8>, Vec<String>)>> {
+    if !pkg::is_pkg(data) {
+        return Ok(None);
+    }
+    let mut doc = Pkg::parse(data)?;
+    let Some(instances) = doc
+        .root
+        .as_obj_mut()
+        .and_then(|o| o.get_mut("instances"))
+        .and_then(Node::as_arr_mut)
+    else {
+        return Ok(None);
+    };
+    let mut lines = Vec::new();
+    for inst in &mut instances.items {
+        let Some(physics) = inst
+            .as_obj_mut()
+            .and_then(|o| o.get_mut("overrides"))
+            .and_then(Node::as_obj_mut)
+            .and_then(|o| o.get_mut("CarPhysics2"))
+            .and_then(Node::as_obj_mut)
+        else {
+            continue;
+        };
+        if physics.get(BASE_KEY).is_some() {
+            continue;
+        }
+        let Some(at) = physics
+            .items
+            .iter()
+            .position(|(k, _)| k.as_str() == Some("vtfAsset"))
+        else {
+            continue;
+        };
+        let Some(vtf) = physics.items[at]
+            .1
+            .as_val()
+            .and_then(Val::as_str)
+            .map(str::to_owned)
+        else {
+            continue;
+        };
+        let Some(base) = base_of(bases, &vtf) else {
+            continue;
+        };
+        physics
+            .items
+            .insert(at + 1, (Val::str(BASE_KEY), Node::Val(Val::str(base))));
+        lines.push(format!(
+            "CarPhysics2/{BASE_KEY}: {base}, so equal performance drives the season's base car"
+        ));
+    }
+    if lines.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some((doc.to_bytes()?, lines)))
 }
 
 pub fn edit_archive(src: &Path, maps: &[&HandlingMap], out: &Path, lines: &mut Vec<String>) -> Result<usize> {
     let file = ErpFile::open(src)?;
     let mut replace = BTreeMap::new();
+    let bases: Vec<(&str, &str)> = maps
+        .iter()
+        .filter_map(|m| Some((m.resources.as_ref()?, m.base.as_deref()?)))
+        .flat_map(|(names, base)| names.iter().map(move |n| (n.as_str(), base)))
+        .collect();
     for (i, r) in file.erp.resources.iter().enumerate() {
+        if r.name.ends_with(CAR_LAYER) && !bases.is_empty() {
+            let res = file.load(r)?;
+            if let Some((bytes, applied)) = base_layer(&res.fragments[0].data()?, &bases)? {
+                let mut new = res.clone();
+                crate::activation::ers::set_data(&mut new, 0, &bytes)?;
+                let layer = r.name.rsplit('/').next().unwrap_or(&r.name);
+                lines.extend(applied.iter().map(|l| format!("handling {layer}: {l}")));
+                replace.insert(i, new);
+            }
+            continue;
+        }
         if r.kind() != "VTF" {
             continue;
         }
         let mut res = file.load(r)?;
+        let stock = res.fragments[0].data()?;
         let mut changed = false;
+        let mut by: Vec<&str> = Vec::new();
         for m in maps {
             if let Some(names) = &m.resources
                 && !names.iter().any(|n| r.name.ends_with(n.as_str()))
@@ -889,9 +1005,18 @@ pub fn edit_archive(src: &Path, maps: &[&HandlingMap], out: &Path, lines: &mut V
                 );
                 res = new;
                 changed = true;
+                by.push(m.id.as_str());
             }
         }
-        if changed {
+        if changed && by.iter().all(|id| id.ends_with(BASE_ID)) {
+            replace.insert(i, res);
+        } else if changed {
+            let moved = wheel_check::changes_in_data(&stock, &res.fragments[0].data()?).unwrap_or_default();
+            let vehicle = r.name.rsplit('/').next().unwrap_or(&r.name);
+            lines.extend(
+                wheel_check::warning(&by.join(", "), vehicle, &moved)
+                    .map(|w| format!("{}{w}", wheel_check::WARNING_PREFIX)),
+            );
             replace.insert(i, res);
         }
     }
@@ -925,7 +1050,10 @@ pub struct HandlingBuild {
 pub fn stamp(maps: &[HandlingMap], sources: &[PathBuf]) -> Result<String> {
     let mut h = <sha2::Sha256 as sha2::Digest>::new();
     for m in maps {
-        sha2::Digest::update(&mut h, format!("{}|{:?}|{:?}", m.id, m.target, m.plan));
+        sha2::Digest::update(
+            &mut h,
+            format!("{}|{:?}|{:?}|{:?}", m.id, m.target, m.plan, m.base),
+        );
     }
     for p in sources {
         let meta = std::fs::metadata(p).map_err(io_err(p))?;
@@ -1226,6 +1354,7 @@ pub fn maps_of(resolved: &Resolved) -> (Vec<HandlingMap>, Vec<String>) {
                     target,
                     plan,
                     resources,
+                    base: None,
                 });
             }
             None => notes.push(format!(
@@ -1263,9 +1392,189 @@ pub fn read_maps(addons: &[(String, PathBuf)], options: Options) -> (Vec<Handlin
         .map(|(addon, values)| Files { addon, values })
         .collect();
     let resolved = resolve(&files, options);
-    let (maps, more) = maps_of(&resolved);
+    let (mut maps, more) = maps_of(&resolved);
     notes.extend(more);
+    let (base, bases) = base_maps(&resolved, addons, &maps);
+    link_bases(&mut maps, &bases);
+    maps.extend(base);
     (maps, notes)
+}
+
+pub fn link_bases(maps: &mut [HandlingMap], bases: &Bases) {
+    for m in maps {
+        let Target::Addon { addon, .. } = &m.target else {
+            continue;
+        };
+        m.base = m
+            .resources
+            .iter()
+            .flatten()
+            .filter_map(|n| package_of(n))
+            .find_map(|p| bases.get(&(addon.clone(), p.to_owned())).cloned());
+    }
+}
+
+const BASE_VTF: &str = "teams/fom_car/handling/fom_car.vtf";
+const BASE_ID: &str = " equal performance";
+const NOT_HANDLING: [&str; 3] = ["vtf", "extends", "within"];
+
+fn package_of(resource: &str) -> Option<&str> {
+    resource
+        .strip_prefix("eaid://")?
+        .split('/')
+        .next()
+        .filter(|p| !p.is_empty())
+}
+
+pub type Bases = BTreeMap<(String, String), String>;
+
+pub fn base_maps(
+    resolved: &Resolved,
+    addons: &[(String, PathBuf)],
+    maps: &[HandlingMap],
+) -> (Vec<HandlingMap>, Bases) {
+    let named: BTreeSet<&str> = maps
+        .iter()
+        .filter_map(|m| m.resources.as_ref())
+        .flatten()
+        .map(String::as_str)
+        .collect();
+    let mut wanted: Vec<(&str, &str, Vec<&Value>)> = Vec::new();
+    for (addon, _) in addons {
+        let mut by_package: BTreeMap<&str, Vec<&Value>> = BTreeMap::new();
+        for m in maps {
+            if !matches!(&m.target, Target::Addon { addon: a, .. } if a == addon) {
+                continue;
+            }
+            let Some(rec) = resolved.records.get(&m.id) else {
+                continue;
+            };
+            let packages: BTreeSet<&str> = m
+                .resources
+                .iter()
+                .flatten()
+                .filter_map(|n| package_of(n))
+                .collect();
+            for package in packages {
+                by_package.entry(package).or_default().push(rec);
+            }
+        }
+        wanted.extend(by_package.into_iter().map(|(p, r)| (addon.as_str(), p, r)));
+    }
+    let mut out = Vec::new();
+    let mut bases = Bases::new();
+    let mut made: BTreeSet<String> = BTreeSet::new();
+    for own_only in [true, false] {
+        for (addon, package, records) in &wanted {
+            let key = ((*addon).to_owned(), (*package).to_owned());
+            if bases.contains_key(&key) {
+                continue;
+            }
+            let base = format!("eaid://{package}/{BASE_VTF}");
+            if named.contains(base.as_str()) || made.contains(&base) {
+                bases.insert(key, base);
+                continue;
+            }
+            let Some((owner, path)) = addons
+                .iter()
+                .filter(|(a, _)| (a.as_str() == *addon) == own_only)
+                .find_map(|(a, dir)| archive_with(dir, &base).map(|path| (a.clone(), path)))
+            else {
+                continue;
+            };
+            bases.insert(key, base.clone());
+            made.insert(base.clone());
+            let plan = Plan::from_record(&consensus(records));
+            if plan.is_empty() {
+                continue;
+            }
+            out.push(HandlingMap {
+                id: format!("{addon}/{package}{BASE_ID}"),
+                target: Target::Addon { addon: owner, path },
+                plan,
+                resources: Some(vec![base]),
+                base: None,
+            });
+        }
+    }
+    (out, bases)
+}
+
+fn archive_with(dir: &Path, resource: &str) -> Option<String> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(at) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&at) else {
+            continue;
+        };
+        for e in entries.flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|x| x.eq_ignore_ascii_case("erp")) {
+                found.push(path);
+            }
+        }
+    }
+    found.sort_by_key(|p| (p.file_name().is_none_or(|n| n != "common.erp"), p.clone()));
+    found.into_iter().find_map(|path| {
+        let file = ErpFile::open(&path).ok()?;
+        if !file.erp.resources.iter().any(|r| r.name == resource) {
+            return None;
+        }
+        let rel = path.strip_prefix(dir).ok()?;
+        Some(rel.to_string_lossy().replace('\\', "/"))
+    })
+}
+
+fn consensus(records: &[&Value]) -> Value {
+    let mut out = Map::new();
+    let mut keys: BTreeSet<&str> = BTreeSet::new();
+    for r in records {
+        if let Some(o) = r.as_object() {
+            keys.extend(o.keys().map(String::as_str).filter(|k| !NOT_HANDLING.contains(k)));
+        }
+    }
+    for key in keys {
+        let values: Vec<&Value> = records.iter().filter_map(|r| r.get(key)).collect();
+        if let Some(v) = agree(&values, records.len()) {
+            out.insert(key.to_owned(), v);
+        }
+    }
+    Value::Object(out)
+}
+
+fn agree(values: &[&Value], total: usize) -> Option<Value> {
+    if values.len() * 2 < total {
+        return None;
+    }
+    if values.iter().all(|v| v.is_object()) {
+        let mut keys: BTreeSet<&str> = BTreeSet::new();
+        for v in values {
+            keys.extend(v.as_object().expect("an object").keys().map(String::as_str));
+        }
+        let mut out = Map::new();
+        for key in keys {
+            let inner: Vec<&Value> = values.iter().filter_map(|v| v.get(key)).collect();
+            if let Some(v) = agree(&inner, total) {
+                out.insert(key.to_owned(), v);
+            }
+        }
+        return (!out.is_empty()).then_some(Value::Object(out));
+    }
+    let mut counts: Vec<(String, usize, &Value)> = Vec::new();
+    for v in values {
+        let text = v.to_string();
+        match counts.iter_mut().find(|(t, _, _)| *t == text) {
+            Some((_, n, _)) => *n += 1,
+            None => counts.push((text, 1, v)),
+        }
+    }
+    let best = counts.iter().map(|(_, n, _)| *n).max()?;
+    counts
+        .into_iter()
+        .find(|(_, n, _)| *n == best)
+        .map(|(_, _, v)| v.clone())
 }
 
 pub fn sources(
@@ -1439,6 +1748,253 @@ mod tests {
         assert!(g.child(b"GearDnSpeedMultiple6th").is_some());
         assert!(g.child(b"GearDnSpeedMultiple7th").is_none());
         assert!(out.lines.iter().any(|l| l.contains("6 gears")));
+        assert_eq!(value(&root, "GearBox", "AllowGearRatioTuning"), "false");
+    }
+
+    #[test]
+    fn a_final_drive_alone_also_turns_setup_ratios_off() {
+        let plan = Plan::from_record(&json!({ "gearbox": { "final_drive_ratio": 4.1 } }));
+        let mut root = car();
+        let out = plan.apply(&mut root);
+        assert!(out.changed, "{:?}", out.notes);
+        assert_eq!(value(&root, "GearBox", "FinalDriveRatio"), "4.1");
+        assert_eq!(value(&root, "GearBox", "AllowGearRatioTuning"), "false");
+        let again = plan.apply(&mut root);
+        assert!(!again.lines.iter().any(|l| l.contains("AllowGearRatioTuning")));
+    }
+
+    #[test]
+    fn a_handling_without_a_gearbox_leaves_setup_ratios_on() {
+        let plan = Plan::from_record(&json!({ "chassis": { "mass": 640 } }));
+        let mut root = car();
+        plan.apply(&mut root);
+        assert!(
+            root.child(b"GearBox")
+                .unwrap()
+                .child(b"AllowGearRatioTuning")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn the_base_takes_each_value_most_records_share() {
+        let a = json!({ "vtf": "a.erp", "extends": "x", "engine": { "limiter_rotation_rate": 1885 },
+            "gearbox": { "ratios": [3.4, 2.2, 1.1] }, "chassis": { "mass": 642, "moi_x": 1 }, "only_here": 1 });
+        let b = json!({ "vtf": "b.erp", "engine": { "limiter_rotation_rate": 1885 },
+            "gearbox": { "ratios": [3.4, 2.2, 1.1] }, "chassis": { "mass": 642, "moi_x": 2 } });
+        let c = json!({ "vtf": "c.erp", "engine": { "limiter_rotation_rate": 1700 },
+            "gearbox": { "ratios": [3.0, 2.0] }, "chassis": { "mass": 700, "moi_x": 3 } });
+        let base = consensus(&[&a, &b, &c]);
+        assert_eq!(
+            base,
+            json!({ "engine": { "limiter_rotation_rate": 1885 }, "gearbox": { "ratios": [3.4, 2.2, 1.1] },
+                "chassis": { "mass": 642, "moi_x": 1 } })
+        );
+    }
+
+    fn erp_with(names: &[&str]) -> Vec<u8> {
+        use swofty_formats::erp::{Erp, Fragment, HEADER_LEN, MAGIC, STORED};
+        let mut header = [0u8; HEADER_LEN];
+        header[..4].copy_from_slice(MAGIC);
+        header[4..8].copy_from_slice(&3u32.to_le_bytes());
+        Erp {
+            header,
+            version: 3,
+            resources: names
+                .iter()
+                .map(|n| Resource {
+                    name: (*n).into(),
+                    kind: swofty_formats::erp::kind("VTF").unwrap(),
+                    unk: vec![0; 4],
+                    fragments: vec![Fragment {
+                        name: *b"temp",
+                        offset: 0,
+                        size: 1,
+                        flags: 0x10,
+                        compression: STORED,
+                        packed: 1,
+                        raw: vec![0],
+                    }],
+                    hash: [0; 16],
+                })
+                .collect(),
+        }
+        .to_bytes()
+    }
+
+    #[test]
+    fn an_addon_package_base_car_gets_the_season_handling() {
+        let dir = std::env::temp_dir().join(format!("swofty-handling-base-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("cars/teams")).unwrap();
+        let base = "eaid://sw_2013_vehicle_package/teams/fom_car/handling/fom_car.vtf";
+        std::fs::write(dir.join("cars/teams/common.erp"), erp_with(&[base])).unwrap();
+        let team = |name: &str| {
+            let res = format!("eaid://sw_2013_vehicle_package/teams/{name}/handling/{name}.vtf");
+            json!({ "vtf": { "erp": format!("cars/teams/{name}/wep/{name}.erp"), "resources": [res] },
+                "gearbox": { "ratios": [3.4, 2.2, 1.9, 1.6, 1.4, 1.2, 1.1] } })
+        };
+        let mut resolved = Resolved::default();
+        resolved.records.insert("t.s/redbull".into(), team("redbull"));
+        resolved.records.insert("t.s/ferrari".into(), team("ferrari"));
+        let (maps, _) = maps_of(&resolved);
+        let addons = vec![("t.s".to_owned(), dir.clone())];
+        let (extra, bases) = base_maps(&resolved, &addons, &maps);
+        assert_eq!(
+            bases
+                .get(&("t.s".to_owned(), "sw_2013_vehicle_package".to_owned()))
+                .map(String::as_str),
+            Some(base)
+        );
+        let mut linked = maps.clone();
+        link_bases(&mut linked, &bases);
+        assert!(linked.iter().all(|m| m.base.as_deref() == Some(base)));
+        assert_eq!(extra.len(), 1);
+        assert_eq!(extra[0].id, "t.s/sw_2013_vehicle_package equal performance");
+        assert_eq!(
+            extra[0].target,
+            Target::Addon {
+                addon: "t.s".into(),
+                path: "cars/teams/common.erp".into()
+            }
+        );
+        assert_eq!(extra[0].resources.as_deref(), Some(&[base.to_owned()][..]));
+        assert!(
+            extra[0]
+                .plan
+                .steps
+                .iter()
+                .any(|s| matches!(s, Step::Gears { ratios, .. } if ratios.len() == 7))
+        );
+
+        let mut own = team("redbull");
+        own["vtf"] = json!({ "erp": "cars/teams/common.erp", "resources": [base] });
+        resolved.records.insert("t.s/base".into(), own);
+        let (maps, _) = maps_of(&resolved);
+        let (extra, bases) = base_maps(&resolved, &addons, &maps);
+        assert!(extra.is_empty());
+        assert_eq!(bases.len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_livery_addon_without_a_base_car_uses_its_season_base() {
+        let root = std::env::temp_dir().join(format!("swofty-handling-real-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let season = root.join("season");
+        let real = root.join("real");
+        std::fs::create_dir_all(season.join("cars/teams")).unwrap();
+        std::fs::create_dir_all(real.join("cars")).unwrap();
+        let base = "eaid://sw_2013_vehicle_package/teams/fom_car/handling/fom_car.vtf";
+        std::fs::write(season.join("cars/teams/common.erp"), erp_with(&[base])).unwrap();
+        let res = "eaid://sw_2013_vehicle_package/teams/redbull/handling/redbull.vtf";
+        let mut resolved = Resolved::default();
+        resolved.records.insert(
+            "t.real/redbull".into(),
+            json!({ "vtf": { "erp": "cars/redbull.erp", "resources": [res] }, "chassis": { "mass": 640 } }),
+        );
+        resolved.records.insert(
+            "t.season/redbull".into(),
+            json!({ "vtf": { "erp": "cars/teams/redbull/wep/redbull.erp", "resources": [res] },
+                "chassis": { "mass": 642 } }),
+        );
+        let (mut maps, _) = maps_of(&resolved);
+        let addons = vec![("t.real".to_owned(), real), ("t.season".to_owned(), season)];
+        let (extra, bases) = base_maps(&resolved, &addons, &maps);
+        assert_eq!(extra.len(), 1);
+        assert_eq!(extra[0].id, "t.season/sw_2013_vehicle_package equal performance");
+        assert_eq!(
+            extra[0].target,
+            Target::Addon {
+                addon: "t.season".into(),
+                path: "cars/teams/common.erp".into()
+            }
+        );
+        link_bases(&mut maps, &bases);
+        assert!(maps.iter().all(|m| m.base.as_deref() == Some(base)), "{maps:?}");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    fn car_layer(physics: Vec<(&str, &str)>) -> Vec<u8> {
+        use swofty_formats::pkg::{Arr, Obj};
+        let physics = Obj::new(
+            physics
+                .into_iter()
+                .map(|(k, v)| (Val::str(k), Node::Val(Val::str(v))))
+                .collect(),
+        );
+        let overrides = Obj::new(vec![(Val::str("CarPhysics2"), Node::Obj(physics))]);
+        let inst = Obj::new(vec![
+            (Val::str("name"), Node::Val(Val::str("car"))),
+            (Val::str("overrides"), Node::Obj(overrides)),
+        ]);
+        Pkg {
+            name: *b"INST",
+            root: Node::Obj(Obj::new(vec![(
+                Val::str("instances"),
+                Node::Arr(Arr::new(vec![Node::Obj(inst)])),
+            )])),
+            vca: Vec::new(),
+            layout: None,
+        }
+        .to_bytes()
+        .unwrap()
+    }
+
+    fn physics_keys(data: &[u8]) -> Vec<(String, String)> {
+        let doc = Pkg::parse(data).unwrap();
+        let inst = &doc
+            .root
+            .as_obj()
+            .unwrap()
+            .get("instances")
+            .unwrap()
+            .as_arr()
+            .unwrap()
+            .items[0];
+        let physics = inst
+            .as_obj()
+            .unwrap()
+            .get("overrides")
+            .unwrap()
+            .as_obj()
+            .unwrap()
+            .get("CarPhysics2")
+            .unwrap()
+            .as_obj()
+            .unwrap();
+        physics
+            .items
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.as_str().unwrap().to_owned(),
+                    v.as_val().unwrap().as_str().unwrap().to_owned(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_season_car_layer_gets_the_season_base_car() {
+        let team = "eaid://sw_2013_vehicle_package/teams/mclaren/handling/mclaren.vtf";
+        let base = "eaid://sw_2013_vehicle_package/teams/fom_car/handling/fom_car.vtf";
+        let data = car_layer(vec![("vtfAsset", team), ("mechanicsAsset", "m")]);
+        let (out, lines) = base_layer(&data, &[(team, base)]).unwrap().unwrap();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            physics_keys(&out),
+            vec![
+                ("vtfAsset".to_owned(), team.to_owned()),
+                ("baseVtfAsset".to_owned(), base.to_owned()),
+                ("mechanicsAsset".to_owned(), "m".to_owned()),
+            ]
+        );
+        assert!(base_layer(&out, &[(team, base)]).unwrap().is_none());
+        let other = "eaid://sw_2013_vehicle_package/teams/ferrari/handling/ferrari.vtf";
+        assert!(base_layer(&data, &[(other, base)]).unwrap().is_none());
+        let own = car_layer(vec![("vtfAsset", team), ("baseVtfAsset", "eaid://x/own.vtf")]);
+        assert!(base_layer(&own, &[(team, base)]).unwrap().is_none());
     }
 
     #[test]

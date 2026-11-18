@@ -103,7 +103,7 @@ popup::show("", "");                   // invalid: title and body are both empty
 Rnd Tyres Thermal checks `available()` to say in its own log whether the player will see the popup the core shows when it cancels a My Team career:
 
 ```cpp
-// addons/rnd-tyres-thermal/native/src/rnd_myteam_block.cpp, trimmed
+// R&D: Tyres & Thermal Management's native/src/rnd_myteam_block.cpp, trimmed
 swofty::log("[rnd-tyres] My Team blocked: the core cancels starting or loading a My Team career and shows \"%s\"%s",
             kTitle,
             swofty::popup::available() ? "" : " (the popup is unavailable on this build; the route is still cancelled)");

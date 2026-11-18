@@ -67,6 +67,8 @@ Database operations (`db/*.json`, `swofty::db`) are global: they write rows into
 - `career::calendars`: an event list (`career.calendar`);
 - `career::ratings`: a driver's ratings at the start of a season (`career.driver_ratings`).
 
+A year pack's season has no data group (`career.season` 1.1, launcher 1.9.55): no career races it as it is, and every career mode that covers the year makes it its own with a variant that sets its data group (see [Make a career mode](/make/career)). The core counts a season for a career only when its data group is the career's, so a pack's season never adds a year to a career by itself. A 1.0 core refuses a season with no data group.
+
 The rest: `characters`, `wizards`, `hub_tabs`, and the [R&D trees and the driver market](#r-d-trees-and-the-driver-market) (`rnd_trees`, `markets`).
 
 <template #example>
@@ -144,8 +146,8 @@ struct SeasonChange {
 SWOFTY_RECORD(SeasonChange, round, slot, seat, out, in, kind, until_round)
 
 struct Season {
-    static constexpr Version version{1, 0};
-    std::string data_group;
+    static constexpr Version version{1, 1};
+    std::string data_group;                    // left out of a year pack's season: a career mode makes it its own with a variant
     int year = 0;
     Ref<::swofty::content::Package> box;       // the box it races in: its cars, looks and rules; .or_else() names the fallback
     Ref<Calendar> calendar;                    // the season's real calendar; empty: the career's
@@ -327,7 +329,7 @@ Result set_seat_of_team(uint32_t team_stat, int seat, Ref<drivers::Identity> dri
 Result set_driver_ratings(Ref<drivers::Identity> driver, const DriverRatings &ratings);
 Result set_car_number(Ref<drivers::Identity> driver, int number, bool swap = false);
 Result swap_drivers(Ref<drivers::Identity> a, Ref<drivers::Identity> b);   // the game's full move sequence
-Result apply_dropped_scores(const events::StandingsRebuild &, int);   // unavailable
+Result set_dropped_scores(std::string_view data_group, int best);   // the loaded career counts each driver's best N results
 Result report_season(int year, int season_index);   // the career's owner: the season at season_index is year
 
 } // namespace swofty::career
@@ -563,7 +565,7 @@ Slot 12 is listed by the team row the core made for the record (its key, `maruss
 
 ### A box with 12 teams
 
-A `content.package` gets its own standings row, `<entrant_list>_teams`, which its entrant list names as the previous season's team standings. The core copies `f1_teams_2026` (11 teams) for a package of more than 20 cars and `f1_teams_2024` (10 teams) otherwise, and writes the package's teams into it in package order. When the package has more teams than the copied row, the core adds the rest. The entrant list grows the same way past the 22 entrants of `f1_2026`:
+A `content.package` gets its own standings row, `<entrant_list>_teams`, which its entrant list names as the previous season's team standings. The core copies `f1_teams_2024` (10 teams), whatever the package's size, and writes the package's teams into it in package order. When the package has more teams than the copied row, the core adds the rest. The entrant list is a copy of `f1_2025` (20 entrants) and grows the same way. The copied rows carry no F1 2026 content, so a player who does not own it can open the package's track select:
 
 ```json
 {
@@ -582,15 +584,15 @@ A `content.package` gets its own standings row, `<entrant_list>_teams`, which it
 ```
 
 ```text
-[apply] content.package boot:   content.package mod.f1-2012/f1_2012: standings f1_2012_teams has 12 teams; f1_teams_2026 holds 11, the rest are added
-[apply] content.package boot:   content.package mod.f1-2012/f1_2012: entrant list f1_2012 has 24 entrants; f1_2026 holds 22, the rest are added
+[apply] content.package boot:   content.package mod.f1-2012/f1_2012: standings f1_2012_teams has 12 teams; f1_teams_2024 holds 10, the rest are added
+[apply] content.package boot:   content.package mod.f1-2012/f1_2012: entrant list f1_2012 has 24 entrants; f1_2025 holds 20, the rest are added
 [apply] content.package boot:   content.package mod.f1-2012/f1_2012: entrant list f1_2012, 24 entrants in swofty_f1
 ```
 
 The package's `database` block names other rows to copy: `standings_from` a standings row, `entrant_list_from` an entrant list. A row it names that already holds every team is copied as it is, and nothing is added.
 
 ```json
-"database": { "standings_from": "mod_f1_2012_teams", "entrant_list_from": "f1_2026" }
+"database": { "standings_from": "mod_f1_2012_teams", "entrant_list_from": "f1_2025" }
 ```
 
 ## What a career freezes
@@ -840,7 +842,7 @@ career::swap_drivers(drivers::identities["game/alex_albon"], drivers::identities
 career::report_season(2017, 1);
 ```
 
-The calls run on the core's career operations table (`SwoftyCoreCareerOps`, `SwoftyCareerOps` in `swofty_api.h`, `SWOFTY_CAREER_OPS_VERSION` 6). A call returns `unavailable` on a core whose table is older than the version that added it. `apply_dropped_scores` returns `unavailable` on every core.
+The calls run on the core's career operations table (`SwoftyCoreCareerOps`, `SwoftyCareerOps` in `swofty_api.h`, `SWOFTY_CAREER_OPS_VERSION` 7). A call returns `unavailable` on a core whose table is older than the version that added it.
 
 | Table version | Adds | Header call |
 | --- | --- | --- |
@@ -850,15 +852,20 @@ The calls run on the core's career operations table (`SwoftyCoreCareerOps`, `Swo
 | 4 | `set_seat`, `set_car_number`, `set_track_fuel` | `career::set_seat`, `career::set_seat_of_team`, `career::set_car_number`, `tracks::set_track_fuel` |
 | 5 | `set_logo` | `teams::set_logo` |
 | 6 | `set_look` | `drivers::set_look` |
+| 7 | `current_round`, `team_stat`, `set_dropped_scores` | `career::current_round`, `career::set_slots` (by team references), `career::set_dropped_scores` |
 
 `set_seat` takes a 1-based `slot` of the loaded career's data group, `set_seat_of_team` a team stat id; `set_car_number` takes `swap`, which gives the driver who held the number the caller's old one. `set_driver_ratings` writes experience, racecraft, awareness and pace by game stat id 0, 1, 3 and 4.
 
 - **Slots:** a season's `slot` is one of the data group's career team slots. `set_slots` names the team each slot races as, by team stat id, and `apply_lineup` reads the table of the season's `data_group`. Without a table every seat is refused.
 - **`apply_teams`:** each slot the season lists (1-12) races as its team; a team with no career rows gets them, built from its donor's. An empty team leaves the slot out of the Championship, and a slot the season doesn't list keeps its team. Call it before `apply_lineup`. It reads only the records of the season's `data_group` and dresses only the rows of that group's slot table. A dressed slot row's loaded team record takes the season team's names, code, colours, base and principal (`team.identity` 1.1); its logo stays the slot row's. When the career unloads, every dressed record goes back to its own. Twelve slots work in Driver Career; twelve with My Team are refused (see [A season's teams](/std/systems/teams#a-season-s-teams)).
 - **Added teams in the new-career wizard:** a season whose slot names a team an addon made (its own `team.identity`, not a `game/` row) is an added team. The career's team rows are the ones its career list holds for every start season, so the added team wears its slot's row: the request `{"start": {"data_group": "<group>", "year": <start season>}}` dresses those rows (names, colours) while the wizard shows that start season, and `"year": 0` takes the dress off. The season start dresses the same row the same way, so the career never gets a second row for the team. At boot, each new driver (a `driver.identity` with a donor) of an added team gets a teamless entrant in the first teamless list the career list references, so the career has a row to seat him in.
+- **`set_dropped_scores`:** while the loaded career is filed under the data group, the drivers' championship counts each driver's best `best` results; 0 counts every result. The cumulative totals, and so the order, use the counted sum of the best per-round totals, taken from the per-session points, which stay gross. The countback of finishing positions still reads every result, and the constructors' championship counts every result.
 - **`set_seat`:** the driver takes race seat 0 or 1 of a slot in Driver Career. A race driver exchanges seats with the seat's driver; a free agent takes the seat and the seat's driver leaves the grid.
-- **What `apply_lineup` changes:** each seat's driver moves to it; a race-seat driver whose seat goes to someone else, and who has no seat in the record, leaves the grid. Mid-season `changes` aren't applied.
+- **What `apply_lineup` changes:** each seat's driver moves to it; a race-seat driver whose seat goes to someone else, and who has no seat in the record, leaves the grid. Mid-season `changes` aren't applied by it; `career::apply_round` applies them (see below).
 - **What it refuses:** a driver not in the drivers table, a driver without a single career row, a driver named on two seats (the second), the player (never moved) and the player's seat (never given away). The refused seats keep their drivers.
+
+- **Mid-season changes:** `career::current_round()` (table version 7) says which race weekend the loaded career is at: `round` is 1-based and is the next race to run, `rounds` the season's weekend count. It returns nothing while no career is loaded, the season has no built weekends or the career is busy, so call it at an idle Team HQ (`career.hub`). `career::seats_at(season, round)` is the season's seats at that round, from the season's `changes` with `round` up to that round: `replace` puts `in` on the seat for the rest of the season, `swap` puts `in` on the seat and gives his old seat to the seat's previous driver, `move` puts `in` on the seat and leaves his old seat empty until another change fills it, and `stand_in` puts `in` on the seat from its round up to (not including) `until_round`, one race when it is absent, then the previous driver returns. `career::apply_round(season, round)` runs `apply_lineup` on those seats, so a seat already right is unchanged, the player's seat is never given away and the player is never moved. A driver an earlier round released has no seat and takes the next one as a free agent.
+- **Team references:** `career::set_slots(data_group, teams)` takes team references (`game/<label>`, or an addon's `team.identity` id) and resolves them to the teams table's stat ids (`team_stat`, table version 7).
 
 A batch of seat changes follows the game's own sequence, in this order:
 

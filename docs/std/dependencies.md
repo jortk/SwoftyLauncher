@@ -54,7 +54,7 @@ SWOFTY_REGISTER
 - **`requires`:** Play stops while one is missing, with a message naming the fix, the same way it stops for a missing addon.
 - **`recommends`:** optional. It never stops Play. The Addon Browser offers it at install, and the launcher names it before Play when something is skipped because of it.
 - **`for`:** shown to players. Keep it short and concrete.
-- **A `record` entry** means "some enabled addon provides this record". Its `version` is a range on the providing addon's version.
+- **A `record` entry** means "some enabled addon provides this record". Its `version` is a range on the providing addon's version. Ranges treat a pre-release as its base version, `*` accepts every version, and `=` pins are exact (see [`requires`](/reference/addons/manifest)).
 
 ## Addons that break others
 
@@ -374,6 +374,8 @@ Missing content
 ```
 
 - **What stops Play:** a missing `requires` entry, or a `breaks` on an installed addon, with a message naming the fix.
+- **A career's own rows stop Play too:** Play asks first, with **Play anyway**, when an addon that is off or uninstalled owns a row a career in the save uses. Two things count. The first is the team, vehicle or driver id in the career's save slot: an id above the highest `stat_id` the stock game database gives that table, which the install's `registry/row-ids.json` gives to an addon (the ids it keeps and the ids those rows had before) or its `registry/ids.json` gives to an addon's team, vehicle or driver record (the id it keeps for that career, else the id it holds now). When several addons hold the id, the ones that are installed and on count and the others don't. The launcher checks this at each build and after each session, and takes the addon off again when the career moves to a stock team. The second is a My Team car: when the core loads a save and finds a My Team car with no vehicle row, it loads the car as a stock placeholder and logs it (`[myteam]` in `loader.log`), and after the session the launcher gives that career the addon that owns the row. The dialog names the addon and the careers, which may not load, or may load with a stock car in place of the missing one. Only the careers in the save the profile boots count: its own launcher save with Use launcher saves on, otherwise the Steam save. A career deleted in game, and a record that no save slot backs, are left out.
+- **An addon that was only on is not a need.** Older launchers added every enabled addon with vehicle, engine, team, driver or head rows, and every addon whose track a session loaded, to each career saved in that session (`why` `database rows in the save` and `a track its sessions loaded`). Those entries say what was on, so they raise nothing at Play or when the addon is turned off. Ids above the stock rows that no addon of the install owns add a line to the build's warnings that lists the database addons that are off.
 - **What warns:** a `conflicts` entry, and a reference inside a record. An unresolved record hides its era box or tile, or guards it.
 - **Where the launcher gets records:** each enabled addon's `registry.lock.json`, data files and `registry.json`, plus the core's `registry/catalog.json` from the last session for what actually loaded.
 - **Install buttons** appear when the Addon Browser knows a published addon that provides the record.
@@ -387,6 +389,8 @@ Sochi Autodrom is in 1 career
   Autodrom is back on. Your other careers aren't affected.
   [Turn off]  [Cancel]
 ```
+
+Turning an addon off, removing it from a profile or uninstalling it in the launcher shows the same warning, with the careers that need it, when a career lists it.
 
 `swofty addons disable mod.sochi` prints the same text and needs `--yes`. `swofty careers` lists every career and what it needs, checked against a profile.
 

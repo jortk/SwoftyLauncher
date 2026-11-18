@@ -24,7 +24,7 @@ The header `swofty/systems/ui.hpp` has `ui::strings` (`lang.string`) and `ui::ad
 - `ui::screens`: an addon screen (`ui.screen`);
 - `ui::routes`: a front-end route (`ui.route`);
 - `ui::options`: a game option and its restriction tags (`ui.option`);
-- `ui::hud_widgets`: an addon HUD element (`hud.widget`);
+- `ui::hud_widgets`: an addon HUD element (`hud.widget`, the design-only alias of `hud.element` below);
 - `ui::strings`: one text key in every language (`lang.string`).
 
 Grand Prix and Time Trial era boxes are `content::era_boxes`, in `swofty/systems/content.hpp` (see [Seasons and GP/TT content](/std/content)).
@@ -254,6 +254,28 @@ ui::options.layer(ui::options["game/parc_ferme_rules"], [](ui::Option &o) {
 ui::hud_widgets.add("tyre_letters", { .view_model = "hud.f1990.tyre_letter", .tmpl = file("ui/tyre_letter.ui") });
 ```
 
+## HUD elements
+
+`hud.element` records put sprites, texts, level bars, gauges and sweeps into the game's HUD dials. They are data files (`operations.hud`), composed at build time across every enabled addon into one grown scene per dial. A record binds your own `view_model_data` leaves (written with `hud::set`) or the dial's own values through a typed table, and the build checks the tag of every binding against the stock template:
+
+```json [registry/hud.json]
+{
+  "hud.element": {
+    "dial_a": {
+      "dial": "f1_26",
+      "sprites": { "base": { "png": "art/base.png", "bounds": [-100, -48, 110, 38] } },
+      "elements": [
+        { "kind": "sprite", "id": "base", "sprite": "base", "layer": 20 },
+        { "kind": "text", "id": "speed", "style": "OSD_24_bold", "align": "centre", "box": 40,
+          "cap_height": 9.5, "at": [0, -14.9], "value": { "game": "speed_str" } }
+      ]
+    }
+  }
+}
+```
+
+`hud.widget` stays as the name of the template-only form and does nothing the records don't. The full format, with every element kind, binding, decision node and the HUD editor preview, is [HUD elements](/reference/ops/hud). To build one end to end, from the record and sprites to the plugin that writes its leaves and the host test, follow [Build a HUD element](/make/hud-element). The element templates and binding rules follow Project Halo by nyannoying. Uses work from Project Halo by nyannoying, <https://github.com/nyannoying1337/f1-25-project-halo>.
+
 ## Strings
 
 A string can apply in one career or one box only. Stock keys change there and nowhere else:
@@ -272,7 +294,7 @@ ui::strings.add("lng_team_alpine", {
 });
 ```
 
-The game looks text up every frame. The core builds a table of the effective strings when content becomes active and when a session loads, and `lang.lookup` reads that table. The same goes for the other hook points the game calls every frame, such as team logos and view-model nodes. A handler on one of them runs on every call, so it should only read a table of its own.
+The game looks text up every frame. The core keeps a table of every `lang.string` record, and each lookup checks the record's `within` against the current content, mode and career. The last record in load order that applies wins; when none applies, the game's own text shows. `lang.lookup` reads that table. The same goes for the other hook points the game calls every frame, such as team logos and view-model nodes. A handler on one of them runs on every call, so it should only read a table of its own.
 
 ## Events and operations
 
@@ -292,7 +314,7 @@ swofty::hud::toast("Driver change", "Gasly replaces Kvyat");
 ## Readiness and limits
 
 - **Ready:** tiles, era boxes, view models, routes, popups and strings. The front-end and view-model lanes are among the most L2 and L3 code outside the career.
-- **Partial:** the HUD (one HUD view model is bound; the other ~30 are class names only), `.idf` layout write-back (shapes are baked meshes).
+- **Partial:** the HUD (`hud.element` records grow the three dial scenes, F1 26, F1 25 and F2, and their spectator dials; other HUD scenes are not composed), `.idf` layout write-back (shapes are baked meshes).
 - **Fixed counts in native screens:** era tiles, four R&D departments, eight MFD pages, Team HQ tabs. Data-bound lists (R&D upgrade tiles, settings rows) take new rows with no UI patch.
 - **A rejected node ends the whole screen build:** the screen comes up blank.
 - **Growing a texture array** changes the archive layout. The core grows every archive that carries the array.

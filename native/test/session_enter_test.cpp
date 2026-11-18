@@ -21,6 +21,7 @@ static void expect(bool ok, const char *what)
 
 struct Memory {
     std::map<uint64_t, uint8_t> bytes;
+    int reads = 0;
 
     void put(uint64_t a, const void *p, size_t n)
     {
@@ -37,6 +38,7 @@ struct Memory {
 static bool read(uint64_t address, void *out, size_t n, void *user)
 {
     Memory *m = static_cast<Memory *>(user);
+    m->reads++;
     for (size_t i = 0; i < n; i++) {
         auto it = m->bytes.find(address + i);
         if (it == m->bytes.end())
@@ -152,6 +154,74 @@ int main()
         m.put64(root + se::NODE_LEFT, root);
         m.put64(root + se::NODE_KEY, 100);
         expect(!se::decide(MANAGER, RSP, 5, read, &m).replace, "a cyclic map is left to the game");
+    }
+    {
+        Memory m = world({10, 20, 30, 40, 50, 60, 70, 80, 90});
+        se::Memo memo;
+        se::Fix a = memo.decide(MANAGER, RSP, 35, 1000, read, &m);
+        expect(a.replace && a.key == 10 && a.index == 5 && memo.misses == 1, "the first lookup walks the map");
+        int before = m.reads;
+        se::Fix b = memo.decide(MANAGER, RSP, 35, 1100, read, &m);
+        expect(b.replace && b.key == 10 && b.index == 5 && memo.hits == 1, "a repeated hash is answered from the memo");
+        int per_hit = m.reads - before;
+        before = m.reads;
+        se::decide(MANAGER, RSP, 35, read, &m);
+        expect(per_hit < m.reads - before, "a memo hit reads less than a full walk");
+        m.put64(RSP + se::INDEX_AT, 9);
+        expect(memo.decide(MANAGER, RSP, 35, 1200, read, &m).index == 9, "a memo hit reports the current vehicle index");
+        expect(!memo.decide(MANAGER, RSP, 30, 1200, read, &m).replace && memo.misses == 2, "a found hash is memoised as no fix");
+        expect(!memo.decide(MANAGER, RSP, 30, 1300, read, &m).replace && memo.hits == 3, "a found hash hits the memo");
+    }
+    {
+        Memory m = world({10, 20, 30});
+        se::Memo memo;
+        memo.decide(MANAGER, RSP, 25, 1000, read, &m);
+        memo.decide(MANAGER, RSP, 25, 1000 + se::MEMO_TTL_MS, read, &m);
+        expect(memo.misses == 2, "the memo expires after its lifetime");
+    }
+    {
+        Memory m = world({10, 20, 30});
+        se::Memo memo;
+        expect(memo.decide(MANAGER, RSP, 25, 1000, read, &m).key == 10, "the memo fixes before the map changes");
+        uint64_t root = 0;
+        read(HEAD + se::NODE_PARENT, &root, 8, &m);
+        m.put64(root + se::NODE_KEY, 25);
+        m.put64(GROUP + se::GROUP_SIZE_AT, 4);
+        se::Fix f = memo.decide(MANAGER, RSP, 25, 1100, read, &m);
+        expect(memo.misses == 2 && !f.replace, "a changed map drops the memo and finds the new key");
+    }
+    {
+        Memory m = world({10, 20, 30});
+        se::Memo memo;
+        m.put64(MANAGER + se::GROUPS_BEGIN_AT, 0);
+        expect(!memo.decide(MANAGER, RSP, 25, 1000, read, &m).replace && memo.entries.empty(), "unreadable groups are not memoised");
+        m.put64(MANAGER + se::GROUPS_BEGIN_AT, GROUPS);
+        expect(memo.decide(MANAGER, RSP, 25, 1010, read, &m).replace, "the next lookup retries after a failed read");
+    }
+    {
+        Memory m = world({10, 20, 30});
+        se::Memo memo;
+        for (uint64_t h = 1; h <= se::MEMO_MAX + 10; h++)
+            memo.decide(MANAGER, RSP, h * 100 + 5, 1000, read, &m);
+        expect(memo.entries.size() <= se::MEMO_MAX, "the memo is bounded");
+    }
+    {
+        Memory m;
+        se::Memo memo;
+        expect(!memo.decide(MANAGER, RSP, 5, 0, read, &m).replace && !memo.decide(0, RSP, 5, 0, read, &m).replace,
+               "the memo leaves unreadable memory and a null manager to the game");
+    }
+    {
+        std::vector<uint64_t> keys;
+        for (uint64_t k = 1; k <= 4000; k++)
+            keys.push_back(k * 10);
+        Memory m = world(keys);
+        se::Memo memo;
+        memo.decide(MANAGER, RSP, 15, 1000, read, &m);
+        int per = m.reads;
+        m.reads = 0;
+        memo.decide(MANAGER, RSP, 25, 1001, read, &m);
+        expect(per < 80 && m.reads < 80, "a decision over a 4000-entry group map reads a bounded number of words");
     }
     {
         se::Skips k;

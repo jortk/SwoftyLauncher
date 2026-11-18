@@ -247,6 +247,12 @@ public:
         return gone;
     }
 
+    std::string career_for_slot(std::string_view key)
+    {
+        Value *c = find_by_tail(key);
+        return c ? std::string(c->operator[]("career").as_string()) : std::string();
+    }
+
     Value *find_by_tail(std::string_view key)
     {
         for (Value &c : careers_)
@@ -275,6 +281,7 @@ public:
         ListResult out;
         std::set<std::string> seen;
         std::set<std::string> kept_this_session;
+        std::set<std::string> slot_modes;
         for (const Value &c : careers_)
             if (c["listed_session"].as_string() == ctx.session)
                 kept_this_session.insert(std::string(c["career"].as_string()));
@@ -310,6 +317,7 @@ public:
             }
             std::string id(str(*rec, "career"));
             seen.insert(id);
+            slot_modes.insert(s.flags & FLAG_MY_TEAM ? "my_team" : "driver_career");
             (*rec)["status"] = Value(STATUS_PRESENT);
             (*rec)["listed_session"] = Value(ctx.session);
             (*rec)["listed_at"] = Value(ctx.now_ms);
@@ -347,6 +355,13 @@ public:
             std::string st(str(c, "status"));
             if (st == STATUS_DELETED)
                 continue;
+            if (id.find(':') == std::string::npos && slot_modes.count(std::string(str(c, "mode")))) {
+                if (st == STATUS_MISSING) {
+                    c["status"] = Value(STATUS_PRESENT);
+                    out.changed = true;
+                }
+                continue;
+            }
             bool here = !switched && str(c, "listed_session") == ctx.session;
             if (here) {
                 c["status"] = Value(STATUS_DELETED);

@@ -142,6 +142,51 @@ inline std::string text(const Stamps &stamps)
     return out;
 }
 
+inline constexpr const char *CACHE_FORMAT = "|logo-cache-3";
+inline constexpr const char *BUILT_LINE = "#built";
+
+using Routes = std::vector<std::pair<std::string, std::string>>;
+
+inline std::string manifest_text(int built, const Routes &routes)
+{
+    std::string out = std::string(BUILT_LINE) + "\t" + std::to_string(built) + "\n";
+    for (auto &[rel, file] : routes)
+        out += rel + "\t" + file + "\n";
+    return out;
+}
+
+inline bool manifest_parse(const std::string &text, const std::function<bool(const std::string &file)> &exists, int &built, Routes &routes)
+{
+    built = -1;
+    routes.clear();
+    size_t at = 0;
+    while (at < text.size()) {
+        size_t end = text.find('\n', at);
+        if (end == std::string::npos)
+            end = text.size();
+        std::string line = text.substr(at, end - at);
+        at = end + 1;
+        size_t tab = line.find('\t');
+        if (tab == std::string::npos)
+            continue;
+        if (line.compare(0, tab, BUILT_LINE) == 0)
+            built = std::atoi(line.c_str() + tab + 1);
+        else
+            routes.emplace_back(line.substr(0, tab), line.substr(tab + 1));
+    }
+    bool whole = built >= 0 && !routes.empty();
+    for (auto &r : routes)
+        whole = whole && exists(r.second);
+    if (!whole)
+        routes.clear();
+    return whole;
+}
+
+inline bool cacheable(size_t routes, size_t changes, int refused)
+{
+    return routes && routes == changes && refused == 0;
+}
+
 struct Env {
     std::function<bool(const std::string &rel, uint64_t &size, uint64_t &time)> stat;
     std::function<bool(const std::string &rel, uint64_t &hash)> hash;

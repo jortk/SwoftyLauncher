@@ -76,7 +76,7 @@ impl SmoothScroll {
         div()
             .absolute()
             .inset_0()
-            .on_scroll_wheel(move |event, window, cx| {
+            .on_scroll(move |event, window, cx| {
                 gpui_kit::base::apply_system_reduce_motion(cx);
                 let mut state = motion.borrow_mut();
                 let ScrollDelta::Lines(delta) = event.delta else {

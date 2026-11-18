@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Run the content lowering on each Classic Seasons season's registry/content.json and check that it makes the
-same operations as the season's db/records.json, the build operations its records cover (as multisets: the core
+"""Run the content lowering on each Classic Seasons season's registry/content.json (copied into
+native/test/content/classic-seasons) and check that it makes the same operations as the season's db/records.json, the build operations its records cover (as multisets: the core
 applies records by id, the build in team order). The stock audio records the cars copy come from a small database
 file made from db/records.json itself, so no game install is needed."""
 
@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools"))
 import gamedb  # noqa: E402
 
-SEASONS = ROOT / "addons" / "classicseasons"
+SEASONS = Path(__file__).resolve().parent / "classic-seasons"
 
 
 def fake_stock(records, content):

@@ -385,4 +385,12 @@ const SwoftyStorage *storage_table()
     return &table;
 }
 
+std::wstring storage_write_path(const std::string &id, const std::string &path)
+{
+    std::string rel;
+    if (id.empty() || !sl::inside(path.c_str(), false, rel))
+        return {};
+    return write_at(root_of(id), rel);
+}
+
 }

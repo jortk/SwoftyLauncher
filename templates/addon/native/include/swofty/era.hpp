@@ -32,19 +32,25 @@ namespace swofty::era {
 
 enum class Result { ok, late, unavailable, invalid };
 
+enum class Only : uint32_t { any = SWOFTY_ERA_ONLY_ANY, grand_prix = SWOFTY_ERA_ONLY_GRAND_PRIX, time_trial = SWOFTY_ERA_ONLY_TIME_TRIAL };
+
 // One box. entrant_list is the entrant list the box selects (its press raises entrant_list_selected with
 // it). title is the lng_* key the box shows; empty means lng_<entrant_list>. image is the texture path
 // the box shows, e.g. "#overrides.home_screen.tiles_solo_6x6[cs_f1_2016]"; empty means
 // #overrides.home_screen.tiles_solo_6x6[<entrant_list>], an overrides entry named after the list. Boxes
 // show in ascending order, then in registration order. time_trial is the entrant list the box selects on
 // the Time Trial picker, set up like entrant_list (in swofty_f1's entrant lists); empty means
-// entrant_list; a core before launcher 1.6.2 ignores it. Strings are copied.
+// entrant_list; a core before launcher 1.6.2 ignores it. only keeps the box off one picker: Only::time_trial
+// leaves it off the Grand Prix picker, Only::grand_prix off the Time Trial picker, Only::any (the default)
+// shows it on both. A core without it would show the box on both, so add_box returns Result::unavailable
+// for an only other than Only::any there (see only_supported()). Strings are copied.
 struct Box {
     std::string_view entrant_list;
     std::string_view title = {};
     std::string_view image = {};
     int32_t order = 0;
     std::string_view time_trial = {};
+    Only only = Only::any;
 };
 
 namespace detail {
@@ -86,6 +92,13 @@ inline bool available()
     return t && t->available();
 }
 
+// The running core honours Box::only.
+inline bool only_supported()
+{
+    HMODULE core = GetModuleHandleW(L"swofty_core.dll");
+    return detail::table() && core && GetProcAddress(core, "SwoftyCoreEraOnly");
+}
+
 // Register a box. ok: queued for the next mixin commit (or live from the next build of the picker when
 // the hooks are already installed); invalid: a bad entrant list name, an over-long string or a second box
 // for the same entrant list (the log says which); unavailable: an older core, or the era picker hooks
@@ -95,8 +108,10 @@ inline Result add_box(const Box &box)
     auto t = detail::table();
     if (!t)
         return Result::unavailable;
+    if (box.only != Only::any && !only_supported())
+        return Result::unavailable;
     std::string list(box.entrant_list), title(box.title), image(box.image), tt(box.time_trial);
-    SwoftyEraBox d{sizeof d, list.c_str(), title.c_str(), image.c_str(), box.order, tt.c_str()};
+    SwoftyEraBox d{sizeof d, list.c_str(), title.c_str(), image.c_str(), box.order, tt.c_str(), uint32_t(box.only)};
     return detail::result(t->add_box(&d));
 }
 

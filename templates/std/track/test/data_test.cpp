@@ -13,9 +13,8 @@ static void load(const std::string &addon, const std::string &path, const std::s
 
 static void classic_seasons_2016()
 {
-    std::string cs = root + "/addons/classicseasons/";
-    load("swofty.classic-seasons", cs + "classic-seasons/registry/drivers.json", "registry/drivers.json");
-    load("swofty.classic-seasons-2016", cs + "classic-seasons-2016/registry/content.json", "registry/content.json");
+    load("swofty.classic-seasons", "test/fixtures/classic-seasons.drivers.json", "registry/drivers.json");
+    load("swofty.classic-seasons-2016", "test/fixtures/classic-seasons-2016.content.json", "registry/content.json");
 }
 
 static int round_of(const Value &rounds, int round)

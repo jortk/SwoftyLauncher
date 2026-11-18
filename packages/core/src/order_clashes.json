@@ -1,5 +1,4 @@
 [
-  {"a": "supercars", "b": "track", "why": "Supercars adds teams to every session, which crashes community tracks"},
   {"a": "f1 2012", "b": "mugello", "why": "F1 2012 has more teams than this track has garages"},
   {"a": "classic career", "b": "progressive", "why": "Classic Career and Progressive Career both change the calendar and the audio"}
 ]

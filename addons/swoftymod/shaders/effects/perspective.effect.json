@@ -1,0 +1,30 @@
+{
+  "id": "perspective",
+  "name": "Perspective",
+  "description": "Corrects the stretching of a wide field of view by redrawing the picture with another projection: 1 is the game's own, lower values pull the edges in, and the picture is zoomed in to hide the borders that opens up.",
+  "params": [
+    { "id": "fov_angle", "type": "float", "default": 90, "min": 30, "max": 170, "step": 0.5,
+      "label": "Field of view", "doc": "The field of view the game is drawing at, in degrees." },
+    { "id": "fov_type", "type": "enum", "values": ["horizontal", "diagonal", "vertical", "horizontal_4_3"], "default": "horizontal",
+      "label": "Field of view type", "doc": "Which direction the field of view is measured in." },
+    { "id": "k", "type": "float", "default": 0.5, "min": -1, "max": 1.5, "step": 0.01,
+      "label": "Projection", "doc": "1 is the game's own projection, 0.5 stereographic, 0 equidistant and -1 orthographic; lower pulls the edges in more." },
+    { "id": "ky", "type": "float", "default": 1, "min": 0, "max": 1, "step": 0.01,
+      "label": "Vertical amount", "doc": "How much of the correction applies up and down; 0 corrects sideways only." },
+    { "id": "cropping_factor", "type": "float", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
+      "label": "Cropping", "doc": "0 shows the whole corrected picture with borders, 1 zooms in until the borders are gone." },
+    { "id": "mirror_border", "type": "bool", "default": false,
+      "label": "Mirror border", "doc": "Fills the border with a mirrored copy of the picture instead of a colour." },
+    { "id": "border_color", "type": "color4", "default": [0.027, 0.027, 0.027, 0.96], "min": 0, "max": 1,
+      "label": "Border colour", "doc": "The colour and opacity of the border." },
+    { "id": "border_corner", "type": "float", "default": 0, "min": 0, "max": 1, "step": 0.01,
+      "label": "Border corner", "doc": "Rounds the corners of the picture." },
+    { "id": "vignette_intensity", "type": "float", "default": 0, "min": 0, "max": 1, "step": 0.01,
+      "label": "Vignette", "doc": "Darkens the edges of the corrected picture." },
+    { "id": "vignette_offset", "type": "float", "default": 0, "min": -1, "max": 1, "step": 0.01,
+      "label": "Vignette offset", "doc": "Moves the start of the vignette; positive pushes it towards the edges." }
+  ],
+  "passes": [
+    { "name": "perspective", "shader": "perspective.hlsl", "entry": "effect" }
+  ]
+}

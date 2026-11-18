@@ -89,7 +89,7 @@ fn only_commands_migrate_the_data_dir() {
     assert!(root.join("addons/a.old/swofty.json").is_file());
     let config: serde_json::Value =
         serde_json::from_slice(&std::fs::read(root.join("config.json")).unwrap()).unwrap();
-    assert_eq!(config["data_version"], 3);
+    assert_eq!(config["data_version"], 4);
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -102,7 +102,14 @@ fn swoftymod_cannot_be_disabled() {
         String::from_utf8_lossy(&out.stderr)
             .contains("SwoftyMod (swofty.core) is always on and cannot be disabled")
     );
-    let profile = std::fs::read_to_string(root.join("profiles/default.json")).unwrap();
-    assert!(!profile.contains("\"enabled\": false"));
+    let profile: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("profiles/default.json")).unwrap()).unwrap();
+    let addons = profile["addons"].as_array().unwrap();
+    assert!(
+        addons
+            .iter()
+            .all(|a| a["id"] != "swofty.core" || a["enabled"] != false),
+        "{profile}"
+    );
     std::fs::remove_dir_all(&root).ok();
 }

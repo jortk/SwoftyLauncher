@@ -207,8 +207,7 @@ struct RunWrap {
 pub fn run_args(game: Option<&Path>) -> Vec<OsString> {
     let mut args: Vec<OsString> = vec!["run".into(), "--apply".into(), "--direct".into()];
     if let Some(g) = game {
-        args.push("--game".into());
-        args.push(g.into());
+        args.push(swofty_core::process::flag("game", g));
     }
     args
 }
@@ -1142,9 +1141,49 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_after_the_end_of_the_options_can_start_with_a_dash() {
+        assert_eq!(
+            parse(&["link", "--", "-mods/x"]),
+            DevCommand::Link {
+                folder: Some("-mods/x".into())
+            }
+        );
+        assert_eq!(
+            parse(&["check", "--", "-x"]),
+            DevCommand::Check {
+                folder: Some("-x".into())
+            }
+        );
+        assert_eq!(
+            parse(&["test", "--", "-x"]),
+            DevCommand::Test {
+                folder: Some("-x".into()),
+                recording_only: false
+            }
+        );
+        assert_eq!(
+            parse(&["pack", "--", "-x"]),
+            DevCommand::Pack {
+                folder: Some("-x".into()),
+                out: None,
+                zip: false
+            }
+        );
+        assert_eq!(
+            parse(&["logs", "--", "-x"]),
+            DevCommand::Logs {
+                addon: Some("-x".into()),
+                follow: false,
+                session: None
+            }
+        );
+    }
+
+    #[test]
     fn run_delegates_to_run_apply_direct() {
         let args = run_args(Some(Path::new("/games/F1 25")));
-        assert_eq!(args, ["run", "--apply", "--direct", "--game", "/games/F1 25"]);
+        assert_eq!(args, ["run", "--apply", "--direct", "--game=/games/F1 25"]);
+        assert!(<RunWrap as Parser>::try_parse_from(run_args(Some(Path::new("-games/F1 25")))).is_ok());
         assert!(<RunWrap as Parser>::try_parse_from(&args).is_ok());
         assert!(<RunWrap as Parser>::try_parse_from(run_args(None)).is_ok());
     }

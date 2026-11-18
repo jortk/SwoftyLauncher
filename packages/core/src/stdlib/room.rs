@@ -44,6 +44,19 @@ pub enum Route {
     File { pad_to: usize, short: usize },
 }
 
+/// The sorted ids of the addons other than `core` that add table rows with `add-row`; the runtime route
+/// takes the core's own mode rows and nothing else that adds rows.
+pub fn row_adders<'a>(copies: impl IntoIterator<Item = &'a str>, core: &str) -> Vec<String> {
+    let mut ids: Vec<String> = copies
+        .into_iter()
+        .filter(|a| *a != core)
+        .map(str::to_owned)
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 /// The room a file of `records` leaves for records added after the load.
 pub fn room_after(records: usize) -> usize {
     runtime_record_room(records)
@@ -144,6 +157,15 @@ mod tests {
         let mut other = report("unavailable", 50_000);
         other.profile = Some("q".into());
         assert_eq!(asked(Some(&other), "p", &[]), None);
+    }
+
+    #[test]
+    fn rows_added_by_other_addons_keep_the_build_off_the_runtime_route() {
+        assert!(row_adders(["core", "core"], "core").is_empty());
+        assert_eq!(
+            row_adders(["b", "core", "a", "b"], "core"),
+            vec!["a".to_owned(), "b".to_owned()]
+        );
     }
 
     #[test]

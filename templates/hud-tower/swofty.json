@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "example.hud-tower",
+  "name": "HUD Tower",
+  "version": "0.1.0",
+  "author": "Your Name",
+  "description": "A 30-row standings tower in place of the track-position board, on the HUD, the replay screen and the spectator screen, with the lap counter and the flag box hidden while it shows.",
+  "license": "MIT",
+  "kind": ["ui"],
+  "compat": { "game": "f1_25", "game_builds": [">=25251167"] },
+  "requires": [{ "id": "swofty.core", "version": ">=0.1.0" }],
+  "operations": {
+    "hud": ["registry/tower@1.1.json"]
+  }
+}

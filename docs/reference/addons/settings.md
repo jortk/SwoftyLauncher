@@ -149,6 +149,62 @@ A <span v-pre>`{{id}}`</span> placeholder in an op file is replaced with the set
 
 A `db` setting goes into the build, so changing it marks the profile for a rebuild, and the next launch applies it. In game, a `db` setting's description ends with *Applies after a restart.*
 
+## Content that needs another addon
+
+`requires` stops the build while another addon is off. For content that applies only while another addon is on, put `addon` in a `when`, and `needs` on the toggle that turns the content on. F2 Revamp has an optional Istanbul Park round that needs the Istanbul Park track addon:
+
+```jsonc [swofty.json]
+{
+  "id": "miguelvf3.f2-revamp",
+  "compat": { "game": "f1_25", "launcher": ">=1.9.34" },
+  "options": [
+    { "id": "istanbul_park", "type": "toggle", "label": "Istanbul Park round", "default": true, "binds": "db",
+      "needs": ["track.istanbul_park"] },          // off and locked while Istanbul Park is off
+    { "id": "sprint_weekends", "type": "toggle", "label": "Sprint weekends", "default": false, "binds": "db" }
+  ],
+  "operations": { "database": ["db/calendar.json", "db/istanbul.json"] }
+}
+```
+
+```jsonc [db/calendar.json]
+{
+  "schema_version": 1,
+  "ops": [
+    { "op": "set", "select": "f2.calendar.round[_metadata_=round_5]", "field": "track", "value": "imola" },
+    { "op": "set", "select": "f2.calendar.round[_metadata_=round_6]", "field": "track", "value": "istanbul_park",
+      "when": { "addon": "track.istanbul_park", "istanbul_park": true } },  // the track addon and the toggle are on
+    { "op": "set", "select": "f2.calendar.round[_metadata_=round_6]", "field": "sprint", "value": "1",
+      "when": { "addon": { "id": "track.istanbul_park", "version": ">=1.2.0" }, "sprint_weekends": true } }
+  ]
+}
+```
+
+```jsonc [db/istanbul.json]
+{
+  "schema_version": 1,
+  "when": { "addon": "track.istanbul_park" },     // the whole file: dropped while the track addon is off
+  "ops": [
+    { "op": "set", "select": "f2.tracks.track[_metadata_=istanbul_park]", "field": "laps", "value": "26" }
+  ]
+}
+```
+
+With Istanbul Park off, the build drops both Istanbul Park ops and all of `db/istanbul.json`, and the profile plays the calendar without the round. Turn Istanbul Park on and the round is back.
+
+- `addon` takes an addon id, `{ "id", "version" }` with a semver range like [`requires`](./manifest#requires-conflicts-load-after), or a list of them that must all be on.
+- Every key in a `when` must hold: `addon` and each option value.
+- A `when` at the top of an op file applies to every op in it, on top of each op's own `when`.
+- An addon is on when the profile has it on and the build includes it.
+
+`needs` lists the addons a toggle needs on, in the same form. While one of them is off, or on at a version outside its range:
+
+- The **Addons** page shows the toggle off and locked, with **Off: needs Istanbul Park on** in place of its hint.
+- The build reads the toggle as off, in <span v-pre>`{{id}}`</span> and in `when`.
+- ADDON SETTINGS in game leaves the toggle out.
+- The profile keeps the player's value, so turning Istanbul Park back on restores it.
+
+A toggle with `"default": true` and `needs` is on whenever the addon it needs is on, until the player turns it off.
+
 ## Read a `native` setting
 
 `SWOFTY_SETTING(type, id, fallback)` declares a setting with the option's `id`, its C++ type and a fallback:

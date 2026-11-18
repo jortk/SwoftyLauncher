@@ -4,10 +4,11 @@
 
 use std::time::Duration;
 
+use crate::notices::{Notification, Notify};
+use crate::scale::px;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::dialog::DialogFooter;
-use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Icon, Sizable, WindowExt, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
@@ -22,6 +23,8 @@ use crate::game_edited::discord_link;
 use crate::pages::{game_art, label};
 use crate::shell::Shell;
 use crate::theme::{Palette, palette};
+use crate::ui::Callout;
+use swofty_i18n::{tr, trf};
 
 pub(crate) const RISK: &str = "Because of how Swofty Launcher hooks the game's engine, which lets addons run \
                                their own engine code, it is highly risky to change the game with any outside \
@@ -108,6 +111,7 @@ impl SetupWizard {
             let result = cx
                 .background_executor()
                 .spawn(async move {
+                    let _helpers = store.helpers().pause();
                     let g = Game::locate(&store.root, dir.clone()).map_err(|e| e.to_string())?;
                     let unrestored = setup::reset(&store.root, &g, other_mods)
                         .map(|r| r.unrestored)
@@ -129,7 +133,7 @@ impl SetupWizard {
                     }
                     Err(e) => {
                         crate::app_log::action("first play setup: put the game folder back").failed(&e);
-                        w.error = Some(format!("Swofty couldn't put the game folder back: {e}"))
+                        w.error = Some(trf!("Swofty couldn't put the game folder back: {e}", e = e))
                     }
                 }
                 cx.notify();
@@ -218,7 +222,7 @@ impl SetupWizard {
             .gap(px(12.))
             .child(illustration(IconName::FolderSearch, p))
             .child(heading(
-                "Are there other mods in your game folder?",
+                tr("Are there other mods in your game folder?"),
                 "Mods copied into the F1 25 folder by hand, or put there by another mod manager or tool, \
                  that Swofty Launcher didn't add.",
                 p,
@@ -294,15 +298,15 @@ impl SetupWizard {
         };
         let first = match self.install.source {
             Source::Steam => (
-                "Verify game files in Steam",
+                tr("Verify game files in Steam"),
                 "Select Verify game files in Steam below. It's also in Steam > right-click F1 25 > \
                  Properties > Installed Files.",
             ),
             Source::EaApp => (repair.title, "EA app > Library > F1 25 > Manage > Repair."),
             Source::Unknown => (
-                "Take out other mods",
-                "This copy isn't from Steam or the EA app, so it can't be verified. Remove any mod files \
-                 Swofty didn't add.",
+                "Play a copy from Steam or the EA app",
+                "This copy isn't from Steam or the EA app, so Swofty can't play it modded. Swofty runs only \
+                 on a copy you own on Steam or the EA app.",
             ),
         };
         v_flex()
@@ -312,7 +316,7 @@ impl SetupWizard {
             .child(
                 v_flex()
                     .gap(px(9.))
-                    .child(label("WHAT TO DO", p))
+                    .child(label(tr("WHAT TO DO"), p))
                     .child(step(1, first.0, first.1, p))
                     .when(self.install.source != Source::Unknown, |d| {
                         d.child(step(
@@ -357,7 +361,7 @@ impl SetupWizard {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .child("Putting back the files Swofty changed…"),
+                            .child(tr("Putting back the files Swofty changed…")),
                     ),
             );
         }
@@ -382,7 +386,7 @@ impl SetupWizard {
             .ghost()
             .h(px(36.))
             .px(px(14.))
-            .label("Not now")
+            .label(tr("Not now"))
             .disabled(self.working)
             .on_click(|_, window, cx| window.close_dialog(cx));
         let buttons = h_flex().gap(px(8.)).child(not_now);
@@ -393,7 +397,7 @@ impl SetupWizard {
                     .h(px(36.))
                     .px(px(14.))
                     .icon(IconName::ArrowRight)
-                    .label("Get started")
+                    .label(tr("Get started"))
                     .on_click(move |_, _, cx| {
                         wizard.update(cx, |w, cx| {
                             w.step = Step::Mods;
@@ -425,7 +429,7 @@ impl SetupWizard {
                             .h(px(36.))
                             .px(px(14.))
                             .icon(IconName::Check)
-                            .label("I understand")
+                            .label(tr("I understand"))
                             .loading(self.working)
                             .disabled(self.working || self.other_mods.is_none())
                             .on_click(move |_, window, cx| {
@@ -450,7 +454,7 @@ impl SetupWizard {
                                 .h(px(36.))
                                 .px(px(14.))
                                 .icon(IconName::ShieldCheck)
-                                .label("Verify game files in Steam")
+                                .label(tr("Verify game files in Steam"))
                                 .on_click(move |_, _, cx| {
                                     cx.open_url(stock::STEAM_VERIFY_URL);
                                     opened.update(cx, |w, cx| {
@@ -515,7 +519,7 @@ fn welcome(p: Palette) -> Div {
         .gap(px(12.))
         .child(illustration(IconName::Gamepad2, p))
         .child(heading(
-            "Welcome to Swofty Launcher",
+            tr("Welcome to Swofty Launcher"),
             "Thanks for installing Swofty Launcher! Just a few things so we can get you sorted before your \
              first modded session.",
             p,
@@ -523,7 +527,7 @@ fn welcome(p: Palette) -> Div {
         .child(
             v_flex()
                 .gap(px(9.))
-                .child(label("ONE-TIME SETUP", p))
+                .child(label(tr("ONE-TIME SETUP"), p))
                 .child(step(
                     1,
                     "Tell us about your game folder",
@@ -635,30 +639,8 @@ fn step(n: u32, title: &'static str, body: &'static str, p: Palette) -> impl Int
         )
 }
 
-fn callout(icon: IconName, text: impl Into<SharedString>, p: Palette) -> impl IntoElement {
-    h_flex()
-        .gap(px(10.))
-        .items_start()
-        .p(px(12.))
-        .rounded(px(6.))
-        .bg(p.warning.opacity(0.08))
-        .border_1()
-        .border_color(p.warning.opacity(0.4))
-        .child(
-            Icon::new(icon)
-                .size(px(15.))
-                .flex_shrink_0()
-                .text_color(p.warning),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_size(px(13.))
-                .line_height(px(19.))
-                .text_color(p.text)
-                .child(text.into()),
-        )
+fn callout(icon: IconName, text: impl Into<SharedString>, _: Palette) -> impl IntoElement {
+    Callout::warning(text).icon(icon)
 }
 
 fn choice(
@@ -735,11 +717,12 @@ impl Shell {
                 .on_ok(move |_, window, cx| {
                     if let Err(e) = setup::record_notice(&store.root) {
                         crate::app_log::action("first play setup: notice").failed(&e);
-                        window.push_notification(Notification::error(e.to_string()), cx);
+                        window.notify(Notification::error(e.to_string()), cx);
                         return false;
                     }
+                    window.close_dialog(cx);
                     shell.update(cx, |s, cx| s.play(window, cx)).ok();
-                    true
+                    false
                 })
         });
     }

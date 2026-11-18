@@ -174,23 +174,244 @@ fn ea_anticheat_launcher_files_drift_without_blocking() {
     );
 }
 
+const FFX: &str = "amd_fidelityfx_dx12.dll";
+const THIRD_PARTY: &[&str] = &[
+    "openvr_api.dll",
+    FFX,
+    "amd_fidelityfx_upscaler_dx12.dll",
+    "NVNGX_DLSS.DLL",
+    "bin/vendor_overlay.dll",
+];
+
+fn third_party_rels(c: &stock::Checked) -> Vec<&str> {
+    c.third_party.iter().map(|d| d.rel.as_str()).collect()
+}
+
 #[test]
-fn a_replaced_vr_runtime_is_reported_without_blocking() {
-    let f = Fixture::new("vr-runtime");
-    f.write("openvr_api.dll", b"opencomposite's openvr_api.dll");
+fn changed_third_party_dlls_are_logged_and_never_block() {
+    let f = Fixture::new("third-party-dlls");
+    let mut listed: Vec<(&str, &[u8])> = vec![("F1_25.exe", b"stock exe bytes")];
     f.write("F1_25.exe", b"stock exe bytes");
-    let d = depots(&[
-        ("openvr_api.dll", b"stock openvr"),
-        ("F1_25.exe", b"stock exe bytes"),
-    ]);
+    for rel in THIRD_PARTY {
+        f.write(rel, b"a third-party build of this dll");
+        listed.push((rel, b"steam's dll"));
+    }
+    let d = depots(&listed);
     let c = stock::check(&f.data, &f.game, &d).unwrap();
     assert!(c.foreign.is_empty(), "{:?}", c.foreign);
-    assert_eq!(c.vr.len(), 1, "the replaced vr runtime is reported, not blocked");
-    assert_eq!(c.vr[0].rel, "openvr_api.dll");
+    assert!(c.detail.is_empty(), "{:?}", c.detail);
+    assert!(c.missing.is_empty(), "{:?}", c.missing);
+    assert!(c.eac.is_empty());
+    let mut want = THIRD_PARTY.to_vec();
+    want.sort();
+    assert_eq!(third_party_rels(&c), want);
+    let ffx = c.third_party.iter().find(|x| x.rel == FFX).unwrap();
+    assert_eq!(ffx.size, Some(b"a third-party build of this dll".len() as u64));
+    assert_eq!(ffx.steam, b"steam's dll".len() as u64);
     assert!(
         f.baseline().stock_checked,
-        "a replaced vr runtime still lets the sweep finish"
+        "third-party dlls let the sweep finish"
     );
+    let again = stock::check(&f.data, &f.game, &d).unwrap();
+    assert!(again.foreign.is_empty());
+}
+
+#[test]
+fn a_changed_third_party_dll_in_a_first_sight_record_is_logged() {
+    let f = Fixture::new("third-party-first-sight");
+    f.write(FFX, b"a drop-in fsr 4 loader");
+    f.record_first_sight(FFX);
+    let d = depots(&[(FFX, b"stock fsr 3.1 loader")]);
+    let c = stock::check(&f.data, &f.game, &d).unwrap();
+    assert!(c.foreign.is_empty(), "{:?}", c.foreign);
+    assert_eq!(third_party_rels(&c), [FFX]);
+    assert_eq!(f.baseline().files[FFX].source, Source::FirstSight);
+}
+
+#[test]
+fn extra_dlls_steam_does_not_list_never_block() {
+    let f = Fixture::new("extra-dlls");
+    f.write(DB, b"stock db");
+    for rel in ["dxgi.dll", "d3d12.dll", "winmm.dll", "reshade-shaders/addon.dll"] {
+        f.write(rel, b"a third-party addition");
+    }
+    let d = depots(&[(DB, b"stock db")]);
+    let c = stock::check(&f.data, &f.game, &d).unwrap();
+    assert_eq!(
+        c,
+        stock::Checked {
+            swept: Some(1),
+            ..Default::default()
+        }
+    );
+    let inst = swofty_core::install::Installer {
+        depot: &d,
+        ..swofty_core::install::Installer::new(&f.data, &f.game)
+    };
+    inst.apply(&replace_plan(&f)).unwrap();
+    assert_eq!(std::fs::read(f.game.dir.join(DB)).unwrap(), b"modded db");
+    assert_eq!(
+        std::fs::read(f.game.dir.join("dxgi.dll")).unwrap(),
+        b"a third-party addition",
+        "the extra dll is left as the player put it"
+    );
+}
+
+#[test]
+fn changed_game_files_that_are_not_dlls_still_block_beside_third_party_dlls() {
+    for name in ["F1_25.exe", UI, "amd_fidelityfx_dx12.dll.bak", "readme.dll.txt"] {
+        let f = Fixture::new(&format!("third-party-and-{}", name.replace(['/', '.'], "-")));
+        f.write(FFX, b"a drop-in fsr 4 loader");
+        f.write(name, b"modded bytes");
+        let d = depots(&[(FFX, b"stock fsr 3.1 loader"), (name, b"stock bytes, longer")]);
+        let c = stock::check(&f.data, &f.game, &d).unwrap();
+        assert_eq!(c.foreign, vec![name.to_owned()], "{name}");
+        assert_eq!(third_party_rels(&c), [FFX], "{name}");
+        assert!(!f.baseline().stock_checked, "{name}");
+    }
+}
+
+#[test]
+fn a_missing_game_dll_still_blocks_with_the_missing_files_fix() {
+    let f = Fixture::new("missing-dll");
+    f.write("F1_25.exe", b"stock exe bytes");
+    let d = depots(&[(FFX, b"stock fsr 3.1 loader"), ("F1_25.exe", b"stock exe bytes")]);
+    let c = stock::check(&f.data, &f.game, &d).unwrap();
+    assert_eq!(c.foreign, [FFX]);
+    assert!(c.third_party.is_empty());
+    assert!(!f.baseline().stock_checked);
+    let (changed, missing) = stock::split_absent(&c.detail);
+    assert!(changed.is_empty());
+    assert_eq!(missing, [FFX]);
+    let current = stock::Report::missing(missing.clone(), &f.game.dir, Some("1.0.145.2472".into()));
+    assert_eq!(current.fix(), stock::Fix::Verify);
+    let older = stock::Report::missing(missing, &f.game.dir, Some("1.0.138.5601".into()));
+    assert_eq!(older.fix(), stock::Fix::Update);
+}
+
+#[test]
+fn the_steam_api_dll_is_still_checked_by_the_ownership_check() {
+    let f = Fixture::new("steam-api");
+    f.write("F1_25.exe", b"stock exe bytes");
+    f.write("steam_api64.dll", b"an emulator's steam api");
+    let d = depots(&[
+        ("F1_25.exe", b"stock exe bytes"),
+        ("steam_api64.dll", b"steam's steam api"),
+    ]);
+    assert_eq!(
+        swofty_core::entitlement::changed_files(&f.data, &f.game.dir, &d).unwrap(),
+        ["steam_api64.dll"]
+    );
+}
+
+fn versioned_exe(major_minor: u32, build_revision: u32) -> Vec<u8> {
+    let mut out = vec![0; 0x200];
+    out[..2].copy_from_slice(b"MZ");
+    out[0x3c..0x40].copy_from_slice(&0x80u32.to_le_bytes());
+    out[0x80..0x84].copy_from_slice(b"PE\0\0");
+    out[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
+    out[0x94..0x96].copy_from_slice(&0xf0u16.to_le_bytes());
+    out[0x98..0x9a].copy_from_slice(&0x20bu16.to_le_bytes());
+    let dir = 0x98 + 112 + 2 * 8;
+    out[dir..dir + 4].copy_from_slice(&0x1000u32.to_le_bytes());
+    out[dir + 4..dir + 8].copy_from_slice(&0x100u32.to_le_bytes());
+    let section = 0x98 + 0xf0;
+    out[section + 8..section + 12].copy_from_slice(&0x100u32.to_le_bytes());
+    out[section + 12..section + 16].copy_from_slice(&0x1000u32.to_le_bytes());
+    out[section + 16..section + 20].copy_from_slice(&0x100u32.to_le_bytes());
+    out[section + 20..section + 24].copy_from_slice(&0x200u32.to_le_bytes());
+    let mut res = vec![0; 0x100];
+    res[0x20..0x24].copy_from_slice(&0xFEEF_04BDu32.to_le_bytes());
+    res[0x28..0x2c].copy_from_slice(&major_minor.to_le_bytes());
+    res[0x2c..0x30].copy_from_slice(&build_revision.to_le_bytes());
+    out.extend(res);
+    out
+}
+
+#[test]
+fn a_changed_game_exe_still_blocks_whatever_its_size() {
+    let f = Fixture::new("exe-changed");
+    f.write(FFX, b"a drop-in fsr 4 loader");
+    f.write("F1_25.exe", b"a patched exe, longer");
+    let d = depots(&[(FFX, b"stock fsr 3.1 loader"), ("F1_25.exe", b"stock exe bytes")]);
+    let c = stock::check(&f.data, &f.game, &d).unwrap();
+    assert_eq!(c.foreign, ["F1_25.exe"]);
+    assert_eq!(third_party_rels(&c), [FFX]);
+
+    f.write("F1_25.exe", b"STOCK EXE BYTES");
+    assert_eq!(
+        swofty_core::entitlement::changed_files(&f.data, &f.game.dir, &d).unwrap(),
+        ["F1_25.exe"],
+        "a same-size edit is caught by its SHA-1"
+    );
+    f.write("F1_25.exe", b"stock exe bytes");
+    assert!(
+        swofty_core::entitlement::changed_files(&f.data, &f.game.dir, &d)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_missing_game_exe_still_blocks_and_is_told_to_update_first() {
+    let f = Fixture::new("exe-missing");
+    f.write(FFX, b"a drop-in fsr 4 loader");
+    let d = depots(&[(FFX, b"stock fsr 3.1 loader"), ("F1_25.exe", b"stock exe bytes")]);
+    let c = stock::check(&f.data, &f.game, &d).unwrap();
+    assert_eq!(c.foreign, ["F1_25.exe"]);
+    let (changed, missing) = stock::split_absent(&c.detail);
+    assert!(changed.is_empty());
+    assert_eq!(missing, ["F1_25.exe"]);
+    let version = swofty_core::exe_version::read(&f.game.dir.join(swofty_core::GAME_EXE));
+    assert_eq!(version, None);
+    let report = stock::Report::missing(missing, &f.game.dir, version);
+    assert_eq!(report.fix(), stock::Fix::Both);
+    let text = report.text();
+    assert!(
+        text.contains("F1_25.exe is missing. Update F1 25 in Steam or the EA app, then verify"),
+        "{text}"
+    );
+}
+
+#[test]
+fn an_older_game_exe_routes_to_the_update_fix_with_third_party_dlls_in_place() {
+    let f = Fixture::new("exe-older");
+    let older = versioned_exe(1 << 16, (138 << 16) | 5601);
+    f.write("F1_25.exe", &older);
+    f.write(FFX, b"a drop-in fsr 4 loader");
+    let d = depots(&[
+        ("F1_25.exe", &older),
+        (FFX, b"stock fsr 3.1 loader"),
+        ("character_package/heads/head.mipmaps", b"a head"),
+    ]);
+    let c = stock::check(&f.data, &f.game, &d).unwrap();
+    assert_eq!(c.foreign, ["character_package/heads/head.mipmaps"]);
+    assert_eq!(third_party_rels(&c), [FFX]);
+    let version = swofty_core::exe_version::read(&f.game.dir.join(swofty_core::GAME_EXE));
+    assert_eq!(version.as_deref(), Some("1.0.138.5601"));
+    let (_, missing) = stock::split_absent(&c.detail);
+    let report = stock::Report::missing(missing, &f.game.dir, version.clone());
+    assert_eq!(report.fix(), stock::Fix::Update);
+    assert!(
+        report
+            .text()
+            .contains("F1 25 1.0.138.5601 is older than 1.0.145.2472; update F1 25 in Steam or the EA app"),
+        "{}",
+        report.text()
+    );
+    let outdated = swofty_core::known_problems::outdated_exe(version.as_deref()).unwrap();
+    assert_eq!(outdated.id, "outdated_exe");
+
+    let mut current = versioned_exe(1 << 16, (145 << 16) | 2472);
+    current.extend([0; 16]);
+    f.write("F1_25.exe", &current);
+    let version = swofty_core::exe_version::read(&f.game.dir.join(swofty_core::GAME_EXE));
+    assert_eq!(
+        version.as_deref(),
+        Some(swofty_core::known_problems::LATEST_GAME_VERSION)
+    );
+    assert_eq!(stock::fix_for(version.as_deref()), stock::Fix::Verify);
+    assert!(swofty_core::known_problems::outdated_exe(version.as_deref()).is_none());
 }
 
 #[test]
@@ -393,11 +614,11 @@ fn missing_files_are_told_to_update_an_older_game_and_verify_a_current_one() {
         "{older}"
     );
     assert!(
-        older.contains("F1 25 1.0.138.5601 is older than 1.0.141.7865; update F1 25 in Steam or the EA app"),
+        older.contains("F1 25 1.0.138.5601 is older than 1.0.145.2472; update F1 25 in Steam or the EA app"),
         "{older}"
     );
     assert!(!older.contains("verify"), "{older}");
-    let current = stock::missing_text(&files, Some("1.0.141.7865"));
+    let current = stock::missing_text(&files, Some("1.0.145.2472"));
     assert!(
         current.contains("verify the game files in Steam (open steam://validate/3059520"),
         "{current}"
@@ -410,7 +631,8 @@ fn missing_files_are_told_to_update_an_older_game_and_verify_a_current_one() {
     );
     assert!(update < verify, "{unknown}");
     assert_eq!(stock::fix_for(Some("1.0.138.5601")), stock::Fix::Update);
-    assert_eq!(stock::fix_for(Some("1.0.141.7865")), stock::Fix::Verify);
+    assert_eq!(stock::fix_for(Some("1.0.141.7865")), stock::Fix::Update);
+    assert_eq!(stock::fix_for(Some("1.0.145.2472")), stock::Fix::Verify);
     assert_eq!(stock::fix_for(None), stock::Fix::Both);
     let mut r = stock::Report::missing(files, Path::new("/games/F1 25"), Some("1.0.138.5601".into()));
     r.at = 1_793_144_157.5;
@@ -514,4 +736,77 @@ fn without_steams_list_the_conflict_is_still_refused() {
     let err = inst.apply(&replace_plan(&f)).unwrap_err();
     assert!(matches!(&err, swofty_core::Error::Leftovers(c) if c.len() == 1 && !c[0].owned));
     assert_eq!(std::fs::read(f.game.dir.join(DB)).unwrap(), b"stock db");
+}
+
+fn foreign(rel: &str, size: Option<u64>) -> stock::Foreign {
+    stock::Foreign {
+        rel: rel.to_owned(),
+        measured: rel.to_owned(),
+        size,
+        steam: 10,
+        modified: None,
+    }
+}
+
+#[test]
+fn many_missing_files_are_counted_not_named() {
+    let files: Vec<String> = (0..7772).map(|i| format!("a/f{i}.erp")).collect();
+    let text = stock::missing_text(&files, Some("1.0.145.2472"));
+    assert!(
+        text.starts_with("7772 game files are missing from the game folder;"),
+        "{text}"
+    );
+    assert!(text.contains("verify the game files in Steam"), "{text}");
+    assert!(!text.contains("copied into the game folder by hand"), "{text}");
+}
+
+#[test]
+fn absent_files_are_split_from_changed_ones() {
+    let detail = vec![
+        foreign("a.erp", None),
+        foreign("b.erp", Some(3)),
+        foreign("c.erp", None),
+    ];
+    let (changed, missing) = stock::split_absent(&detail);
+    assert_eq!(changed, ["b.erp"]);
+    assert_eq!(missing, ["a.erp", "c.erp"]);
+}
+
+#[test]
+fn a_report_of_only_absent_files_says_missing_and_a_mixed_one_says_both() {
+    let game = Path::new("/games/F1 25");
+    let only = stock::Report::new(vec!["a.erp".into(), "c.erp".into()], game)
+        .with_detail(vec![foreign("a.erp", None), foreign("c.erp", None)]);
+    let text = only.text();
+    assert!(text.contains("a.erp and c.erp are missing"), "{text}");
+    assert!(!text.contains("changed outside"), "{text}");
+    assert!(!only.mixed());
+
+    let mixed = stock::Report::new(vec!["a.erp".into(), "b.erp".into()], game)
+        .with_detail(vec![foreign("a.erp", None), foreign("b.erp", Some(3))]);
+    assert!(mixed.mixed());
+    let text = mixed.text();
+    assert!(
+        text.contains("1 game file was changed outside the launcher"),
+        "{text}"
+    );
+    assert!(text.contains("a.erp is missing"), "{text}");
+
+    let edited = stock::Report::new(vec!["b.erp".into()], game).with_detail(vec![foreign("b.erp", Some(3))]);
+    assert!(edited.text().contains("b.erp was changed outside the launcher"));
+}
+
+#[test]
+fn a_mixed_error_names_both_counts() {
+    let err = swofty_core::Error::NotStockAndMissing {
+        changed: vec!["b.erp".into()],
+        missing: (0..5).map(|i| format!("m{i}.erp")).collect(),
+        version: Some("1.0.145.2472".into()),
+    };
+    let text = err.to_string();
+    assert!(
+        text.starts_with("b.erp is not the copy Steam installed"),
+        "{text}"
+    );
+    assert!(text.contains("5 game files are missing"), "{text}");
 }

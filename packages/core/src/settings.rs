@@ -1,9 +1,11 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::manifest::{AddonManifest, Binds, CareerSetup, HubTab, OptionType, ScreenOp};
+use crate::manifest::{
+    AddonManifest, AddonNeed, AddonOption, Binds, CareerSetup, HubTab, OptionType, ScreenOp,
+};
 use crate::map::TrackPackage;
 use crate::owned::OwnedItem;
 use crate::profile::Profile;
@@ -15,6 +17,56 @@ pub const SCHEMA: u32 = 1;
 pub const SETTINGS_FILE: &str = "swofty/settings.json";
 pub const RESTART_COMMAND: &str = "swofty_restart";
 pub const UI_DIR: &str = "swofty/ui";
+
+/// The addons on in a build, each with its version: what an op's `when.addon` and an option's `needs`
+/// are checked against.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct OnAddons {
+    on: BTreeMap<String, semver::Version>,
+    off: BTreeSet<(String, String)>,
+}
+
+impl OnAddons {
+    pub fn new<'a>(on: impl IntoIterator<Item = &'a AddonManifest>) -> Self {
+        Self {
+            on: on
+                .into_iter()
+                .map(|m| (m.id.clone(), m.version.clone()))
+                .collect(),
+            off: BTreeSet::new(),
+        }
+    }
+
+    /// Turns toggle `option` of `addon` off for this build, whatever the profile holds.
+    pub fn force_off(&mut self, addon: &str, option: &str) {
+        self.off.insert((addon.to_owned(), option.to_owned()));
+    }
+
+    /// The installed addons the profile has on.
+    pub fn of(profile: &Profile, installed: &BTreeMap<String, AddonManifest>) -> Self {
+        Self::new(profile.enabled().filter_map(|id| installed.get(id)))
+    }
+
+    pub fn has(&self, need: &AddonNeed) -> bool {
+        self.on
+            .get(&need.id)
+            .is_some_and(|v| crate::version::satisfies(&need.version, v))
+    }
+
+    /// The first addon the option needs that is off, or on at a version out of its range.
+    pub fn missing<'a>(&self, o: &'a AddonOption) -> Option<&'a AddonNeed> {
+        o.needs.iter().find(|n| !self.has(n))
+    }
+
+    /// The option's value in a build: the profile's, or off while an addon it needs is off or the build
+    /// turned it off.
+    pub fn value(&self, profile: &Profile, m: &AddonManifest, o: &AddonOption) -> Value {
+        match self.missing(o).is_some() || self.off.contains(&(m.id.clone(), o.id.clone())) {
+            true => Value::Bool(false),
+            false => profile.option(m, o),
+        }
+    }
+}
 
 pub fn djb2(s: &str) -> u32 {
     s.bytes()
@@ -103,6 +155,9 @@ pub fn screens<'a>(
 pub struct SessionMap {
     pub code: String,
     pub name: String,
+    /// The addon that brings the track package: its ADDON SETTINGS tile shows the track.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub addon: String,
     #[serde(default)]
     pub version: String,
     #[serde(default)]
@@ -134,6 +189,12 @@ pub struct SessionAddon {
     pub description: String,
     pub enabled: bool,
     pub locked: bool,
+    /// A track addon: its category is Tracks or it brings a track package, as the launcher shows it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub track: bool,
+    /// The launcher folder the addon is in, by name; ADDON SETTINGS lists a row per folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     #[serde(default)]
     pub dlls: Vec<String>,
     pub enable_commands: [String; 2],
@@ -176,11 +237,13 @@ pub struct SessionState {
 }
 
 impl SessionSettings {
-    pub fn set_maps<'a>(&mut self, packages: impl Iterator<Item = &'a TrackPackage>) {
+    /// The build's track packages, each with the addon that brings it, which is then a track.
+    pub fn set_maps<'a>(&mut self, packages: impl Iterator<Item = (&'a TrackPackage, &'a str)>) {
         self.maps = packages
-            .map(|p| SessionMap {
+            .map(|(p, addon)| SessionMap {
                 code: p.track_code.clone(),
                 name: p.track_name.clone().unwrap_or_else(|| p.track_code.clone()),
+                addon: addon.to_owned(),
                 version: p.version.clone().unwrap_or_default(),
                 author: p.author_name.clone().unwrap_or_default(),
                 description: p
@@ -191,6 +254,9 @@ impl SessionSettings {
                     .to_owned(),
             })
             .collect();
+        for a in &mut self.addons {
+            a.track |= self.maps.iter().any(|m| m.addon == a.id);
+        }
     }
 
     pub fn set_mods(&mut self, items: impl Iterator<Item = SessionMod>) {
@@ -220,6 +286,7 @@ impl SessionSettings {
         rest.sort_by_key(|m| m.name.to_lowercase());
         order.extend(rest);
         let enabled: Vec<&str> = profile.enabled().collect();
+        let on = OnAddons::of(profile, installed);
         let screens: Vec<SessionScreen> =
             screens(order.iter().copied().filter(|m| enabled.contains(&m.id.as_str())))?
                 .into_iter()
@@ -256,6 +323,8 @@ impl SessionSettings {
                 description: m.description.clone().unwrap_or_default(),
                 enabled: enabled.contains(&m.id.as_str()),
                 locked: m.is_builtin() || crate::managed::is_managed(&m.id),
+                track: m.category == Some(crate::manifest::Category::Tracks),
+                folder: None,
                 dlls: m
                     .operations
                     .native
@@ -272,7 +341,7 @@ impl SessionSettings {
                         binds: o.binds,
                         label: o.title().to_owned(),
                         description: o.description.clone().unwrap_or_default(),
-                        current: o.index(&profile.option(m, o)).unwrap_or(0),
+                        current: o.index(&on.value(profile, m, o)).unwrap_or(0),
                         states: o
                             .states()
                             .into_iter()
@@ -283,7 +352,7 @@ impl SessionSettings {
                                 command: format!("swofty_set:{}:{}:{i}", m.id, o.id),
                             })
                             .collect(),
-                        hidden: o.hidden,
+                        hidden: o.hidden || on.missing(o).is_some(),
                     })
                     .collect(),
                 career_setup: m.career_setup.clone(),
@@ -400,7 +469,7 @@ pub fn merge(profile: &mut Profile, installed: &BTreeMap<String, AddonManifest>,
     out
 }
 
-pub fn render_ops(doc: &mut Value, m: &AddonManifest, profile: &Profile) -> Result<()> {
+pub fn render_ops(doc: &mut Value, m: &AddonManifest, profile: &Profile, on: &OnAddons) -> Result<()> {
     let fail = |msg: String| Error::Resolve(format!("{}: {msg}", m.id));
     let option = |id: &str| {
         m.options
@@ -408,30 +477,46 @@ pub fn render_ops(doc: &mut Value, m: &AddonManifest, profile: &Profile) -> Resu
             .find(|o| o.id == id)
             .ok_or_else(|| fail(format!("unknown option {id}")))
     };
+    let holds = |when: Value| -> Result<bool> {
+        let Value::Object(when) = when else {
+            return Err(fail("when must be an object of option values and addon".into()));
+        };
+        let mut hit = true;
+        for (id, want) in &when {
+            if id == "addon" {
+                let needs = AddonNeed::parse_list(want).map_err(|e| fail(format!("when.addon: {e}")))?;
+                hit &= needs.iter().all(|n| on.has(n));
+                continue;
+            }
+            let o = option(id)?;
+            let want = o
+                .normalise(want)
+                .ok_or_else(|| fail(format!("when: {want} is not a value of {id}")))?;
+            hit &= on.value(profile, m, o) == want;
+        }
+        Ok(hit)
+    };
+    let Some(doc) = doc.as_object_mut() else {
+        return Ok(());
+    };
+    let file = doc.remove("when").map(holds).transpose()?.unwrap_or(true);
     let Some(ops) = doc.get_mut("ops").and_then(Value::as_array_mut) else {
         return Ok(());
     };
+    if !file {
+        ops.clear();
+        return Ok(());
+    }
     let mut keep = Vec::with_capacity(ops.len());
     for mut op in ops.drain(..) {
-        if let Some(when) = op.as_object_mut().and_then(|o| o.remove("when")) {
-            let Value::Object(when) = when else {
-                return Err(fail("when must be an object of option values".into()));
-            };
-            let mut hit = true;
-            for (id, want) in &when {
-                let o = option(id)?;
-                let want = o
-                    .normalise(want)
-                    .ok_or_else(|| fail(format!("when: {want} is not a value of {id}")))?;
-                hit &= profile.option(m, o) == want;
-            }
-            if !hit {
-                continue;
-            }
+        if let Some(when) = op.as_object_mut().and_then(|o| o.remove("when"))
+            && !holds(when)?
+        {
+            continue;
         }
         substitute(&mut op, &|id| {
             let o = option(id)?;
-            Ok(o.placeholder(&profile.option(m, o)))
+            Ok(o.placeholder(&on.value(profile, m, o)))
         })?;
         keep.push(op);
     }
@@ -440,7 +525,7 @@ pub fn render_ops(doc: &mut Value, m: &AddonManifest, profile: &Profile) -> Resu
 }
 
 /// One manifest string with its `{{id}}` placeholders filled from the profile's option values.
-pub fn render_text(text: &str, m: &AddonManifest, profile: &Profile) -> Result<String> {
+pub fn render_text(text: &str, m: &AddonManifest, profile: &Profile, on: &OnAddons) -> Result<String> {
     let mut v = Value::String(text.to_owned());
     substitute(&mut v, &|id| {
         let o = m
@@ -448,7 +533,7 @@ pub fn render_text(text: &str, m: &AddonManifest, profile: &Profile) -> Result<S
             .iter()
             .find(|o| o.id == id)
             .ok_or_else(|| Error::Resolve(format!("{}: unknown option {id}", m.id)))?;
-        Ok(o.placeholder(&profile.option(m, o)))
+        Ok(o.placeholder(&on.value(profile, m, o)))
     })?;
     Ok(v.as_str().expect("a string stays a string").to_owned())
 }
@@ -610,7 +695,7 @@ mod tests {
         };
         let packages = [pkg("okayama", "Okayama"), pkg("bahrain24", "Sepang")];
         let mut s = SessionSettings::build(&p, &installed(), None).unwrap();
-        s.set_maps(packages.iter());
+        s.set_maps(packages.iter().map(|p| (p, "")));
         let codes: Vec<&str> = s.maps.iter().map(|m| m.code.as_str()).collect();
         assert_eq!(codes, ["okayama", "bahrain24"]);
         assert_eq!(s.maps[1].name, "Sepang");
@@ -776,16 +861,16 @@ mod tests {
             {"op": "set", "select": "t.r", "field": "l", "value": "{{ livery }}-{{audi}}", "when": {"livery": "title"}},
             {"op": "set", "select": "t.r", "field": "a", "value": "1", "when": {"audi": true}}
         ]});
-        render_ops(&mut doc, &m, &p).unwrap();
+        render_ops(&mut doc, &m, &p, &OnAddons::default()).unwrap();
         let ops = doc["ops"].as_array().unwrap();
         assert_eq!(ops.len(), 2);
         assert_eq!(ops[0]["value"], "8");
         assert_eq!(ops[1]["value"], "title-false");
         assert!(ops[1].get("when").is_none());
         let mut bad = serde_json::json!({"ops": [{"op": "set", "value": "{{missing}}"}]});
-        assert!(render_ops(&mut bad, &m, &p).is_err());
+        assert!(render_ops(&mut bad, &m, &p, &OnAddons::default()).is_err());
         let mut bad = serde_json::json!({"ops": [{"op": "set", "value": "x", "when": {"livery": "nope"}}]});
-        assert!(render_ops(&mut bad, &m, &p).is_err());
+        assert!(render_ops(&mut bad, &m, &p, &OnAddons::default()).is_err());
     }
 
     #[test]
@@ -818,7 +903,7 @@ mod tests {
                 "me_lacquerRoughness": 0.1
             }
         }]});
-        render_ops(&mut doc, &m, &p).unwrap();
+        render_ops(&mut doc, &m, &p, &OnAddons::default()).unwrap();
         let file = OpFile::from_value(doc, FileKind::Erp).unwrap();
         let AssetOp::Erp(ErpOp::SetMaterial { params, .. }) = &file.ops[0] else {
             panic!("{:?}", file.ops[0]);
@@ -831,11 +916,214 @@ mod tests {
         p.set_option(&m, "coat", serde_json::json!("1 1 1")).unwrap();
         let mut doc = serde_json::json!({"schema_version": 1, "ops": [{"op": "set-material", "erp": "a.erp", "resource": "r",
             "params": {"me_x": "{{coat}} x"}}]});
-        render_ops(&mut doc, &m, &p).unwrap();
+        render_ops(&mut doc, &m, &p, &OnAddons::default()).unwrap();
         let file = OpFile::from_value(doc, FileKind::Erp).unwrap();
         let AssetOp::Erp(ErpOp::SetMaterial { params, .. }) = &file.ops[0] else {
             panic!();
         };
         assert_eq!(params["me_x"].values().unwrap_err(), "\"x\" is not a number");
+    }
+
+    fn addon(id: &str, version: &str) -> AddonManifest {
+        AddonManifest::parse(&format!(
+            r#"{{ "schema_version": 1, "id": "{id}", "name": "{id}", "version": "{version}", "author": "a",
+                 "compat": {{ "game": "f1_25" }} }}"#
+        ))
+        .unwrap()
+    }
+
+    fn rounds() -> AddonManifest {
+        AddonManifest::parse(
+            r#"{
+              "schema_version": 1, "id": "miguel.f2-revamp", "name": "F2 Revamp", "version": "1.0.0", "author": "a",
+              "compat": { "game": "f1_25" },
+              "options": [
+                { "id": "sprint", "type": "toggle", "default": false, "binds": "db" },
+                { "id": "istanbul_park", "type": "toggle", "default": false, "binds": "db",
+                  "needs": ["track.istanbul_park"] },
+                { "id": "imola", "type": "toggle", "default": true, "binds": "native",
+                  "needs": [{ "id": "track.imola", "version": ">=2.0.0" }] }
+              ],
+              "operations": { "database": ["db/rounds.json"] }
+            }"#,
+        )
+        .unwrap()
+    }
+
+    fn kept(doc: &Value) -> Vec<&str> {
+        doc["ops"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|o| o["field"].as_str().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn an_op_with_when_addon_applies_only_while_that_addon_is_on() {
+        let m = rounds();
+        let mut p = Profile::new("x");
+        let doc = serde_json::json!({"schema_version": 1, "ops": [
+            {"op": "set", "select": "t.r", "field": "always", "value": "1"},
+            {"op": "set", "select": "t.r", "field": "round", "value": "1", "when": {"addon": "track.istanbul_park"}},
+            {"op": "set", "select": "t.r", "field": "sprint", "value": "1",
+             "when": {"addon": "track.istanbul_park", "sprint": true}},
+            {"op": "set", "select": "t.r", "field": "v2", "value": "1",
+             "when": {"addon": {"id": "track.istanbul_park", "version": ">=2.0.0"}}},
+            {"op": "set", "select": "t.r", "field": "both", "value": "1",
+             "when": {"addon": ["track.istanbul_park", "track.imola"]}}
+        ]});
+        let render = |p: &Profile, on: &[AddonManifest]| {
+            let mut doc = doc.clone();
+            render_ops(&mut doc, &m, p, &OnAddons::new(on)).unwrap();
+            doc
+        };
+        assert_eq!(kept(&render(&p, &[])), ["always"]);
+        let istanbul = addon("track.istanbul_park", "1.4.0");
+        let out = render(&p, std::slice::from_ref(&istanbul));
+        assert_eq!(kept(&out), ["always", "round"]);
+        assert!(out["ops"][1].get("when").is_none());
+        p.set_option(&m, "sprint", serde_json::json!(true)).unwrap();
+        assert_eq!(kept(&render(&p, &[])), ["always"]);
+        assert_eq!(
+            kept(&render(&p, std::slice::from_ref(&istanbul))),
+            ["always", "round", "sprint"]
+        );
+        let on = [
+            addon("track.istanbul_park", "2.1.0"),
+            addon("track.imola", "1.0.0"),
+        ];
+        assert_eq!(
+            kept(&render(&p, &on)),
+            ["always", "round", "sprint", "v2", "both"]
+        );
+    }
+
+    #[test]
+    fn a_whole_op_file_applies_only_while_its_when_holds() {
+        let m = rounds();
+        let mut p = Profile::new("x");
+        let doc = serde_json::json!({"schema_version": 1, "when": {"addon": "track.istanbul_park", "sprint": true},
+        "ops": [
+            {"op": "set", "select": "t.r", "field": "round", "value": "1"},
+            {"op": "set", "select": "t.r", "field": "laps", "value": "1", "when": {"addon": "track.imola"}}
+        ]});
+        let istanbul = [addon("track.istanbul_park", "1.0.0")];
+        let mut off = doc.clone();
+        render_ops(&mut off, &m, &p, &OnAddons::new(&istanbul)).unwrap();
+        assert!(kept(&off).is_empty());
+        assert!(off.get("when").is_none());
+        p.set_option(&m, "sprint", serde_json::json!(true)).unwrap();
+        let mut on = doc.clone();
+        render_ops(&mut on, &m, &p, &OnAddons::new(&istanbul)).unwrap();
+        assert_eq!(kept(&on), ["round"]);
+        let file = crate::asset::OpFile::from_value(on, crate::asset::FileKind::Database).unwrap();
+        assert_eq!(file.ops.len(), 1);
+    }
+
+    #[test]
+    fn a_bad_when_addon_names_the_addon_and_the_problem() {
+        let m = rounds();
+        let p = Profile::new("x");
+        let err = |when: Value| {
+            let mut doc = serde_json::json!({"ops": [{"op": "set", "value": "1", "when": when}]});
+            render_ops(&mut doc, &m, &p, &OnAddons::default())
+                .unwrap_err()
+                .to_string()
+        };
+        assert!(
+            err(serde_json::json!({"addon": "Istanbul Park"}))
+                .contains(r#"miguel.f2-revamp: when.addon: "Istanbul Park" is not an addon id"#)
+        );
+        assert!(
+            err(serde_json::json!({"addon": {"id": "track.istanbul_park", "versoin": "2"}}))
+                .contains(r#"when.addon: "versoin" is not a key of an addon"#)
+        );
+        assert!(err(serde_json::json!({"addon": []})).contains("when.addon: lists no addon"));
+        assert!(err(serde_json::json!({"adon": "track.istanbul_park"})).contains("unknown option adon"));
+        let mut file = serde_json::json!({"when": {"addon": 4}, "ops": []});
+        let e = render_ops(&mut file, &m, &p, &OnAddons::default())
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("when.addon: 4 is not an addon id"), "{e}");
+    }
+
+    #[test]
+    fn an_option_that_needs_an_addon_is_off_while_it_is_off_and_keeps_its_value() {
+        let m = rounds();
+        let istanbul = &m.options[1];
+        let mut p = Profile::new("x");
+        p.set_option(&m, "istanbul_park", serde_json::json!(true))
+            .unwrap();
+        let none = OnAddons::default();
+        assert_eq!(none.missing(istanbul).unwrap().to_string(), "track.istanbul_park");
+        assert_eq!(none.value(&p, &m, istanbul), false);
+        assert_eq!(p.option(&m, istanbul), true);
+        let on = OnAddons::new(&[addon("track.istanbul_park", "1.0.0")]);
+        assert!(on.missing(istanbul).is_none());
+        assert_eq!(on.value(&p, &m, istanbul), true);
+        let doc = serde_json::json!({"ops": [
+            {"op": "set", "select": "t.r", "field": "round", "value": "{{istanbul_park}}"},
+            {"op": "set", "select": "t.r", "field": "only", "value": "1", "when": {"istanbul_park": true}}
+        ]});
+        let mut off = doc.clone();
+        render_ops(&mut off, &m, &p, &none).unwrap();
+        assert_eq!(kept(&off), ["round"]);
+        assert_eq!(off["ops"][0]["value"], "false");
+        let mut back = doc.clone();
+        render_ops(&mut back, &m, &p, &on).unwrap();
+        assert_eq!(kept(&back), ["round", "only"]);
+        assert_eq!(back["ops"][0]["value"], "true");
+        assert_eq!(render_text("{{istanbul_park}}", &m, &p, &none).unwrap(), "false");
+    }
+
+    #[test]
+    fn a_toggle_on_by_default_that_needs_an_addon_follows_it() {
+        let m = rounds();
+        let imola = &m.options[2];
+        let p = Profile::new("x");
+        assert_eq!(OnAddons::default().value(&p, &m, imola), false);
+        assert_eq!(
+            OnAddons::new(&[addon("track.imola", "1.9.0")]).value(&p, &m, imola),
+            false
+        );
+        assert_eq!(
+            OnAddons::new(&[addon("track.imola", "1.9.0")])
+                .missing(imola)
+                .unwrap()
+                .to_string(),
+            "track.imola >=2.0.0"
+        );
+        assert_eq!(
+            OnAddons::new(&[addon("track.imola", "2.0.0")]).value(&p, &m, imola),
+            true
+        );
+    }
+
+    #[test]
+    fn the_session_file_shows_an_option_off_and_hidden_while_an_addon_it_needs_is_off() {
+        let mut installed = installed();
+        installed.insert("miguel.f2-revamp".into(), rounds());
+        installed.insert(
+            "track.istanbul_park".into(),
+            addon("track.istanbul_park", "1.0.0"),
+        );
+        let m = &installed["miguel.f2-revamp"];
+        let mut p = Profile::new("x");
+        p.set_enabled("miguel.f2-revamp", true).unwrap();
+        p.set_option(m, "istanbul_park", serde_json::json!(true)).unwrap();
+        let option = |s: &SessionSettings| {
+            let a = s.addons.iter().find(|a| a.id == "miguel.f2-revamp").unwrap();
+            a.options
+                .iter()
+                .find(|o| o.id == "istanbul_park")
+                .unwrap()
+                .clone()
+        };
+        let off = option(&SessionSettings::build(&p, &installed, None).unwrap());
+        assert_eq!((off.current, off.hidden), (0, true));
+        p.set_enabled("track.istanbul_park", true).unwrap();
+        let on = option(&SessionSettings::build(&p, &installed, None).unwrap());
+        assert_eq!((on.current, on.hidden), (1, false));
     }
 }

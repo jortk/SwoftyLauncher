@@ -51,6 +51,7 @@ const SwoftySessionOps g_ops = {
     Points::op_spectator_follow,
     Points::op_spectator_set_camera,
     Points::op_spectator_current,
+    Points::op_disqualify,
 };
 
 session_points::Env make_env()
@@ -99,8 +100,10 @@ void setup()
 {
     const SwoftyEvents *ev = runtime::events_table();
     uint32_t token = 0;
-    if (ev && ev->on_frame)
+    if (ev && ev->on_frame) {
+        runtime::frame_probe_name("session_points");
         ev->on_frame(frame, nullptr, &token);
+    }
 }
 
 }
@@ -108,6 +111,11 @@ void setup()
 void declare_session_points(Table &t)
 {
     Points::declare(t, make_vops(), make_env());
+}
+
+int session_control_mode(uint32_t car, uint32_t *mode)
+{
+    return Points::op_control(car, mode, nullptr);
 }
 
 void arm_session_points()

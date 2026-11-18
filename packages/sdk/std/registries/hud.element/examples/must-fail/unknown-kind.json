@@ -1,0 +1,8 @@
+{
+  "hud.element": {
+    "bad": {
+      "dial": "f1_26",
+      "elements": [{ "id": "x", "kind": "polygon" }]
+    }
+  }
+}

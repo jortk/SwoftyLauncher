@@ -366,7 +366,7 @@ Driver ids run 208 to 16382, and the core allocates 208 to 253, then 256 upward.
 
 An explicit `stat_id` you ship stays your record's id from then on. Other addons and saved careers refer to it.
 
-Rows an older addon's database operations copy with `add-row` keep their ids the same way, in `$DATA/registry/row-ids.json`, keyed by addon, table and row label ([Kept ids](/reference/ops/database#kept-ids)). A copy never takes an id `ids.json` holds.
+Rows an older addon's database operations copy with `add-row` keep their ids the same way, in `$DATA/registry/row-ids.json`, keyed by addon, table and row label ([Kept ids](/reference/ops/database#kept-ids)); a clash in one profile moves a row's id in that profile only. A copy never takes an id `ids.json` holds.
 
 ```text
 [registry] stat ids: driver.identity swofty.f1-1990/alain_prost -> 241 (pool 208-16382, 16117 free after this)

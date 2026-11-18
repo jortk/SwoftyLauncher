@@ -13,7 +13,7 @@
 
 namespace swofty::tel {
 
-static_assert(SWOFTY_TELEMETRY_VERSION == 1);
+static_assert(SWOFTY_TELEMETRY_VERSION == 2);
 static_assert(sizeof(SwoftySessionState) == 80);
 static_assert(sizeof(SwoftyCarState) == 192);
 static_assert(sizeof(SwoftyParticipant) == 92);

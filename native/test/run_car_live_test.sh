@@ -15,3 +15,6 @@ mkdir -p "$OUT"
 "${PIN[@]}" zig c++ -target x86_64-linux-musl -std=c++23 -O1 -Wall -Wextra -Werror -Wno-nullability-completeness \
     -I../../packages/sdk/include -o "$OUT/car_profile_test" hooks/car_profile_test.cpp
 "$OUT/car_profile_test"
+"${PIN[@]}" zig c++ -target x86_64-linux-musl -std=c++23 -O1 -Wall -Wextra -Werror -Wno-nullability-completeness \
+    -I../../packages/sdk/include -o "$OUT/ai_racecraft_test" hooks/ai_racecraft_test.cpp
+"$OUT/ai_racecraft_test"

@@ -63,6 +63,8 @@ inline constexpr Spec DESTROY{"car.controllers.destroyed", "Sess_ControllerSyste
 inline constexpr Spec HIDE{"hud.spectator.visible", "Sess_SpectatorHud_Hide"};
 inline constexpr Spec DIRECTOR_UPDATE{"spectator.director", "Sess_SpectatorDirector_Update"};
 inline constexpr Spec DIRECTOR_SET_ACTIVE{"spectator.director", "Sess_SpectatorDirector_SetActive"};
+inline constexpr Spec RULES_INIT{"session.rules", "Sess_RuleManager_Initialise"};
+inline constexpr const char *DISQUALIFY_BINDING = "Sess_Rules_Disqualify";
 
 struct Env {
     std::function<bool(uintptr_t addr, void *out, size_t n)> read;
@@ -197,17 +199,20 @@ template <class Tag> struct Set {
     static inline std::unique_ptr<MidPoint> ai_apply;
     static inline std::unique_ptr<AiLink> ai_link;
     static inline std::unique_ptr<GamePoint> control, build, destroy, hide;
-    static inline std::unique_ptr<GamePoint> director_update, director_set_active;
+    static inline std::unique_ptr<GamePoint> director_update, director_set_active, rules_init;
 
     static inline std::atomic<uintptr_t> system{0};
     static inline std::atomic<bool> rebuilding{true};
     static inline std::atomic<int> depth{0};
     static inline std::atomic<uintptr_t> director{0};
+    static inline std::atomic<uintptr_t> rules{0};
+    static inline std::atomic<uintptr_t> rules_vtable{0};
     static inline std::atomic<bool> watching{false};
 
     struct Pending {
         uint32_t car;
         uint32_t mode;
+        bool disqualify = false;
     };
     static inline std::mutex pending_lock;
     static inline std::vector<Pending> pending;
@@ -524,6 +529,59 @@ template <class Tag> struct Set {
         return apply_control(car, mode);
     }
 
+    static int op_disqualify(uint32_t car)
+    {
+        if (env.flow_thread && !env.flow_thread())
+            return SWOFTY_ASSET_LATE;
+        if (car > 0xfe)
+            return SWOFTY_ASSET_INVALID;
+        if (!system.load() || !rules_live())
+            return SWOFTY_ASSET_LATE;
+        if (unsafe()) {
+            std::lock_guard<std::mutex> g(pending_lock);
+            for (auto &p : pending)
+                if (p.car == car && p.disqualify)
+                    return SWOFTY_ASSET_OK;
+            pending.push_back({car, 0, true});
+            note("[sessions] disqualify for car " + std::to_string(car) + " queued: the game is " +
+                 (rebuilding.load() ? "rebuilding the controller sets" : "inside a controller switch"));
+            return SWOFTY_ASSET_OK;
+        }
+        return apply_disqualify(car);
+    }
+
+    static bool rules_live()
+    {
+        uintptr_t r = rules.load();
+        return r && rd<uintptr_t>(r) == rules_vtable.load();
+    }
+
+    static int apply_disqualify(uint32_t car)
+    {
+        uint32_t mode = 0, flags = 0;
+        int why = 0;
+        if (!read_set(car, mode, flags, why))
+            return why;
+        if (!rules_live())
+            return SWOFTY_ASSET_LATE;
+        uintptr_t fn = resolve(DISQUALIFY_BINDING);
+        if (!fn) {
+            note(std::string("[sessions] disqualify unavailable: ") + DISQUALIFY_BINDING + " does not resolve on this build");
+            return SWOFTY_ASSET_UNAVAILABLE;
+        }
+        reinterpret_cast<void (*)(void *, uint32_t)>(fn)(reinterpret_cast<void *>(rules.load()), car);
+        note("[sessions] disqualify: car " + std::to_string(car) + " handed to the rules' disqualification");
+        return SWOFTY_ASSET_OK;
+    }
+
+    static uint32_t d_rules_init(void *self, void *systems, void *components)
+    {
+        uint32_t r = rules_init->original<uint32_t>(self, systems, components);
+        rules_vtable = rd<uintptr_t>(reinterpret_cast<uintptr_t>(self));
+        rules = reinterpret_cast<uintptr_t>(self);
+        return r;
+    }
+
     // Called once a frame on the flow thread: queued changes apply when no rebuild or switch is running.
     static void drain()
     {
@@ -535,10 +593,10 @@ template <class Tag> struct Set {
             todo.swap(pending);
         }
         for (auto &p : todo) {
-            int r = apply_control(p.car, p.mode);
+            int r = p.disqualify ? apply_disqualify(p.car) : apply_control(p.car, p.mode);
             if (r != SWOFTY_ASSET_OK)
-                note("[sessions] queued set_control for car " + std::to_string(p.car) + " not applied (result " +
-                     std::to_string(r) + ")");
+                note(std::string("[sessions] queued ") + (p.disqualify ? "disqualify" : "set_control") + " for car " +
+                     std::to_string(p.car) + " not applied (result " + std::to_string(r) + ")");
         }
     }
 
@@ -602,7 +660,7 @@ template <class Tag> struct Set {
     // Installs what the core observes from the window stage on (the sets' destroy-all and build-all).
     static void arm()
     {
-        for (GamePoint *p : {destroy.get(), build.get()}) {
+        for (GamePoint *p : {destroy.get(), build.get(), rules_init.get()}) {
             p->keep(true);
             p->install(false, "the core");
         }
@@ -645,6 +703,7 @@ template <class Tag> struct Set {
         make(destroy, DESTROY, reinterpret_cast<void *>(&d_destroy));
         make(hide, HIDE, reinterpret_cast<void *>(&d_hide));
         t.declare_game(HIDE.point, SWOFTY_POINT_MODIFY, spe::HudVisible::version, hide.get());
+        make(rules_init, RULES_INIT, reinterpret_cast<void *>(&d_rules_init));
         make(director_update, DIRECTOR_UPDATE, reinterpret_cast<void *>(&d_director_update));
         make(director_set_active, DIRECTOR_SET_ACTIVE, reinterpret_cast<void *>(&d_director_set_active));
     }

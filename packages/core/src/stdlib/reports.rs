@@ -21,8 +21,9 @@ pub const CATALOG: &str = "catalog.json";
 pub const ROOM: &str = "room.json";
 /// The core's stat-id store (docs/std/dependencies.md "Tracks have stable identities").
 pub const IDS: &str = "ids.json";
-/// The reports Send Logs adds, by their name in `$DATA/registry/`.
-pub const SENT: [&str; 4] = [EFFECTIVE, CONFLICTS, CATALOG, ROOM];
+/// The reports Send Logs adds, by their name in `$DATA/registry/`; with the stat-id
+/// allocations `ids.json` and `row-ids.json`.
+pub const SENT: [&str; 6] = [EFFECTIVE, CONFLICTS, CATALOG, ROOM, IDS, crate::row_ids::FILE];
 
 pub fn dir(data: &Path) -> PathBuf {
     data.join(DIR)
@@ -213,9 +214,58 @@ impl Conflict {
     }
 }
 
+/// What the core left out of one addon at boot for want of a free stat id.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct IdLeftOut {
+    pub teams: u64,
+    pub vehicles: u64,
+    pub lists: u64,
+}
+
+pub const LEFT_OUT_WARNING: &str = "Left out for want of a free id: ";
+
+/// The one Play warning for the seasons the core left out at boot (`left_out`, by addon id, from the last
+/// session's conflicts report) and the addons whose database rows found no free id in this build (`built`),
+/// counting only addons still in `order`. `None` when nothing is left out.
+pub fn left_out_warning(
+    left_out: &BTreeMap<String, IdLeftOut>,
+    built: &BTreeMap<String, usize>,
+    order: &[String],
+    name: &dyn Fn(&str) -> String,
+) -> Option<String> {
+    let mut addons: BTreeMap<&str, IdLeftOut> = BTreeMap::new();
+    for (id, n) in left_out.iter().filter(|(id, _)| order.contains(id)) {
+        addons.insert(id, n.clone());
+    }
+    for (id, n) in built.iter().filter(|(id, _)| order.contains(id)) {
+        addons.entry(id).or_default().vehicles += *n as u64;
+    }
+    addons.retain(|_, n| n.teams + n.vehicles + n.lists > 0);
+    if addons.is_empty() {
+        return None;
+    }
+    let sum = |f: fn(&IdLeftOut) -> u64| addons.values().map(f).sum::<u64>();
+    let names: Vec<String> = addons.keys().take(5).map(|id| name(id)).collect();
+    let more = match addons.len() {
+        n if n > 5 => format!(" and {} more", n - 5),
+        _ => String::new(),
+    };
+    Some(format!(
+        "{LEFT_OUT_WARNING}{} addon(s) ({}{more}) lost {} team(s), {} car(s) and {} entrant list(s) because the game's team and car tables are full. \
+         Turn some season addons off to get them back",
+        addons.len(),
+        names.join(", "),
+        sum(|n| n.teams),
+        sum(|n| n.vehicles),
+        sum(|n| n.lists),
+    ))
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Conflicts {
     pub registry: Vec<Conflict>,
+    pub left_out: BTreeMap<String, IdLeftOut>,
     /// The core's own status lines by addon, when it writes them (`"status": { "<id>": ["..."] }`).
     pub status: BTreeMap<String, Vec<String>>,
 }
@@ -249,7 +299,15 @@ impl Conflicts {
                 (id.clone(), lines)
             })
             .collect();
-        Some(Self { registry, status })
+        let left_out = v
+            .get("left_out")
+            .and_then(|l| serde_json::from_value(l.clone()).ok())
+            .unwrap_or_default();
+        Some(Self {
+            registry,
+            left_out,
+            status,
+        })
     }
 
     pub fn read(data: &Path, game: Option<&Path>) -> Option<Self> {
@@ -611,6 +669,25 @@ mod tests {
             c.registry[2].line(&name),
             "hook career.calendar.add_activity unavailable: old_addon overwrites it, so swofty.progressive can't use it"
         );
+    }
+
+    #[test]
+    fn the_core_and_the_build_give_one_warning_for_what_is_left_out() {
+        let c = Conflicts::parse(
+            r#"{ "left_out": { "s.1986": { "teams": 10, "vehicles": 10, "lists": 1 },
+                               "s.off": { "teams": 4 }, "s.none": { "teams": 0 } } }"#,
+        )
+        .unwrap();
+        let order = vec!["s.1986".to_owned(), "s.1972".to_owned(), "s.none".to_owned()];
+        let built = BTreeMap::from([("s.1972".to_owned(), 3usize)]);
+        let name = |id: &str| id.to_owned();
+        let text = left_out_warning(&c.left_out, &built, &order, &name).unwrap();
+        assert_eq!(
+            text,
+            "Left out for want of a free id: 2 addon(s) (s.1972, s.1986) lost 10 team(s), 13 car(s) and 1 entrant list(s) because the game's team and car tables are full. Turn some season addons off to get them back"
+        );
+        assert!(left_out_warning(&c.left_out, &BTreeMap::new(), &["s.other".to_owned()], &name).is_none());
+        assert!(Conflicts::parse("{}").unwrap().left_out.is_empty());
     }
 
     #[test]

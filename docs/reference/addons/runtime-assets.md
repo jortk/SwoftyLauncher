@@ -146,6 +146,7 @@ The engine loads content by asset group. `group.register` adds a group to its as
 
 - `file.put` ships the archive. Loose files are copied into the game folder at build, or served from `swofty/overlay/` if your profile turns on the experimental `file` feature.
 - `erps` lists several archives, `deps` names groups that must load first, and `template` names a stock group to copy settings from.
+- A car group in the `teams/` folder of its template's package also gets the template's archives that sit right in that `teams/` folder and that `erps` doesn't list, after its own. The 2025 My Team cars read the shared car (`teams/fom_car/`) from `teams/common_fom.erp`; every other car reads its shared parts from `teams/common.erp`. The core logs `[assets] <group>: added <archive> from its template <template>` for each one.
 - The core skips groups already in the stock manifest. If a database field points at a stock group whose archive is missing, the session load hangs.
 - Database fields such as a track's `worldAssetGroup` refer to the group. Tracks use this route: each track's archive goes to `2025_asset_groups/environment_package/tracks/<code>/<code>.erp`, with one group per world, bake and probe set ([How tracks are installed](/reference/installing-tracks)).
 

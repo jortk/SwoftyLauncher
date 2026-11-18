@@ -10,6 +10,8 @@ use crate::baseline::sha256_file;
 use crate::recovery::SessionLock;
 use crate::{Error, Result, io_err};
 
+const SESSION_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
+
 pub const CLOSE_STEAM: &str = "Exit Steam completely (Steam menu > Exit), then restore again. Starting Steam \
                                afterwards uploads the restored save.";
 pub const CLOSE_GAME: &str = "F1 25 is running; close it, then try again.";
@@ -113,20 +115,31 @@ pub fn restore_across(
     running: Running,
     now: i64,
 ) -> Result<Restored> {
-    let vault = from;
     if let Some(why) = blocker(loc.layout, running) {
-        vault.log(
+        from.log(
             &Event::new(now, EventKind::RestoreRefused)
                 .snapshot(id)
                 .detail(why.clone()),
         );
         return Err(Error::Other(why));
     }
-    let _session = SessionLock::try_acquire(&vault.data)?.ok_or_else(|| {
+    let _session = SessionLock::wait(&from.data, SESSION_GRACE)?.ok_or_else(|| {
         Error::Other(
             "a Play session or another restore is running; wait for it to end, then restore again".to_owned(),
         )
     })?;
+    restore_held(from, id, loc, into, now)
+}
+
+/// [`restore_across`] for a caller that holds the session lock and checked [`blocker`] itself.
+pub(crate) fn restore_held(
+    from: &Vault,
+    id: &str,
+    loc: &Location,
+    into: &Vault,
+    now: i64,
+) -> Result<Restored> {
+    let vault = from;
     let same = from.source == into.source;
     let (first, second) = match from.source <= into.source {
         true => (from, into),
@@ -184,7 +197,8 @@ pub fn restore_across(
                 true => Ok(()),
                 false => Err(Error::Other(format!("{} did not copy cleanly", tmp.display()))),
             })
-            .and_then(|()| touch(&tmp, now));
+            .and_then(|()| touch(&tmp, now))
+            .and_then(|()| crate::sync_file(&tmp));
         if let Err(e) = ok {
             for (tmp, _, _) in &staged {
                 std::fs::remove_file(tmp).ok();
@@ -204,6 +218,9 @@ pub fn restore_across(
                     true => Ok(()),
                     false => Err(Error::Other(format!("{} did not restore cleanly", to.display()))),
                 });
+        if done.is_ok() {
+            crate::sync_dir(to.parent());
+        }
         if let Err(e) = done {
             for (tmp, _, _) in &staged[n..] {
                 std::fs::remove_file(tmp).ok();

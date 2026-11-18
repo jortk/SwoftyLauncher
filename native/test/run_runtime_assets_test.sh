@@ -365,6 +365,7 @@ for mode in none replace gated late early earlywait secondcopy files; do
         ;;
     none)
         absent "no runtime-assets logs without assets.json" '\[assets\]'
+        check "none: the window stage leaves the tracks table unread while no addon has opened the game database" '\[apply\] facts: the tracks table is not readable at the window stage \(no addon has opened the game database, so its reader is not initialised\); the track is left empty'
         absent "no early stage without assets.json" 'KERNEL32!CreateMutexW|stage: window'
         check "loader: early stage off without assets.json" 'early stage: off \(no "early_stage" in swofty.assets\.json\)'
         ;;

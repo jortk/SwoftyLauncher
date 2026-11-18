@@ -1,3 +1,4 @@
+use crate::scale::px;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::dialog::DialogFooter;
@@ -11,6 +12,7 @@ use crate::discord::{BLURPLE, BLURPLE_HOVER, INVITE, LOGO};
 use crate::pages::{game_art, logo};
 use crate::shell::Shell;
 use crate::theme::{Palette, palette};
+use swofty_i18n::{tr, trf};
 
 const HEIGHT: f32 = 470.;
 const TITLE: &str = "EA app support is experimental";
@@ -57,7 +59,7 @@ fn illustration(p: Palette) -> impl IntoElement {
         .items_center()
         .gap(px(6.))
         .child(game_art(64., 64.).opacity(0.55))
-        .child(tag("EA APP", p));
+        .child(tag(tr("EA APP"), p));
     let swofty = v_flex()
         .items_center()
         .gap(px(6.))
@@ -175,7 +177,7 @@ fn discord_button() -> Stateful<Div> {
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(white)
         .child(svg().data(LOGO).size(px(16.)).text_color(white))
-        .child("Report a bug on Discord")
+        .child(tr("Report a bug on Discord"))
         .on_click(|_, _, cx| cx.open_url(INVITE))
 }
 
@@ -215,7 +217,7 @@ impl Shell {
                                 .primary()
                                 .h(px(36.))
                                 .px(px(16.))
-                                .label("Play F1 25")
+                                .label(tr("Play F1 25"))
                                 .on_click(move |_, window, cx| {
                                     window.close_dialog(cx);
                                     shell.update(cx, |s, cx| s.play(window, cx)).ok();
@@ -236,14 +238,14 @@ impl Shell {
         window.open_alert_dialog(cx, move |alert, _, _| {
             let alert = alert
                 .width(px(560.))
-                .title("The EA app has F1 25 in another folder")
+                .title(tr("The EA app has F1 25 in another folder"))
                 .description(text.clone());
             if !moved.there {
                 return alert.ok_text("OK");
             }
             let (shell, dir) = (shell.clone(), moved.recorded.clone());
             alert
-                .ok_text(format!("Play the copy in {}", dir.display()))
+                .ok_text(trf!("Play the copy in {folder}", folder = dir.display()))
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {
                     shell.update(cx, |s, cx| s.use_copy(dir.clone(), window, cx)).ok();

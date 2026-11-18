@@ -282,6 +282,10 @@ struct UpgradeChange {
     float value = 0;
 };
 SWOFTY_RECORD(UpgradeChange, section, key, op, value)
+[[maybe_unused]] inline std::string_view swofty_field_schema(const UpgradeChange *, std::string_view field)
+{
+    return field == "op" ? R"({"type":"string","enum":["=","+","-","*"]})" : std::string_view{};
+}
 
 struct RadUpgrade {
     std::string name;
@@ -438,6 +442,70 @@ enum class Field : uint32_t {
     susp_rear_toe = SWOFTY_CAR_SUSP_REAR_TOE,
     susp_rear_anti_roll = SWOFTY_CAR_SUSP_REAR_ANTI_ROLL,
     susp_rear_ride_height_offset = SWOFTY_CAR_SUSP_REAR_RIDE_HEIGHT_OFFSET,
+    aero_slipstream_drag = SWOFTY_CAR_AERO_SLIPSTREAM_DRAG,
+    aero_slipstream_front_wing = SWOFTY_CAR_AERO_SLIPSTREAM_FRONT_WING,
+    aero_slipstream_rear_wing = SWOFTY_CAR_AERO_SLIPSTREAM_REAR_WING,
+    aero_slipstream_lift = SWOFTY_CAR_AERO_SLIPSTREAM_LIFT,
+    aero_slipstream_car_width = SWOFTY_CAR_AERO_SLIPSTREAM_CAR_WIDTH,
+    ai_blocking_fraction_of_follow_speed = SWOFTY_CAR_AI_BLOCKING_FRACTION,   // layers only; per car, read on every AI tick
+    ai_blocking_fraction_of_follow_speed_at_race_start = SWOFTY_CAR_AI_BLOCKING_FRACTION_RACE_START,
+    ai_blocking_max_blocking_distance = SWOFTY_CAR_AI_BLOCKING_MAX_DISTANCE,
+    ai_blocking_max_blocking_distance_at_race_start = SWOFTY_CAR_AI_BLOCKING_MAX_DISTANCE_RACE_START,
+    ai_alongside_speed_difference_for_limited_zone_yielding = SWOFTY_CAR_AI_ALONGSIDE_SPEED_DIFFERENCE_FOR_LIMITED_ZONE_YIELDING,
+    ai_alongside_yield_overtake_rate = SWOFTY_CAR_AI_ALONGSIDE_YIELD_OVERTAKE_RATE,
+    ai_alongside_min_presence_within_buffer = SWOFTY_CAR_AI_ALONGSIDE_MIN_PRESENCE_WITHIN_BUFFER,
+    ai_divebomb_defense_max_presence_alongside = SWOFTY_CAR_AI_DIVEBOMB_DEFENSE_MAX_PRESENCE_ALONGSIDE,
+    ai_divebomb_defense_max_time_to_ignore = SWOFTY_CAR_AI_DIVEBOMB_DEFENSE_MAX_TIME_TO_IGNORE,
+    ai_divebomb_defense_max_track_offset = SWOFTY_CAR_AI_DIVEBOMB_DEFENSE_MAX_TRACK_OFFSET,
+    ai_divebomb_defense_max_track_radius = SWOFTY_CAR_AI_DIVEBOMB_DEFENSE_MAX_TRACK_RADIUS,
+    ai_offset_variation_max_offset = SWOFTY_CAR_AI_OFFSET_VARIATION_MAX_OFFSET,
+    ai_offset_variation_offset_limit_at_corner_start = SWOFTY_CAR_AI_OFFSET_VARIATION_OFFSET_LIMIT_AT_CORNER_START,
+    ai_offset_variation_offset_limit_blend_distance = SWOFTY_CAR_AI_OFFSET_VARIATION_OFFSET_LIMIT_BLEND_DISTANCE,
+    ai_offset_variation_half_width_scaling_graph = SWOFTY_CAR_AI_OFFSET_VARIATION_HALF_WIDTH_SCALING_GRAPH,
+    ai_offset_variation_radius_scalar_graph = SWOFTY_CAR_AI_OFFSET_VARIATION_RADIUS_SCALAR_GRAPH,
+    ai_overtake_attacker_close_enough_car_lengths = SWOFTY_CAR_AI_OVERTAKE_ATTACKER_CLOSE_ENOUGH_CAR_LENGTHS,
+    ai_overtake_braking_zone_abort_overtake_time = SWOFTY_CAR_AI_OVERTAKE_BRAKING_ZONE_ABORT_OVERTAKE_TIME,
+    ai_overtake_close_range_car_lengths_to_continue_overtake = SWOFTY_CAR_AI_OVERTAKE_CLOSE_RANGE_CAR_LENGTHS_TO_CONTINUE_OVERTAKE,
+    ai_overtake_close_range_car_lengths_to_start_overtake = SWOFTY_CAR_AI_OVERTAKE_CLOSE_RANGE_CAR_LENGTHS_TO_START_OVERTAKE,
+    ai_overtake_oppertunist_overtake_time = SWOFTY_CAR_AI_OVERTAKE_OPPERTUNIST_OVERTAKE_TIME,
+    ai_overtake_oppertunist_overtake_track_speed_difference = SWOFTY_CAR_AI_OVERTAKE_OPPERTUNIST_OVERTAKE_TRACK_SPEED_DIFFERENCE,
+    ai_overtake_danger_overtake_continue_time_adjustment = SWOFTY_CAR_AI_OVERTAKE_DANGER_OVERTAKE_CONTINUE_TIME_ADJUSTMENT,
+    ai_overtake_danger_overtake_full_heat_time_adjustment = SWOFTY_CAR_AI_OVERTAKE_DANGER_OVERTAKE_FULL_HEAT_TIME_ADJUSTMENT,
+    ai_overtake_danger_overtake_initiate_time_adjustment = SWOFTY_CAR_AI_OVERTAKE_DANGER_OVERTAKE_INITIATE_TIME_ADJUSTMENT,
+    ai_overtake_danger_overtake_pull_out_time = SWOFTY_CAR_AI_OVERTAKE_DANGER_OVERTAKE_PULL_OUT_TIME,
+    ai_overtake_regular_overtake_continue_time_adjustment = SWOFTY_CAR_AI_OVERTAKE_REGULAR_OVERTAKE_CONTINUE_TIME_ADJUSTMENT,
+    ai_overtake_regular_overtake_full_heat_time_adjustment = SWOFTY_CAR_AI_OVERTAKE_REGULAR_OVERTAKE_FULL_HEAT_TIME_ADJUSTMENT,
+    ai_overtake_regular_overtake_initiate_time_adjustment = SWOFTY_CAR_AI_OVERTAKE_REGULAR_OVERTAKE_INITIATE_TIME_ADJUSTMENT,
+    ai_overtake_regular_overtake_pull_out_time = SWOFTY_CAR_AI_OVERTAKE_REGULAR_OVERTAKE_PULL_OUT_TIME,
+    ai_overtake_overlap_percentage = SWOFTY_CAR_AI_OVERTAKE_OVERLAP_PERCENTAGE,
+    ai_overtake_concede_speed_diff = SWOFTY_CAR_AI_OVERTAKE_CONCEDE_SPEED_DIFF,
+    ai_overtake_concede_slowdown_speed_diff = SWOFTY_CAR_AI_OVERTAKE_CONCEDE_SLOWDOWN_SPEED_DIFF,
+    ai_overtake_concede_time_vs_behind = SWOFTY_CAR_AI_OVERTAKE_CONCEDE_TIME_VS_BEHIND,
+    ai_space_seeking_added_buffer = SWOFTY_CAR_AI_SPACE_SEEKING_ADDED_BUFFER,
+    ai_space_seeking_speed_below_follow = SWOFTY_CAR_AI_SPACE_SEEKING_SPEED_BELOW_FOLLOW,
+    ai_space_seeking_first_speed_below_follow = SWOFTY_CAR_AI_SPACE_SEEKING_FIRST_SPEED_BELOW_FOLLOW,
+    ai_space_seeking_car_in_front_needed = SWOFTY_CAR_AI_SPACE_SEEKING_CAR_IN_FRONT_NEEDED,
+    ai_space_seeking_remember_crowed = SWOFTY_CAR_AI_SPACE_SEEKING_REMEMBER_CROWED,
+    ai_space_seeking_concede_overtake_blocked_by_crowed_time = SWOFTY_CAR_AI_SPACE_SEEKING_CONCEDE_OVERTAKE_BLOCKED_BY_CROWED_TIME,
+    ai_space_seeking_total_queue_needed = SWOFTY_CAR_AI_SPACE_SEEKING_TOTAL_QUEUE_NEEDED,
+    ai_space_seeking_distance_braking_point = SWOFTY_CAR_AI_SPACE_SEEKING_DISTANCE_BRAKING_POINT,
+    ai_space_seeking_time_to_switch_sides = SWOFTY_CAR_AI_SPACE_SEEKING_TIME_TO_SWITCH_SIDES,
+    ai_space_seeking_track_distance_needed = SWOFTY_CAR_AI_SPACE_SEEKING_TRACK_DISTANCE_NEEDED,
+    ai_space_seeking_track_abort_distance = SWOFTY_CAR_AI_SPACE_SEEKING_TRACK_ABORT_DISTANCE,
+    ai_space_seeking_cars_moving_away_speed_to_ignore = SWOFTY_CAR_AI_SPACE_SEEKING_CARS_MOVING_AWAY_SPEED_TO_IGNORE,
+    ai_space_seeking_can_start_track_radius = SWOFTY_CAR_AI_SPACE_SEEKING_CAN_START_TRACK_RADIUS,
+    ai_blocking_start_blocking_intersection_time = SWOFTY_CAR_AI_BLOCKING_START_BLOCKING_INTERSECTION_TIME,
+    ai_blocking_start_blocking_maximum_time_to_corner = SWOFTY_CAR_AI_BLOCKING_START_BLOCKING_MAXIMUM_TIME_TO_CORNER,
+    ai_blocking_start_blocking_minimum_time_to_corner = SWOFTY_CAR_AI_BLOCKING_START_BLOCKING_MINIMUM_TIME_TO_CORNER,
+    ai_blocking_time_to_corner_for_end_merge_rate = SWOFTY_CAR_AI_BLOCKING_TIME_TO_CORNER_FOR_END_MERGE_RATE,
+    ai_blocking_time_to_corner_for_start_merge_rate = SWOFTY_CAR_AI_BLOCKING_TIME_TO_CORNER_FOR_START_MERGE_RATE,
+    ai_blocking_end_blocking_time_to_corner_vs_offset = SWOFTY_CAR_AI_BLOCKING_END_BLOCKING_TIME_TO_CORNER_VS_OFFSET,
+    ai_blocking_blocking_offset_from_car_behind = SWOFTY_CAR_AI_BLOCKING_BLOCKING_OFFSET_FROM_CAR_BEHIND,
+    ai_blocking_blocking_speed_differential = SWOFTY_CAR_AI_BLOCKING_BLOCKING_SPEED_DIFFERENTIAL,
+    ai_blocking_blocking_threat_time_modifier = SWOFTY_CAR_AI_BLOCKING_BLOCKING_THREAT_TIME_MODIFIER,
+    ai_blocking_blocking_variable_offset_fraction = SWOFTY_CAR_AI_BLOCKING_BLOCKING_VARIABLE_OFFSET_FRACTION,
+    ai_blocking_avoidance_decrease_rate = SWOFTY_CAR_AI_BLOCKING_AVOIDANCE_DECREASE_RATE,
+    ai_blocking_merge_back_to_racing_line = SWOFTY_CAR_AI_BLOCKING_MERGE_BACK_TO_RACING_LINE,
 };
 
 }
@@ -491,6 +559,52 @@ inline const SwoftyCarOps *live_car_ops_v2()
 namespace swofty::cars::live {
 
 class Car;
+
+enum class FuelMix : uint32_t { lean = SWOFTY_CAR_FUEL_MIX_LEAN, standard = SWOFTY_CAR_FUEL_MIX_STANDARD, rich = SWOFTY_CAR_FUEL_MIX_RICH, max = SWOFTY_CAR_FUEL_MIX_MAX };
+
+// Offers the mixes in mask (FuelMix bits) on the MFD of every car while the mask stays set; 0 withdraws the owner's
+// request. The mode tables themselves are fields: "fuel_ecu.fuel_burn_scale.rich", "fuel_ecu.fuel_power_scale.max",
+// "fuel_ecu.fuel_revs_scale.lean", "fuel_ecu.temperature_scale.standard" (burn, power, revs, temperature x lean,
+// standard, rich, max).
+inline Result unlock_fuel_mixes(std::string_view owner, uint32_t mask)
+{
+    auto t = swofty::detail::live_car_ops();
+    if (!t || t->version < 3 || !t->unlock_fuel_mixes)
+        return Result::unavailable;
+    return swofty::detail::result(t->unlock_fuel_mixes(std::string(owner).c_str(), mask));
+}
+
+inline std::optional<FuelMix> fuel_mix(uint32_t car_index)
+{
+    auto t = swofty::detail::live_car_ops();
+    uint32_t mode = 0;
+    if (!t || t->version < 3 || !t->fuel_mix || t->fuel_mix(car_index, &mode) != SWOFTY_ASSET_OK || mode > 3)
+        return std::nullopt;
+    return static_cast<FuelMix>(1u << mode);
+}
+
+inline bool set_fuel_mix_available()
+{
+    auto t = swofty::detail::live_car_ops();
+    return t && t->version >= 4 && t->set_fuel_mix;
+}
+
+// Switches the car to a mix the MFD offers it, through the game's own mode switch. Result::invalid for a mix the car
+// is not offered (see unlock_fuel_mixes), Result::late off the game's flow thread, Result::unavailable on a core
+// older than car ops version 4.
+inline Result set_fuel_mix(uint32_t car_index, FuelMix mix)
+{
+    auto t = swofty::detail::live_car_ops();
+    if (!t || t->version < 4 || !t->set_fuel_mix)
+        return Result::unavailable;
+    const uint32_t bits = static_cast<uint32_t>(mix);
+    if (bits == 0 || (bits & (bits - 1)) || bits > SWOFTY_CAR_FUEL_MIX_MAX)
+        return Result::invalid;
+    uint32_t mode = 0;
+    while ((1u << mode) != bits)
+        mode++;
+    return swofty::detail::result(t->set_fuel_mix(car_index, mode));
+}
 
 inline std::optional<Field> field(std::string_view path)
 {

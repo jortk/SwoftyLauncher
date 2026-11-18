@@ -2,9 +2,9 @@
 
 #include <windows.h>
 
+#include "hooks/guard.hpp"
 #include "session_enter_logic.hpp"
 
-#include <swofty/mem.hpp>
 #include <swofty/mixin.hpp>
 
 #include <cstdint>
@@ -38,18 +38,30 @@ namespace se = runtime::session_enter;
 
 bool offered = false, settled = false, offered_ok = false;
 se::Skips skips;
+se::Memo memo;
+constexpr uint64_t SLOW_US = 5000;
+int slow_logged = 0;
 
 bool read_memory(uint64_t address, void *out, size_t n, void *)
 {
-    if (!runtime::readable(reinterpret_cast<const void *>(address), n))
+    if (!address || address + n < address)
         return false;
-    memcpy(out, reinterpret_cast<const void *>(address), n);
-    return true;
+    return swofty_core::hooks::guard::copy_memory(out, reinterpret_cast<const void *>(address), n);
 }
 
 void name_hash(SwoftyContext *c)
 {
-    se::Fix f = se::decide(c->rcx, c->rsp, c->r13, read_memory, nullptr);
+    LARGE_INTEGER t0, t1, hz;
+    QueryPerformanceCounter(&t0);
+    se::Fix f = memo.decide(c->rcx, c->rsp, c->r13, GetTickCount64(), read_memory, nullptr);
+    QueryPerformanceCounter(&t1);
+    QueryPerformanceFrequency(&hz);
+    uint64_t us = static_cast<uint64_t>(t1.QuadPart - t0.QuadPart) * 1000000 / static_cast<uint64_t>(hz.QuadPart);
+    if (us >= SLOW_US && slow_logged < se::LOG_FIRST) {
+        slow_logged++;
+        swofty::log("[session] name hash decision took %llu us (memo %d hits, %d misses)", (unsigned long long)us, memo.hits,
+                    memo.misses);
+    }
     if (!f.replace)
         return;
     uint64_t hash = c->r13;

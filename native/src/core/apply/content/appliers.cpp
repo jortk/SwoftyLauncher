@@ -4,11 +4,20 @@
 #include "../database.hpp"
 #include "../files_api.hpp"
 #include "../ids.hpp"
+#include "../moments.hpp"
+#include "../scheduler.hpp"
 #include "boot.hpp"
 #include "garage_build.hpp"
+#include "grid_rules.hpp"
 #include "gvdb.hpp"
 #include "logos.hpp"
+#include "race_fuel.hpp"
+#include "quali_tyres.hpp"
 #include "teams.hpp"
+#include "box_options.hpp"
+#include "tyre_change.hpp"
+#include "tyre_warmers.hpp"
+#include "weekend.hpp"
 #include "../tracks/boot.hpp"
 #include "../tracks/box.hpp"
 #include "../../career_ops/teams_plan.hpp"
@@ -59,6 +68,23 @@ void publish_drs(Store &st, Expansion &x)
     }
     std::lock_guard g(drs_mu);
     drs_groups = std::move(groups);
+}
+
+std::mutex points_mu;
+std::map<std::string, PointsSystem> points_systems;
+
+void publish_points(Store &st, Expansion &x)
+{
+    std::map<std::string, PointsSystem> systems;
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    for (auto &id : x.applied["session.points"]) {
+        const Value *rec = lookup("session.points", id);
+        if (auto s = rec ? points_system(id, *rec, nullptr) : std::nullopt)
+            systems[id] = *s;
+    }
+    std::lock_guard g(points_mu);
+    points_systems = std::move(systems);
 }
 
 struct Database {
@@ -181,7 +207,7 @@ Expansion &plan_run(Store &st)
         Database &d = database();
         s.plan = std::make_unique<Expansion>(base_of(d));
         if (d.ok)
-            expand(st, *s.plan, {});
+            expand(st, *s.plan, planning_ids());
     }
     return *s.plan;
 }
@@ -201,6 +227,9 @@ void define_pools(Database &d, std::vector<std::string> &lines, std::map<std::st
             pool.ranges = scan.holes;
         else if (scan.lo <= scan.hi)
             pool.ranges.push_back({scan.lo, scan.hi});
+        for (auto &spec : POOLS)
+            if (scan.registry == spec.registry)
+                pool.cap = spec.cap;
         ids::store().define_pool(scan.registry, pool);
         lines.push_back("stat-id pool for " + scan.registry + ": " +
                         (scan.lo <= scan.hi ? std::to_string(scan.lo) + "-" + std::to_string(scan.hi) : std::string("none")) +
@@ -225,6 +254,19 @@ int64_t stat_id(const std::string &registry, const std::string &id, int64_t pin)
     return r.id;
 }
 
+void report_left_out(const Expansion &x)
+{
+    for (auto &[addon, counts] : x.left_out) {
+        auto n = [&counts](const char *reg) {
+            auto it = counts.find(reg);
+            return it == counts.end() ? 0 : it->second;
+        };
+        swofty::log("[registry] left out: %s: %d team(s), %d vehicle(s), %d entrant list(s) got no stat id", addon.c_str(),
+                    n("team.identity"), n("vehicle"), n("content.package"));
+        moments::left_out(addon, n("team.identity"), n("vehicle"), n("content.package"));
+    }
+}
+
 void run_boot(Store &st)
 {
     State &s = state();
@@ -237,7 +279,28 @@ void run_boot(Store &st)
     std::map<std::string, PoolScan> scans;
     define_pools(d, s.boot_lines, scans);
     pin_all(st, scans);
-    Admission adm = admit(st.order(), plan.addon_fresh, db::staging().room());
+    for (const char *registry : {"vehicle", "vehicle.package", "content.package", "team.identity"})
+        if (scans.count(registry))
+            ids::store().set_live(registry, st.list(registry, ""));
+    uint64_t room = db::staging().room();
+    if (room != db::UNMEASURED) {
+        uint64_t tracks = scheduler().planned_keys("track");
+        room = tracks < room ? room - tracks : 0;
+    }
+    Admission adm = admit(st.order(), plan.addon_fresh, room);
+    expand(st, *s.boot, stat_id, adm.skip);
+    for (;;) {
+        Admission again = readmit(st.order(), s.boot->addon_fresh, adm, room);
+        if (again.skip.size() == adm.skip.size())
+            break;
+        for (std::size_t i = adm.refused.size(); i < again.refused.size(); i++)
+            swofty::log("[registry] room: %s counted %zu new key(s) at boot, past the room the plan left; the boot's "
+                        "rows are laid out again without it",
+                        again.refused[i].first.c_str(), again.refused[i].second);
+        adm = std::move(again);
+        s.boot = std::make_unique<Expansion>(base_of(d));
+        expand(st, *s.boot, stat_id, adm.skip);
+    }
     for (auto &[addon, keys] : adm.refused) {
         db::Refusal r{addon, {}, keys};
         for (const char *reg : ROW_REGISTRIES)
@@ -249,7 +312,6 @@ void run_boot(Store &st)
                 }
         db::staging().refuse(std::move(r));
     }
-    expand(st, *s.boot, stat_id, adm.skip);
 }
 
 void redirect_bundles(Store &st, Expansion &x, Report &report)
@@ -444,8 +506,10 @@ void apply_logos(Expansion &x, Report &report)
         return;
     LogoReport made;
     deliver_logos(x.logos, made);
-    for (auto &l : made.lines)
+    for (auto &l : made.lines) {
         report.lines.push_back(l);
+        swofty::log("[apply] %s", l.c_str());
+    }
     report.refused += made.refused;
     report.lines.push_back("team.logo: " + std::to_string(x.logos.size()) + " logo slot(s) planned, " + std::to_string(made.built) +
                            " slice(s) built, " + std::to_string(made.refused) + " refused");
@@ -456,11 +520,21 @@ void apply_garages(Expansion &x, Report &report)
     if (x.garages.empty())
         return;
     constexpr const char *CACHE_ADDON = "swofty.garage";
+    char art[8] = {};
+    DWORD art_len = GetEnvironmentVariableA("SWOFTY_GARAGE_ART", art, sizeof art);
+    bool art_on = art_len && art_len < sizeof art && garage_art_enabled(art);
+    if (!art_on)
+        report.lines.push_back(GARAGE_FENCE_LINE);
+    char desc[8] = {};
+    DWORD desc_len = GetEnvironmentVariableA("SWOFTY_GARAGE_DESC", desc, sizeof desc);
+    bool descriptor = !(desc_len && desc_len < sizeof desc && desc[0] == '0');
     std::string dir = "addons/" + std::string(CACHE_ADDON) + "/";
     CreateDirectoryW(runtime::under_swofty("addons").c_str(), nullptr);
     CreateDirectoryW(runtime::under_swofty(dir).c_str(), nullptr);
     std::set<std::string> keep;
     for (auto &g : x.garages) {
+        if (!art_on)
+            break;
         std::filesystem::path root(runtime::under_swofty("addons/" + g.addon + "/" + g.folder));
         std::vector<garage::Input> inputs;
         std::error_code ec;
@@ -488,6 +562,7 @@ void apply_garages(Expansion &x, Report &report)
         };
         mix(g.root);
         mix(g.srgb ? "srgb" : "linear");
+        mix(descriptor ? "descriptor" : "resident");
         for (auto &in : inputs) {
             mix(in.rel);
             mix(in.bytes);
@@ -498,7 +573,7 @@ void apply_garages(Expansion &x, Report &report)
         bool reused = runtime::file_size(path, &have) && have > 0;
         DWORD t0 = GetTickCount();
         if (!reused) {
-            garage::Built built = garage::build(inputs, g.root, g.srgb);
+            garage::Built built = garage::build(inputs, g.root, g.srgb, descriptor);
             for (auto &l : built.lines)
                 report.lines.push_back("team.garage " + g.id + ": " + l);
             report.refused += built.refused;
@@ -635,6 +710,8 @@ public:
         }
         report.applied = int(x.records[registry_]);
         report.refused = int(x.refused[registry_]);
+        if (first)
+            report_left_out(x);
         for (auto &addon : s.refused[registry_]) {
             report.refused++;
             report.lines.push_back(addon + ": left out for room (see the [registry] room line)");
@@ -655,6 +732,8 @@ public:
             apply_garages(x, report);
         if (std::string_view(registry_) == "rules.drs")
             publish_drs(st, x);
+        if (std::string_view(registry_) == "session.points")
+            publish_points(st, x);
         if (staged) {
             std::string records = std::to_string(staged) + " database record" + (staged == 1 ? "" : "s");
             report.summary = report.summary.empty() ? records : report.summary + "; " + records;
@@ -750,7 +829,7 @@ public:
         for (auto &b : plan.boxes) {
             if (!b.literal.empty() && lang)
                 lang->override_set("*", b.title.c_str(), b.literal.c_str());
-            SwoftyEraBox d{sizeof d, b.entrant_list.c_str(), b.title.c_str(), b.image.c_str(), b.order, b.time_trial.c_str()};
+            SwoftyEraBox d{sizeof d, b.entrant_list.c_str(), b.title.c_str(), b.image.c_str(), b.order, b.time_trial.c_str(), b.only};
             int rc = era ? era->add_box(&d) : SWOFTY_ASSET_UNAVAILABLE;
             if (rc == SWOFTY_ASSET_OK)
                 report.applied++;
@@ -758,6 +837,7 @@ public:
                 report.refused++;
             report.lines.push_back("era.box " + b.id + ": " + b.entrant_list +
                                    (b.time_trial.empty() ? std::string() : " (Time Trial " + b.time_trial + ")") +
+                                   (b.only == 1 ? " (Grand Prix only)" : b.only == 2 ? " (Time Trial only)" : "") +
                                    (rc == SWOFTY_ASSET_OK ? " registered"
                                                           : " not registered (a box for it exists or the picker is off)"));
         }
@@ -790,6 +870,139 @@ DrsBox drs_for_box(const std::string &entrant_list)
         pick = drs_pick(entrant_list, packages, drs_groups);
     }
     return {pick.group ? pick.group->label : std::string(), pick.line};
+}
+
+WarmersBox tyre_warmers_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    WarmersPick pick = tyre_warmers_pick(entrant_list, packages);
+    return {pick.warmers, pick.line};
+}
+
+FuelRules fuel_rules_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    return fuel_rules_pick(entrant_list, packages);
+}
+
+WeekendBox weekend_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    WeekendPick pick = weekend_pick(entrant_list, packages);
+    return {pick.time_limit_s, pick.weekend_mode, pick.line};
+}
+
+BoxOptionsPick box_options_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    return box_options_pick(entrant_list, packages);
+}
+
+GridBox grid_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    GridPick pick = grid_pick(entrant_list, packages);
+    return {pick.rule, pick.line};
+}
+
+bool any_grid_rule()
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    for (auto &id : in_load_order(st, "content.package"))
+        if (const Value *rec = lookup("content.package", id); rec && (*rec)["rules"]["grid"].is_object())
+            return true;
+    return false;
+}
+
+QualiTyresBox quali_tyres_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    QualiTyresPick pick = quali_tyres_pick(entrant_list, packages);
+    return {pick.mask, pick.line};
+}
+
+bool any_quali_tyres()
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    for (auto &id : in_load_order(st, "content.package")) {
+        const Value *rec = lookup("content.package", id);
+        if (rec && (*rec)["entrant_list"].is_string() &&
+            quali_tyres_pick(std::string((*rec)["entrant_list"].as_string()), {{id, rec}}).mask)
+            return true;
+    }
+    return false;
+}
+
+PointsBox points_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    PointsPick pick;
+    {
+        std::lock_guard g(points_mu);
+        pick = points_pick(entrant_list, packages, points_systems);
+    }
+    PointsBox box;
+    box.line = pick.line;
+    if (pick.system) {
+        box.found = true;
+        box.label = pick.system->label;
+        box.full = pick.system->full;
+        box.reduced = pick.system->reduced;
+        box.bonus = pick.system->bonus;
+        box.rule = pick.system->rule;
+    }
+    return box;
+}
+
+TyreChangeBox tyre_change_for_box(const std::string &entrant_list)
+{
+    Store &st = registry::store();
+    std::map<std::string, Value> keep;
+    Lookup lookup = store_lookup(st, keep);
+    std::vector<std::pair<std::string, const Value *>> packages;
+    for (auto &id : in_load_order(st, "content.package"))
+        packages.push_back({id, lookup("content.package", id)});
+    TyreChangePick pick = tyre_change_pick(entrant_list, packages);
+    return {pick.required, pick.line};
 }
 
 void register_appliers()

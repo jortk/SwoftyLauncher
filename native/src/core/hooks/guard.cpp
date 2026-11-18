@@ -2,6 +2,8 @@
 
 #include "guard.hpp"
 
+#include <cstring>
+
 namespace swofty_core::hooks::guard {
 namespace {
 
@@ -90,6 +92,16 @@ int blamed_call(SwoftyHookFn fn, void *user, SwoftyHookCall *call, BlameFn blame
         return fn(user, call);
     } __except (blame_filter(GetExceptionInformation(), blame, ctx)) {
         return 0;
+    }
+}
+
+bool copy_memory(void *out, const void *from, size_t n)
+{
+    __try {
+        memcpy(out, from, n);
+        return true;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
     }
 }
 

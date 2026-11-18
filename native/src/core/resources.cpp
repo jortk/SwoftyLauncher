@@ -1,5 +1,6 @@
 #include "runtime.hpp"
 
+#include "apply/content/overlay_copies.hpp"
 #include "erp_zstd.hpp"
 
 #include <safetyhook.hpp>
@@ -80,7 +81,7 @@ std::map<std::string, std::set<std::string>> layouts;
 runtime::Overlay overlay;
 bool overlay_ok, trace_on;
 HANDLE built_event;
-std::once_flag build_once;
+std::once_flag build_once, copies_once;
 std::atomic<bool> dropped{false};
 std::unordered_map<uint64_t, std::unique_ptr<Watch>> watches;
 std::vector<uint64_t> overlay_hashes;
@@ -894,6 +895,23 @@ void site(safetyhook::Context &c)
                 (unsigned long long)id, id == w->id ? "match" : "MISMATCH");
 }
 
+// The team logo build grows texture arrays in copies of the archives that carry them. An overlay archive is read
+// before its targets, so its copy is registered in its place; from here on the logo build can offer no other copy.
+void use_logo_copies()
+{
+    auto copies = swofty_core::apply::content::logo_deliver::overlay_copies().take();
+    for (auto &e : overlay.erps) {
+        auto it = copies.find(swofty_core::apply::content::logo_deliver::overlay_key(e.path));
+        if (it == copies.end())
+            continue;
+        swofty::log("[assets] resources: overlay ERP %s is registered as its team.logo copy %s (%llu bytes): the copy holds "
+                    "the texture array(s) the logo build grew",
+                    e.path.c_str(), it->second.path.c_str(), (unsigned long long)it->second.size);
+        e.path = it->second.path;
+        e.size = it->second.size;
+    }
+}
+
 }
 
 namespace runtime {
@@ -927,6 +945,7 @@ const Overlay *resource_overlay(DWORD wait_ms)
         overlay_dropped("the overlay build produced no ERP");
         return nullptr;
     }
+    std::call_once(copies_once, use_logo_copies);
     return &overlay;
 }
 

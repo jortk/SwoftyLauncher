@@ -740,7 +740,7 @@ void hub_tick()
 {
     static uint32_t ticks;
     bool change = pending.load() && pending.exchange(false), on = hide.load();
-    if (!change && !(on && ++ticks % 30 == 0))
+    if (!change && !(on && ++ticks % 5 == 0))
         return;
     if (team_hq_flag.load())
         keep(team_hq_bar, change, on);

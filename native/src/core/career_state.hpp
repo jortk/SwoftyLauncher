@@ -82,6 +82,17 @@ private:
     std::atomic<uint64_t> until_{0};
 };
 
+// Where the game is, for the component poll: in a career, elsewhere (Time Trial, Grand Prix, story, F1 World: no career
+// can be loaded there) or unknown (the main menu, a mode not listed, no read yet). The poll reads the game everywhere but
+// elsewhere; there it reports no career without a read, which is what a read finds, so a career that was loaded still
+// unloads.
+enum class Where { unknown, career, elsewhere };
+
+inline bool poll_reads(Where w)
+{
+    return w != Where::elsewhere;
+}
+
 struct Components {
     bool entity = false;
     bool career = false;

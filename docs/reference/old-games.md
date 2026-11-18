@@ -5,7 +5,7 @@ description: Where F1 2016 to F1 24 keep their helmets, faces, suits, engine sou
 
 # Assets from older F1 games
 
-F1 2016 to F1 25 are all built on Codemasters' EGO engine, and their helmets, driver faces, race suits, engine sounds and cars use the same [ERP archives](/reference/erp), `.mipmaps` sidecars and `.bdl` sound bundles. The resource versions and the texture layouts differ from game to game. The Classic Seasons addon ports these assets into F1 25 with the Python tools in [`addons/classicseasons/classic-seasons/tools/`](https://github.com/Swofty-Developments/SwoftyLauncher/tree/main/addons/classicseasons/classic-seasons/tools). This page lists where each game keeps them, what changes between versions, and which tool ports each asset.
+F1 2016 to F1 25 are all built on Codemasters' EGO engine, and their helmets, driver faces, race suits, engine sounds and cars use the same [ERP archives](/reference/erp), `.mipmaps` sidecars and `.bdl` sound bundles. The resource versions and the texture layouts differ from game to game. The Classic Seasons addon ports these assets into F1 25 with its own Python tools. This page lists where each game keeps them, what changes between versions, and which tool ports each asset.
 
 ## What the tools read
 
@@ -63,7 +63,7 @@ In F1 2016 to F1 2019 a loose sidecar holds its levels one after another from th
 
 ## Helmets
 
-Tools: [`build_helmets.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/build_helmets.py), [`old_helmets.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/old_helmets.py). Data: `data/helmets.json`.
+Tools: `build_helmets.py`, `old_helmets.py`. Data: `data/helmets.json`.
 
 ```sh
 python3 tools/build_helmets.py --games <folder holding the old game folders> \
@@ -88,7 +88,7 @@ F1 23's helmet shells are byte for byte F1 25's, and an F1 23 helmet texture fit
 
 ## Faces and heads
 
-Tools: [`heads.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/heads.py), [`head_sheet.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/head_sheet.py). Data: `data/heads.json`.
+Tools: `heads.py`, `head_sheet.py`. Data: `data/heads.json`.
 
 A driver's head has two archives, `2025_asset_groups/animation_package/scenes/cinematics/drivers/heads/<label>.erp` and `.../morph_poses/<label>.erp`, named by the `asset_group_path_format` and `face_morph_asset_group_path_format` of its `entrants.animation.driver_heads.driver_head` row. The row's `model_path` names the model the heads archive holds:
 
@@ -128,7 +128,7 @@ Face mods use the same donor technique. The Rio Haryanto face mod is on `jak_cra
 
 ## Race suits
 
-Tools: [`suit_sources.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/suit_sources.py), [`build_real_suits.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/build_real_suits.py), [`f1_23_suits.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/f1_23_suits.py), [`suit_transfer.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/suit_transfer.py). Data: `data/real_suits.json`.
+Tools: `suit_sources.py`, `build_real_suits.py`, `f1_23_suits.py`, `suit_transfer.py`. Data: `data/real_suits.json`.
 
 ```sh
 python3 tools/suit_transfer.py --game <F1 25> --mods <mod folders>
@@ -149,7 +149,7 @@ python3 tools/build_real_suits.py --game <F1 25> --mods <mod folders> --f1-23 <F
 
 ## Engine sounds
 
-Tool: [`sounds.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/sounds.py). Data: `data/sounds.json`.
+Tool: `sounds.py`. Data: `data/sounds.json`.
 
 ```sh
 python3 tools/sounds.py --games <folder holding the old game folders> --f1-23 <F1 23> [--game <F1 25>] [--years 2016-2024]
@@ -198,7 +198,7 @@ The bundle header differs too: F1 2016 to F1 2019 bundles hold 0 at offset `0x24
 
 ## Cars
 
-Tools: [`build_cars.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/build_cars.py), [`powerunit.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/powerunit.py), [`pace.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/pace.py), [`aislots.py`](https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/addons/classicseasons/classic-seasons/tools/aislots.py).
+Tools: `build_cars.py`, `powerunit.py`, `pace.py`, `aislots.py`.
 
 ```sh
 python3 tools/build_cars.py [--downloads <folder>] [--game <F1 25>] [--years 2016-2024]

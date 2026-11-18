@@ -9,13 +9,25 @@
 #include <vector>
 #include "apply/moments.hpp"
 #include "blackbox.hpp"
+#include "crash_dir.hpp"
 #include "crash_heap.hpp"
+#include "d3d12_hooks.hpp"
+#include "../loader/data_folder.h"
 #include "dred.hpp"
 #include "dred_logic.hpp"
+#include "fast_fail_logic.hpp"
+#include "hw_settings_logic.hpp"
 #include "json.hpp"
 #include "perf.hpp"
+#include "save_heap_logic.hpp"
 #include "safetyhook.hpp"
+#include "stall_order_logic.hpp"
+#include "stall_walk.hpp"
 #include "swofty_api.h"
+
+namespace runtime {
+void placed_record_crash_text(char *out, size_t cap);
+}
 
 std::string core_code_owner(uintptr_t addr);
 
@@ -23,7 +35,8 @@ namespace runtime {
 std::string load_stage();
 void on_stage(void (*fn)(int));
 void hud_fatal();
-void netplay_exit();
+void session_host_exit();
+void load_stall_game_line(const char *line);
 }
 
 // Crash log and crash reports. The crash log writes each fatal-class exception, the top-level filter
@@ -63,6 +76,10 @@ constexpr const char *PATTERN_REPORT_MEMORY_ERROR =
 constexpr uint8_t HEAP_ERROR_PREFIX[] = {0x55, 0x41, 0x57, 0x41, 0x56, 0x41, 0x55, 0x41, 0x54, 0x56,
                                          0x57, 0x53, 0x48, 0x83, 0xEC, 0x18, 0x48, 0x8D, 0x6C, 0x24,
                                          0x10, 0x89, 0xD6, 0x48, 0x89, 0xCF, 0x48, 0x8B, 0x5D, 0x78};
+constexpr uint32_t RVA_REPORT_GS_FAILURE = 0x4d9245c, RVA_FAST_FAIL_TERMINATE = 0x5349d58, RVA_INVALID_PARAMETER_ABORT = 0x5351784;
+constexpr const char *PATTERN_REPORT_GS_FAILURE = "48 89 4C 24 08 48 83 EC 38 B9 17 00 00 00";
+constexpr const char *PATTERN_FAST_FAIL_TERMINATE = "48 83 EC 28 B9 17 00 00 00 FF 15 ?? ?? ?? ?? 85 C0 74 07 B9";
+constexpr const char *PATTERN_INVALID_PARAMETER_ABORT = "48 83 EC 28 E8 ?? ?? ?? ?? 48 85 C0 74 0A B9 16";
 constexpr uint8_t FATAL_ABORT[] = {0xC7, 0x04, 0x25, 0x01, 0x00, 0x00, 0x00, 0xAD, 0xDE, 0xAD, 0xDE};
 
 struct Symbol {
@@ -103,6 +120,8 @@ struct HeapError {
     ULONGLONG ms;
     uintptr_t heap;
     uint64_t capacity, used, free_bytes, largest;
+    bool pool;
+    runtime::save_heap::Pool pool_info;
     char name[64];
     char msg[768];
 };
@@ -157,7 +176,8 @@ ULONGLONG start_ms;
 std::vector<Symbol> symbols;
 bool symbols_match, kb_build;
 LPTOP_LEVEL_EXCEPTION_FILTER previous;
-safetyhook::InlineHook exit_hook, terminate_hook, nt_terminate_hook, heap_error_hook;
+safetyhook::InlineHook exit_hook, terminate_hook, nt_terminate_hook, heap_error_hook, fail_fast_hook;
+safetyhook::MidHook gs_hook, invalid_parameter_hook, abort_hook;
 uintptr_t seen[MAX_SEEN];
 volatile LONG seen_count, reports, busy, exited, claimed, writing, snapshot_lock, fatal_count, window_reached;
 bool ea_build;
@@ -172,7 +192,7 @@ ThreadInfoFn query_thread;
 using DescriptionFn = HRESULT(WINAPI *)(HANDLE, PWSTR *);
 DescriptionFn thread_description;
 const char *(*wine_version)();
-uintptr_t heap_error_fn, report_memory_error;
+uintptr_t heap_error_fn, report_memory_error, gs_failure_fn, fast_fail_terminate_fn, abort_fn;
 HANDLE go_event, text_event, done_event;
 DWORD writer_tid;
 uintptr_t writer_stack_top;
@@ -187,7 +207,15 @@ Out out;
 Mod mods[512];
 int nmods;
 wchar_t report_path[MAX_PATH], dump_path[MAX_PATH];
-char report_name[64], dump_note[256];
+char report_name[64], report_where[MAX_PATH * 3], dump_note[256];
+std::wstring crash_dir;
+
+std::wstring data_folder()
+{
+    wchar_t buf[MAX_PATH * 2];
+    DWORD n = swofty_data_folder(buf, MAX_PATH * 2);
+    return std::wstring(buf, n);
+}
 
 blackbox::Ring<256> events;
 blackbox::Ring<64> warnings;
@@ -235,6 +263,49 @@ void cl(const char *f, ...)
     diag_line(b);
 }
 
+/* One loader.log line about the player's hardware_settings_config.xml, written at attach before the game's
+   InitSequence reads it: its Documents path, whether that is under OneDrive, its size and attributes, and a read
+   test that opens without recalling a cloud-only file and does not read one at all. */
+void log_hardware_settings()
+{
+    hw_settings::Probe p;
+    wchar_t docs[MAX_PATH] = {};
+    using GetFolder = HRESULT(WINAPI *)(HWND, int, HANDLE, DWORD, LPWSTR);
+    HMODULE shell = GetModuleHandleW(L"shell32.dll");
+    if (!shell)
+        shell = LoadLibraryW(L"shell32.dll");
+    auto get = shell ? reinterpret_cast<GetFolder>(GetProcAddress(shell, "SHGetFolderPathW")) : nullptr;
+    if (get && SUCCEEDED(get(nullptr, 0x0005, nullptr, 0, docs))) {
+        std::wstring path = std::wstring(docs) + L"\\My Games\\F1 25\\hardwaresettings\\hardware_settings_config.xml";
+        char utf8[1024] = {};
+        WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, utf8, sizeof utf8 - 1, nullptr, nullptr);
+        p.path = utf8;
+        p.onedrive = hw_settings::under_onedrive(path);
+        WIN32_FILE_ATTRIBUTE_DATA fa{};
+        if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &fa)) {
+            p.exists = true;
+            p.attrs = fa.dwFileAttributes;
+            p.size = (uint64_t(fa.nFileSizeHigh) << 32) | fa.nFileSizeLow;
+            if (!hw_settings::cloud_only(p.attrs)) {
+                p.read_tried = true;
+                HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                       nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | 0x00100000, nullptr);
+                char buf[4096];
+                DWORD n = 0;
+                if (h != INVALID_HANDLE_VALUE && ReadFile(h, buf, sizeof buf, &n, nullptr)) {
+                    p.read_ok = true;
+                    p.read_bytes = n;
+                } else {
+                    p.read_error = GetLastError();
+                }
+                if (h != INVALID_HANDLE_VALUE)
+                    CloseHandle(h);
+            }
+        }
+    }
+    api->log("%s", hw_settings::line(p).c_str());
+}
+
 /* Every api->log call from core and the addons passes through here on its way to the loader, so the
    black box sees the game log's warnings and the telemetry's session lines without another hook. */
 void tap(const char *f, ...)
@@ -244,9 +315,11 @@ void tap(const char *f, ...)
     va_start(ap, f);
     vsnprintf(b, sizeof b, f, ap);
     va_end(ap);
-    if (!strncmp(b, "[game] ", 7) && (strstr(b, " (warn): ") || strstr(b, " (error): ")))
-        warnings.put(GetTickCount64(), GetCurrentThreadId(), "game", b + 7);
-    else if (!strncmp(b, "[telemetry] session ", 20))
+    if (!strncmp(b, "[game] ", 7)) {
+        if (strstr(b, " (warn): ") || strstr(b, " (error): "))
+            warnings.put(GetTickCount64(), GetCurrentThreadId(), "game", b + 7);
+        runtime::load_stall_game_line(b);
+    } else if (!strncmp(b, "[telemetry] session ", 20))
         events.put(GetTickCount64(), GetCurrentThreadId(), "session", b + 20);
     loader_log("%s", b);
 }
@@ -676,14 +749,18 @@ bool request_report(Kind kind, const char *reason, const EXCEPTION_RECORD *rec, 
 void already(const char *what)
 {
     if (claimed && report_name[0])
-        cl("[crash] %s; swofty\\%s already has this process's crash report", what, report_name);
+        cl("[crash] %s; %s already has this process's crash report", what, report_where);
 }
 
 bool writer_fault(EXCEPTION_POINTERS *e, bool breakpoint);
 
+volatile DWORD stall_tid;
+
 LONG CALLBACK veh(EXCEPTION_POINTERS *e)
 {
     DWORD code = e->ExceptionRecord->ExceptionCode;
+    if (stall_tid && stall_tid == GetCurrentThreadId())
+        return EXCEPTION_CONTINUE_SEARCH;
     if (writer_fault(e, false))
         return EXCEPTION_CONTINUE_EXECUTION;
     if (!fatal(code))
@@ -751,7 +828,7 @@ void window_stage(int)
 void on_exit(const char *fn, UINT code)
 {
     perf::flush(fn);
-    runtime::netplay_exit();
+    runtime::session_host_exit();
     if (InterlockedExchange(&exited, 1) || !enter())
         return;
     bool early = !window_reached, stack = code || early;
@@ -856,6 +933,18 @@ void on_heap_error(int code, const char *msg, bool is_fatal, void *heap)
         h.largest = reinterpret_cast<Largest>(vt[0x80 / 8])(heap, 1);
         h.stats = true;
     }
+    else if (heap && readable(h.heap, runtime::save_heap::kPoolFlags + 8) && !(h.heap & 7) &&
+             *reinterpret_cast<uintptr_t *>(h.heap) == exe_base + (runtime::save_heap::kPoolVtable - runtime::save_heap::kImageBase)) {
+        const uint8_t *p = reinterpret_cast<const uint8_t *>(h.heap);
+        auto &pi = h.pool_info;
+        memcpy(&pi.start, p + runtime::save_heap::kPoolStart, 8);
+        memcpy(&pi.size, p + runtime::save_heap::kPoolSize, 8);
+        memcpy(&pi.cursor, p + runtime::save_heap::kPoolCursor, 8);
+        memcpy(&pi.flags, p + runtime::save_heap::kPoolFlags, 4);
+        h.pool = true;
+        snprintf(h.name, sizeof h.name, "SAVE_PROPERTY_BAG_TEMP");
+        cl("%s", runtime::save_heap::pool_line(pi, runtime::save_heap::parse_request(h.msg)).c_str());
+    }
     h.set = true;
     char line[blackbox::TEXT];
     snprintf(line, sizeof line, "0x%x%s in '%s': %s", code, is_fatal ? " (fatal)" : "", h.name, h.msg);
@@ -866,6 +955,20 @@ void on_heap_error(int code, const char *msg, bool is_fatal, void *heap)
                      (unsigned long long)h.used, (unsigned long long)h.free_bytes, (unsigned long long)h.largest)
                      .c_str()
                : "");
+    if (code == 0x58) {
+        DWORD last = GetLastError();
+        MEMORYSTATUSEX ms = {};
+        ms.dwLength = sizeof ms;
+        if (GlobalMemoryStatusEx(&ms))
+            cl("[crash] Ne heap error 0x58 (useAddressSpace: the commit of a heap block failed, error 0x58 is a Win32 error the game does not map, e.g. 1455 commit limit) in '%s': last Win32 error %lu, system commit limit %llu MiB, commit left %llu MiB, physical %llu of %llu MiB free, process address space left %llu MiB; heap %s",
+               h.name, last, (unsigned long long)(ms.ullTotalPageFile >> 20), (unsigned long long)(ms.ullAvailPageFile >> 20),
+               (unsigned long long)(ms.ullAvailPhys >> 20), (unsigned long long)(ms.ullTotalPhys >> 20),
+               (unsigned long long)(ms.ullAvailVirtual >> 20),
+               h.stats ? fmt("capacity %llu, used %llu, free %llu, largest free %llu", (unsigned long long)h.capacity,
+                             (unsigned long long)h.used, (unsigned long long)h.free_bytes, (unsigned long long)h.largest)
+                             .c_str()
+                       : "stats unavailable");
+    }
     if (!is_fatal)
         return;
     alignas(16) CONTEXT ctx;
@@ -879,6 +982,78 @@ int hooked_report_memory_error(int code, const char *msg, char is_fatal, char br
 {
     on_heap_error(code, msg, is_fatal != 0, heap);
     return heap_error_hook.unsafe_call<int>(code, msg, is_fatal, brk, a5, heap);
+}
+
+bool fast_fail_available()
+{
+    return IsProcessorFeaturePresent(PF_FASTFAIL_AVAILABLE) != 0;
+}
+
+void report_fast_fail(fast_fail::Source src, const fast_fail::Outcome &o, const CONTEXT &ctx, uintptr_t at_addr)
+{
+    perf::flush("fast-fail");
+    if (!enter())
+        return;
+    std::string why = fast_fail::reason(src, o, where(at_addr));
+    cl("[crash] %s", why.c_str());
+    blackbox::note("fast-fail", why.c_str());
+    cl("[crash]   rax=%016llx rbx=%016llx rcx=%016llx rdx=%016llx", ctx.Rax, ctx.Rbx, ctx.Rcx, ctx.Rdx);
+    cl("[crash]   stack:");
+    backtrace(ctx, true);
+    leave();
+    EXCEPTION_RECORD rec{};
+    rec.ExceptionCode = o.exit_status;
+    rec.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
+    rec.ExceptionAddress = reinterpret_cast<PVOID>(ctx.Rip);
+    if (o.has_code) {
+        rec.NumberParameters = 1;
+        rec.ExceptionInformation[0] = o.code;
+    }
+    runtime::hud_fatal();
+    CONTEXT copy = ctx;
+    if (!request_report(K_EXCEPTION, why.c_str(), &rec, &copy))
+        already("fast-fail");
+}
+
+void report_from_hook(fast_fail::Source src, safetyhook::Context &c, uintptr_t entry)
+{
+    alignas(16) CONTEXT ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+    ctx.Rax = c.rax, ctx.Rbx = c.rbx, ctx.Rcx = c.rcx, ctx.Rdx = c.rdx, ctx.Rsi = c.rsi, ctx.Rdi = c.rdi;
+    ctx.Rbp = c.rbp, ctx.Rsp = c.rsp, ctx.R8 = c.r8, ctx.R9 = c.r9, ctx.R10 = c.r10, ctx.R11 = c.r11;
+    ctx.R12 = c.r12, ctx.R13 = c.r13, ctx.R14 = c.r14, ctx.R15 = c.r15;
+    ctx.Rip = entry;
+    ctx.EFlags = DWORD(c.rflags);
+    uintptr_t caller = readable(ctx.Rsp, 8) ? *reinterpret_cast<uintptr_t *>(ctx.Rsp) : entry;
+    report_fast_fail(src, fast_fail::outcome(src, fast_fail_available(), 0), ctx, caller);
+}
+
+void on_gs_failure(safetyhook::Context &c)
+{
+    report_from_hook(fast_fail::Source::GsFailure, c, gs_failure_fn);
+}
+
+void on_invalid_parameter(safetyhook::Context &c)
+{
+    report_from_hook(fast_fail::Source::InvalidParameter, c, fast_fail_terminate_fn);
+}
+
+void on_abort(safetyhook::Context &c)
+{
+    report_from_hook(fast_fail::Source::Abort, c, abort_fn);
+}
+
+void WINAPI hooked_raise_fail_fast(PEXCEPTION_RECORD rec, PCONTEXT given, DWORD flags)
+{
+    alignas(16) CONTEXT ctx;
+    RtlCaptureContext(&ctx);
+    if (given && readable(reinterpret_cast<uintptr_t>(given), sizeof(CONTEXT)) && given->Rip)
+        memcpy(&ctx, given, sizeof ctx);
+    uint32_t status = rec && readable(reinterpret_cast<uintptr_t>(rec), sizeof(DWORD)) ? rec->ExceptionCode : 0;
+    report_fast_fail(fast_fail::Source::RaiseFailFast, fast_fail::outcome(fast_fail::Source::RaiseFailFast, true, status),
+                     ctx, ctx.Rip);
+    fail_fast_hook.unsafe_call<void>(rec, given, flags);
 }
 
 void load_symbols(const std::wstring &path, DWORD stamp)
@@ -1199,6 +1374,8 @@ void section_heap(const Request &r)
             out.put("  heap %p '%s': capacity %llu, used %llu, free %llu, largest free %llu bytes\n",
                     reinterpret_cast<void *>(h.heap), h.name, (unsigned long long)h.capacity, (unsigned long long)h.used,
                     (unsigned long long)h.free_bytes, (unsigned long long)h.largest);
+        if (h.pool)
+            out.put("  %s\n", runtime::save_heap::pool_line(h.pool_info, runtime::save_heap::parse_request(h.msg)).c_str() + 8);
     }
     for (int i = 0; i < nheaps; i++) {
         const neheap::Heap &h = heaps[i];
@@ -1242,6 +1419,9 @@ void section_exception(const Request &r)
             e.ExceptionFlags, w);
     for (DWORD i = 0; i < e.NumberParameters && i < EXCEPTION_MAXIMUM_PARAMETERS; i++)
         out.put("  parameter %lu: 0x%llx\n", i, (unsigned long long)e.ExceptionInformation[i]);
+    std::string ff = fast_fail::exception_line(e.ExceptionCode, e.NumberParameters >= 1, e.ExceptionInformation[0]);
+    if (!ff.empty())
+        out.put("  %s\n", ff.c_str());
     if ((e.ExceptionCode == EXCEPTION_ACCESS_VIOLATION || e.ExceptionCode == EXCEPTION_IN_PAGE_ERROR) &&
         e.NumberParameters >= 2) {
         auto op = e.ExceptionInformation[0];
@@ -1263,6 +1443,9 @@ void section_state(const Request &r)
             out.put("  last %-9s none recorded\n", k);
     }
     out.put("  track and car count: core does not read them\n");
+    char placed[256];
+    runtime::placed_record_crash_text(placed, sizeof placed);
+    out.put("  %s\n", placed);
 }
 
 void section_blackbox(const Request &r)
@@ -1390,6 +1573,12 @@ void section_log()
     HANDLE f = CreateFileW((swofty_dir + L"loader.log").c_str(), GENERIC_READ,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
     if (f == INVALID_HANDLE_VALUE) {
+        std::wstring other = crash_dir::fallback(data_folder());
+        if (!other.empty())
+            f = CreateFileW((other + L"loader-fallback.log").c_str(), GENERIC_READ,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+    }
+    if (f == INVALID_HANDLE_VALUE) {
         out.put("  loader.log could not be opened (error %lu)\n", GetLastError());
         return;
     }
@@ -1512,22 +1701,51 @@ void minidump(Request &r)
                             : "");
 }
 
-void report_names()
+bool create_report(const std::wstring &dir, const char *stamp)
 {
-    char stamp[32];
-    local_stamp(stamp, sizeof stamp, true);
     for (int i = 0; i < 100; i++) {
         snprintf(report_name, sizeof report_name - 4, i ? "crash-%s-%d" : "crash-%s", stamp, i + 1);
         wchar_t wname[64];
         MultiByteToWideChar(CP_UTF8, 0, report_name, -1, wname, 64);
-        swprintf(report_path, MAX_PATH, L"%ls%ls.txt", swofty_dir.c_str(), wname);
-        swprintf(dump_path, MAX_PATH, L"%ls%ls.dmp", swofty_dir.c_str(), wname);
+        swprintf(report_path, MAX_PATH, L"%ls%ls.txt", dir.c_str(), wname);
+        swprintf(dump_path, MAX_PATH, L"%ls%ls.dmp", dir.c_str(), wname);
         out.file = CreateFileW(report_path, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL,
                                nullptr);
-        if (out.file != INVALID_HANDLE_VALUE || GetLastError() != ERROR_FILE_EXISTS)
-            break;
+        if (out.file != INVALID_HANDLE_VALUE)
+            return true;
+        if (GetLastError() != ERROR_FILE_EXISTS)
+            return false;
+    }
+    return false;
+}
+
+std::string narrow(const std::wstring &w)
+{
+    char b[MAX_PATH * 3];
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, b, sizeof b, nullptr, nullptr);
+    return n > 0 ? std::string(b, n - 1) : std::string();
+}
+
+void report_names()
+{
+    char stamp[32];
+    local_stamp(stamp, sizeof stamp, true);
+    DWORD refused = 0;
+    crash_dir = swofty_dir;
+    if (!create_report(crash_dir, stamp)) {
+        refused = GetLastError();
+        std::wstring other = crash_dir::fallback(data_folder());
+        if (!other.empty()) {
+            CreateDirectoryW(other.c_str(), nullptr);
+            if (create_report(other, stamp))
+                crash_dir = other;
+        }
     }
     strcat(report_name, ".txt");
+    snprintf(report_where, sizeof report_where, "%s",
+             crash_dir::logged(narrow(crash_dir), narrow(swofty_dir), report_name).c_str());
+    if (crash_dir != swofty_dir)
+        cl("[crash] the game folder refused the crash report (error %lu); it goes to the data folder", refused);
 }
 
 void summary_line(const Request &r)
@@ -1545,7 +1763,7 @@ void summary_line(const Request &r)
              frames += (frames.empty() ? "" : " < ") + std::string(w);
              return ++kept < 4;
          });
-    cl("[crash] crash report swofty\\%s: %s; %sstack %s; minidump %s", report_name, r.reason,
+    cl("[crash] crash report %s: %s; %sstack %s; minidump %s", report_where, r.reason,
        prior ? "earlier exception's " : "", frames.c_str(), dump_note);
 }
 
@@ -1611,8 +1829,19 @@ void step_dred(Request &r)
     if (r.has_prior)
         look(r.prior.ctx);
     std::string text = runtime::dred::section(seen);
-    if (!text.empty())
-        out.put("%s", text.c_str());
+    if (text.empty())
+        return;
+    out.put("%s", text.c_str());
+    std::string builds = d3d12hooks::rtas_recent_text(runtime::dred::build_stops());
+    for (size_t at = 0; at < builds.size();) {
+        size_t end = builds.find('\n', at);
+        end = end == std::string::npos ? builds.size() : end + 1;
+        out.put("%.*s", int(end - at), builds.data() + at);
+        size_t from = builds.find_first_not_of(' ', at), to = builds[end - 1] == '\n' ? end - 1 : end;
+        if (from < to)
+            api->log("[gfx] rtas recent: %.*s", int(to - from), builds.data() + from);
+        at = end;
+    }
 }
 
 void step_close(Request &)
@@ -1718,8 +1947,8 @@ void write_report()
     out.put("\n[%s is cut short: the writer hit %s (0x%08lx) at %s]\n", STEPS[step].name, code_name(fault_code),
             fault_code, w);
     out.flush();
-    cl("[crash] the crash report writer hit %s (0x%08lx) at %s in %s of swofty\\%s; %s", code_name(fault_code),
-       fault_code, w, STEPS[step].name, report_name,
+    cl("[crash] the crash report writer hit %s (0x%08lx) at %s in %s of %s; %s", code_name(fault_code),
+       fault_code, w, STEPS[step].name, report_where,
        n >= MAX_WRITER_FAULTS ? "too many faults, the report ends here" : "it goes on with the next step");
     step_at = n >= MAX_WRITER_FAULTS ? std::max(step + 1, CLOSE_STEP) : step + 1;
     run_steps();
@@ -1784,11 +2013,11 @@ void read_addons(const std::wstring &path)
     }
 }
 
-void prune(const wchar_t *pattern, int keep)
+void prune(const std::wstring &dir, const wchar_t *pattern, int keep)
 {
     std::vector<std::wstring> names;
     WIN32_FIND_DATAW fd;
-    HANDLE h = FindFirstFileW((swofty_dir + pattern).c_str(), &fd);
+    HANDLE h = FindFirstFileW((dir + pattern).c_str(), &fd);
     if (h == INVALID_HANDLE_VALUE)
         return;
     do
@@ -1797,7 +2026,7 @@ void prune(const wchar_t *pattern, int keep)
     FindClose(h);
     std::sort(names.begin(), names.end());
     for (size_t i = 0; i + keep < names.size(); i++)
-        DeleteFileW((swofty_dir + names[i]).c_str());
+        DeleteFileW((dir + names[i]).c_str());
 }
 
 uintptr_t function_at(uint32_t rva, const uint8_t *expect, size_t n)
@@ -1811,11 +2040,11 @@ uintptr_t kb_function(uint32_t rva, const uint8_t *expect, size_t n)
     return kb_build ? function_at(rva, expect, n) : 0;
 }
 
-// A fixed-byte scan of the exe's executable sections, used only to find Ne_ReportMemoryError on a
-// build with no known address for it. It stays in the crash code and does not go through the
+// A byte scan of the exe's executable sections, used only to find Ne_ReportMemoryError and the CRT's
+// fast-fail paths on a build with no known address for them. It stays in the crash code and does not go through the
 // loader's scan (whose cache and log lines are the binding resolver's). It asks Windows about each
 // memory region once rather than about every page.
-uintptr_t scan_exe(const uint8_t *pat, size_t n)
+uintptr_t scan_exe(const uint8_t *pat, size_t n, const fast_fail::Pattern *masked = nullptr)
 {
     auto dos = reinterpret_cast<const IMAGE_DOS_HEADER *>(exe_base);
     auto nt = reinterpret_cast<const IMAGE_NT_HEADERS *>(exe_base + dos->e_lfanew);
@@ -1839,7 +2068,7 @@ uintptr_t scan_exe(const uint8_t *pat, size_t n)
                 a = static_cast<const uint8_t *>(memchr(a, pat[0], size_t(hi - a) - n + 1));
                 if (!a)
                     break;
-                if (!memcmp(a, pat, n)) {
+                if (masked ? fast_fail::matches(a, *masked) : !memcmp(a, pat, n)) {
                     found = reinterpret_cast<uintptr_t>(a);
                     if (++hits >= 2)
                         return 0;
@@ -1885,12 +2114,585 @@ void hook_heap_errors()
        how, heap_error_fn ? "their error method at the KB address" : "the error method's prologue");
 }
 
+
+uintptr_t find_fast_fail_path(const char *name, uint32_t rva, const char *pattern, const char *&how)
+{
+    fast_fail::Pattern p = fast_fail::parse_pattern(pattern);
+    uintptr_t a = exe_base + rva;
+    how = "KB address";
+    if (kb_build && rva < exe_size && readable(a, p.bytes.size()) &&
+        fast_fail::matches(reinterpret_cast<const uint8_t *>(a), p))
+        return a;
+    how = "found by its prologue";
+    a = scan_exe(p.bytes.data(), p.bytes.size(), &p);
+    if (!a)
+        cl("[crash] %s: its prologue matched 0 or several times; a fast-fail from it gets no report", name);
+    return a;
+}
+
+void hook_fast_fail_path(const char *name, uint32_t rva, const char *pattern, uintptr_t &fn, safetyhook::MidHook &hook,
+                         void (*callback)(safetyhook::Context &))
+{
+    const char *how = "";
+    fn = find_fast_fail_path(name, rva, pattern, how);
+    if (!fn)
+        return;
+    auto h = safetyhook::MidHook::create(reinterpret_cast<void *>(fn), callback);
+    if (h)
+        hook = std::move(*h);
+    cl("[crash] %s at base+0x%llx %s (%s)", name, (unsigned long long)(fn - exe_base), h ? "hooked" : "NOT hooked", how);
+}
+
+void hook_fast_fails()
+{
+    hook_fast_fail_path("__report_gsfailure", RVA_REPORT_GS_FAILURE, PATTERN_REPORT_GS_FAILURE, gs_failure_fn, gs_hook,
+                        on_gs_failure);
+    hook_fast_fail_path("the CRT invalid-parameter terminate path", RVA_FAST_FAIL_TERMINATE, PATTERN_FAST_FAIL_TERMINATE,
+                        fast_fail_terminate_fn, invalid_parameter_hook, on_invalid_parameter);
+    hook_fast_fail_path("the CRT abort path", RVA_INVALID_PARAMETER_ABORT, PATTERN_INVALID_PARAMETER_ABORT, abort_fn,
+                        abort_hook, on_abort);
+}
 }
 
 /* Called by the core once the game's code reads decrypted, which on a packed build is the decrypted stage. */
 void crash_game_hooks()
 {
     hook_heap_errors();
+    hook_fast_fails();
+}
+
+namespace {
+
+/* Load-stall reports, asked for by load_stall.cpp when a load stops moving. Every thread but the asking one and the
+   crash report writer is suspended in turn, only while its context is read and its stack is unwound into a table
+   allocated beforehand; nothing in that window allocates, logs or takes a lock, since a suspended thread may hold
+   the heap lock or the logger's. The module list, each module's function table and the thread names are read
+   before the first suspension; the frames are named and the text written after the last thread runs again. */
+
+constexpr int STALL_THREADS = 384, STALL_FRAMES = 40, KEEP_STALLS = 4;
+constexpr size_t STALL_TEXT = size_t(3) << 20;
+
+struct Sampled {
+    DWORD tid, error;
+    LONG priority;
+    bool walked, faulted, self, writer;
+    int frames, same_as;
+    uint64_t rip[STALL_FRAMES], rsp[STALL_FRAMES];
+    uint64_t regs[runtime::stall_order::kRegs];
+    runtime::stall_order::Kept kept;
+    char desc[80];
+};
+
+struct Pdata {
+    const RUNTIME_FUNCTION *f;
+    size_t n;
+};
+
+struct Text {
+    char *b = nullptr;
+    size_t cap = 0, n = 0;
+
+    void put(const char *f, ...) __attribute__((format(printf, 2, 3)))
+    {
+        if (!b || n + 1 >= cap)
+            return;
+        va_list ap;
+        va_start(ap, f);
+        int k = vsnprintf(b + n, cap - n, f, ap);
+        va_end(ap);
+        if (k > 0)
+            n = std::min(cap - 1, n + size_t(k));
+    }
+};
+
+Sampled *stall_threads;
+Pdata stall_pdata[sizeof mods / sizeof *mods];
+Text stall_text;
+volatile LONG stall_busy;
+
+PRUNTIME_FUNCTION stall_lookup(DWORD64 pc, DWORD64 *base)
+{
+    const Mod *m = mod_at(uintptr_t(pc));
+    if (!m)
+        return nullptr;
+    const Pdata &p = stall_pdata[m - mods];
+    uint32_t rva = uint32_t(pc - m->base);
+    size_t lo = 0, hi = p.f ? p.n : 0;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if (rva < p.f[mid].BeginAddress)
+            hi = mid;
+        else if (rva >= p.f[mid].EndAddress)
+            lo = mid + 1;
+        else {
+            *base = m->base;
+            return const_cast<PRUNTIME_FUNCTION>(&p.f[mid]);
+        }
+    }
+    return nullptr;
+}
+
+const IMAGE_DATA_DIRECTORY *image_dir(uintptr_t base, int which)
+{
+    auto dos = reinterpret_cast<const IMAGE_DOS_HEADER *>(base);
+    if (!readable(base, sizeof *dos) || !readable(base + dos->e_lfanew, sizeof(IMAGE_NT_HEADERS64)))
+        return nullptr;
+    auto nt = reinterpret_cast<const IMAGE_NT_HEADERS64 *>(base + dos->e_lfanew);
+    if (nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC || nt->OptionalHeader.NumberOfRvaAndSizes <= DWORD(which))
+        return nullptr;
+    const IMAGE_DATA_DIRECTORY *d = &nt->OptionalHeader.DataDirectory[which];
+    return d->VirtualAddress && d->Size ? d : nullptr;
+}
+
+void stall_tables()
+{
+    for (int i = 0; i < nmods; i++) {
+        const Mod &m = mods[i];
+        stall_pdata[i] = {nullptr, 0};
+        const IMAGE_DATA_DIRECTORY *d = image_dir(m.base, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+        if (!d || d->Size < sizeof(RUNTIME_FUNCTION) || uint64_t(d->VirtualAddress) + d->Size > m.size ||
+            !readable(m.base + d->VirtualAddress, d->Size))
+            continue;
+        stall_pdata[i] = {reinterpret_cast<const RUNTIME_FUNCTION *>(m.base + d->VirtualAddress),
+                          d->Size / sizeof(RUNTIME_FUNCTION)};
+    }
+}
+
+/* The nearest export at or before a, for the frames in system and addon modules, which have no symbol table. */
+const char *export_near(const Mod *m, uintptr_t a, uint32_t &off)
+{
+    const IMAGE_DATA_DIRECTORY *d = image_dir(m->base, IMAGE_DIRECTORY_ENTRY_EXPORT);
+    if (!d || d->Size < sizeof(IMAGE_EXPORT_DIRECTORY) || uint64_t(d->VirtualAddress) + d->Size > m->size ||
+        !readable(m->base + d->VirtualAddress, d->Size))
+        return nullptr;
+    auto ed = reinterpret_cast<const IMAGE_EXPORT_DIRECTORY *>(m->base + d->VirtualAddress);
+    if (!ed->NumberOfNames || ed->NumberOfNames > 0x10000 || ed->NumberOfFunctions > 0x10000 ||
+        !readable(m->base + ed->AddressOfFunctions, ed->NumberOfFunctions * 4ull) ||
+        !readable(m->base + ed->AddressOfNames, ed->NumberOfNames * 4ull) ||
+        !readable(m->base + ed->AddressOfNameOrdinals, ed->NumberOfNames * 2ull))
+        return nullptr;
+    auto funcs = reinterpret_cast<const DWORD *>(m->base + ed->AddressOfFunctions);
+    auto names = reinterpret_cast<const DWORD *>(m->base + ed->AddressOfNames);
+    auto ords = reinterpret_cast<const WORD *>(m->base + ed->AddressOfNameOrdinals);
+    uint32_t rva = uint32_t(a - m->base), best = 0;
+    const char *name = nullptr;
+    for (DWORD i = 0; i < ed->NumberOfNames; i++) {
+        WORD o = ords[i];
+        if (o >= ed->NumberOfFunctions)
+            continue;
+        DWORD f = funcs[o];
+        if (f > rva || f < best || (f >= d->VirtualAddress && f < d->VirtualAddress + d->Size))
+            continue;
+        if (names[i] < d->VirtualAddress || names[i] >= d->VirtualAddress + d->Size)
+            continue;
+        best = f;
+        name = reinterpret_cast<const char *>(m->base + names[i]);
+    }
+    if (!name || rva - best >= 0x20000)
+        return nullptr;
+    off = rva - best;
+    return name;
+}
+
+/* The export that starts the function holding ip (or, for a leaf with no function entry, one just before it). */
+const char *export_of(uint64_t ip, uint32_t &off)
+{
+    const Mod *m = mod_at(ip);
+    if (!m || m->base == exe_base)
+        return nullptr;
+    const char *name = export_near(m, ip, off);
+    if (!name)
+        return nullptr;
+    DWORD64 base = 0;
+    PRUNTIME_FUNCTION f = stall_lookup(ip, &base);
+    if (f)
+        f = primary(f, base);
+    uint32_t rva = uint32_t(ip - m->base);
+    return f ? (f->BeginAddress == rva - off ? name : nullptr) : (off < 0x100 ? name : nullptr);
+}
+
+void stall_frame(char *w, size_t cap, uint64_t ip)
+{
+    where_into(w, cap, ip, true);
+    uint32_t off = 0;
+    if (const char *name = export_of(ip, off)) {
+        size_t k = strlen(w);
+        snprintf(w + k, cap - k, " [%s+0x%x]", name, off);
+    }
+}
+
+const char *wait_kind(const Sampled &s, char *w, size_t cap)
+{
+    for (int i = 0; i < s.frames && i < 4; i++) {
+        uint32_t off = 0;
+        const char *name = export_of(s.rip[i], off);
+        if (name && runtime::stall_order::wait_export(name)) {
+            snprintf(w, cap, "%s", name);
+            return w;
+        }
+    }
+    return nullptr;
+}
+
+DWORD loader_lock_owner(LONG &recursion)
+{
+    auto teb = reinterpret_cast<uintptr_t>(NtCurrentTeb());
+    uintptr_t peb = *reinterpret_cast<uintptr_t *>(teb + 0x60);
+    recursion = 0;
+    if (!readable(peb + 0x110, 8))
+        return 0;
+    auto cs = *reinterpret_cast<const RTL_CRITICAL_SECTION *const *>(peb + 0x110);
+    if (!cs || !readable(uintptr_t(cs), sizeof *cs))
+        return 0;
+    recursion = cs->RecursionCount;
+    return DWORD(uintptr_t(cs->OwningThread));
+}
+
+void stall_regs(const CONTEXT &c, uint64_t *r)
+{
+    namespace so = runtime::stall_order;
+    r[so::Rax] = c.Rax;
+    r[so::Rbx] = c.Rbx;
+    r[so::Rcx] = c.Rcx;
+    r[so::Rdx] = c.Rdx;
+    r[so::Rsi] = c.Rsi;
+    r[so::Rdi] = c.Rdi;
+    r[so::Rbp] = c.Rbp;
+    r[so::Rsp] = c.Rsp;
+    r[so::R8] = c.R8;
+    r[so::R9] = c.R9;
+    r[so::R10] = c.R10;
+    r[so::R11] = c.R11;
+    r[so::R12] = c.R12;
+    r[so::R13] = c.R13;
+    r[so::R14] = c.R14;
+    r[so::R15] = c.R15;
+    r[so::Rip] = c.Rip;
+    r[so::EFlags] = c.EFlags;
+}
+
+int stall_sample()
+{
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snap == INVALID_HANDLE_VALUE)
+        return -1;
+    THREADENTRY32 te{};
+    te.dwSize = sizeof te;
+    DWORD pid = GetCurrentProcessId(), me = GetCurrentThreadId();
+    int n = 0;
+    for (BOOL ok = Thread32First(snap, &te); ok && n < STALL_THREADS; ok = Thread32Next(snap, &te)) {
+        if (te.th32OwnerProcessID != pid)
+            continue;
+        Sampled &s = stall_threads[n++];
+        memset(&s, 0, sizeof s);
+        s.tid = te.th32ThreadID;
+        s.priority = te.tpBasePri;
+        s.same_as = -1;
+        s.self = s.tid == me;
+        s.writer = writer_tid && s.tid == writer_tid;
+    }
+    CloseHandle(snap);
+    for (int i = 0; i < n; i++) {
+        Sampled &s = stall_threads[i];
+        HANDLE h = thread_description ? OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, s.tid) : nullptr;
+        if (!h)
+            continue;
+        PWSTR d = nullptr;
+        if (SUCCEEDED(thread_description(h, &d)) && d) {
+            WideCharToMultiByte(CP_UTF8, 0, d, -1, s.desc, sizeof s.desc - 1, nullptr, nullptr);
+            LocalFree(d);
+        }
+        CloseHandle(h);
+    }
+    stall_tid = me;
+    for (int i = 0; i < n; i++) {
+        Sampled &s = stall_threads[i];
+        if (s.self || s.writer)
+            continue;
+        HANDLE h = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, s.tid);
+        if (!h) {
+            s.error = GetLastError();
+            continue;
+        }
+        if (SuspendThread(h) == DWORD(-1)) {
+            s.error = GetLastError();
+            CloseHandle(h);
+            continue;
+        }
+        alignas(16) CONTEXT ctx{};
+        ctx.ContextFlags = CONTEXT_FULL;
+        if (GetThreadContext(h, &ctx)) {
+            stall_regs(ctx, s.regs);
+            uintptr_t lo = 0, hi = 0;
+            struct {
+                LONG status;
+                void *teb;
+                uintptr_t pid, tid;
+                uintptr_t affinity;
+                LONG priority, base;
+            } tbi{};
+            if (query_thread && query_thread(h, 0, &tbi, sizeof tbi, nullptr) >= 0 && tbi.teb &&
+                readable(reinterpret_cast<uintptr_t>(tbi.teb), sizeof(NT_TIB))) {
+                auto tib = static_cast<NT_TIB *>(tbi.teb);
+                lo = reinterpret_cast<uintptr_t>(tib->StackLimit);
+                hi = reinterpret_cast<uintptr_t>(tib->StackBase);
+            }
+            stall_walk::Kept kept;
+            kept.lo = exe_base;
+            kept.hi = exe_base + exe_size;
+            s.frames = stall_walk::walk(&ctx, lo, hi ? hi : ctx.Rsp + 1, STALL_FRAMES, stall_lookup, readable, s.rip,
+                                        s.rsp, &s.faulted, exe_base ? &kept : nullptr);
+            s.kept = kept.at;
+            s.walked = true;
+        } else {
+            s.error = GetLastError();
+        }
+        ResumeThread(h);
+        CloseHandle(h);
+    }
+    stall_tid = 0;
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < i && stall_threads[i].same_as < 0; j++) {
+            const Sampled &a = stall_threads[i], &b = stall_threads[j];
+            if (a.walked && b.walked && b.same_as < 0 && a.frames > 1 && a.frames == b.frames &&
+                !memcmp(a.rip, b.rip, sizeof(uint64_t) * a.frames))
+                stall_threads[i].same_as = j;
+        }
+    return n;
+}
+
+void stall_threads_text(int n)
+{
+    Text &t = stall_text;
+    char w[512], kind[64];
+    int sampled = 0, failed = 0, alike = 0;
+    for (int i = 0; i < n; i++) {
+        const Sampled &s = stall_threads[i];
+        sampled += s.walked;
+        failed += !s.walked && !s.self && !s.writer;
+        alike += s.same_as >= 0;
+    }
+    t.put("\n== Threads (%d; %d unwound, %d not readable, %d with the same stack as an earlier one)\n", n, sampled,
+          failed, alike);
+    for (int i = 0; i < n; i++) {
+        const Sampled &s = stall_threads[i];
+        const char *wait = s.walked ? wait_kind(s, kind, sizeof kind) : nullptr;
+        t.put("thread %lu%s%s%s, priority %ld%s%s%s%s\n", (unsigned long)s.tid, s.desc[0] ? " \"" : "", s.desc,
+              s.desc[0] ? "\"" : "", s.priority, s.self ? " (the load-stall watchdog, not suspended)" : "",
+              s.writer ? " (the crash report writer, not suspended)" : "", wait ? ", waiting in " : "", wait ? wait : "");
+        if (s.self || s.writer)
+            continue;
+        if (!s.walked) {
+            t.put("  not read (error %lu)\n", (unsigned long)s.error);
+            continue;
+        }
+        if (s.same_as >= 0) {
+            t.put("  same stack as thread %lu\n", (unsigned long)stall_threads[s.same_as].tid);
+            continue;
+        }
+        for (int f = 0; f < s.frames; f++) {
+            stall_frame(w, sizeof w, s.rip[f]);
+            t.put("  #%-2d %016llx rsp=%016llx  %s\n", f, (unsigned long long)s.rip[f], (unsigned long long)s.rsp[f], w);
+        }
+        if (s.frames <= 1)
+            t.put("  (the unwind stopped at the first frame)\n");
+        if (s.faulted)
+            t.put("  (the unwind faulted reading this stack and stopped)\n");
+    }
+}
+
+void stall_running_text(int n)
+{
+    namespace so = runtime::stall_order;
+    static so::Thread order[STALL_THREADS];
+    static int pick[STALL_THREADS];
+    static char block[2048];
+    char w[512], kind[64];
+    int game = 0;
+    for (int i = 0; i < n; i++) {
+        const Sampled &s = stall_threads[i];
+        so::Thread &o = order[i];
+        o.read = s.walked && !s.self && !s.writer;
+        o.waiting = o.read && wait_kind(s, kind, sizeof kind);
+        o.game = o.read && s.kept.frame >= 0;
+        game += o.read && !o.waiting && o.game;
+    }
+    int k = so::running_first(order, n, pick);
+    Text &t = stall_text;
+    so::heading(k, game, block, sizeof block);
+    t.put("%s", block);
+    for (int j = 0; j < k; j++) {
+        const Sampled &s = stall_threads[pick[j]];
+        t.put("thread %lu%s%s%s, priority %ld, not in a wait%s\n", (unsigned long)s.tid, s.desc[0] ? " \"" : "", s.desc,
+              s.desc[0] ? "\"" : "", s.priority, s.kept.frame >= 0 ? ", in game code" : "");
+        t.put("  registers as suspended:\n");
+        so::regs_text(s.regs, block, sizeof block);
+        t.put("%s", block);
+        so::kept_text(s.kept, block, sizeof block);
+        t.put("%s", block);
+        if (s.kept.frame >= 0) {
+            uint64_t q[so::kFrameQwords] = {};
+            int got = 0;
+            while (got < so::kFrameQwords && readable(uintptr_t(s.kept.rsp) + got * 8u, 8)) {
+                q[got] = *reinterpret_cast<const uint64_t *>(uintptr_t(s.kept.rsp) + got * 8u);
+                got++;
+            }
+            so::stack_text(s.kept.rsp, q, got, block, sizeof block);
+            t.put("%s", block);
+        }
+        int top = std::min(s.frames, so::kTopFrames);
+        t.put("  top %d of %d frame(s):\n", top, s.frames);
+        for (int f = 0; f < top; f++) {
+            stall_frame(w, sizeof w, s.rip[f]);
+            t.put("  #%-2d %016llx rsp=%016llx  %s\n", f, (unsigned long long)s.rip[f], (unsigned long long)s.rsp[f], w);
+        }
+        if (s.faulted)
+            t.put("  (the unwind faulted reading this stack and stopped)\n");
+    }
+}
+
+void stall_core_text(int n)
+{
+    Text &t = stall_text;
+    char w[512];
+    t.put("\n== Threads in swofty code (core and addons; a core lock's waiter shows a swofty frame under a wait)\n");
+    int shown = 0;
+    for (int i = 0; i < n; i++) {
+        const Sampled &s = stall_threads[i];
+        const Sampled &src = s.same_as >= 0 ? stall_threads[s.same_as] : s;
+        if (!s.walked)
+            continue;
+        for (int f = 0; f < src.frames; f++) {
+            const Mod *m = mod_at(src.rip[f]);
+            bool core = m && self && m->base == reinterpret_cast<uintptr_t>(self);
+            std::string owner = !m ? core_code_owner(src.rip[f]) : std::string();
+            if (!core && owner.empty())
+                continue;
+            stall_frame(w, sizeof w, src.rip[f]);
+            t.put("  thread %lu frame #%d: %s\n", (unsigned long)s.tid, f, w);
+            shown++;
+            break;
+        }
+    }
+    if (!shown)
+        t.put("  none\n");
+    LONG recursion = 0;
+    DWORD owner = loader_lock_owner(recursion);
+    if (owner)
+        t.put("  the loader lock is held by thread %lu (recursion %ld)\n", (unsigned long)owner, recursion);
+    else
+        t.put("  the loader lock is free\n");
+    t.put("  core std::mutex owners are not tracked\n");
+}
+
+bool create_stall(const std::wstring &dir, const char *stamp, wchar_t *path, HANDLE &f)
+{
+    for (int i = 0; i < 100; i++) {
+        wchar_t name[64];
+        swprintf(name, 64, i ? L"stall-%hs-%d.txt" : L"stall-%hs.txt", stamp, i + 1);
+        swprintf(path, MAX_PATH, L"%ls%ls", dir.c_str(), name);
+        f = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (f != INVALID_HANDLE_VALUE)
+            return true;
+        if (GetLastError() != ERROR_FILE_EXISTS)
+            return false;
+    }
+    return false;
+}
+
+}
+
+namespace runtime {
+
+bool stall_report(int index, int max, const char *why, const char *state)
+{
+    if (!why)
+        why = "";
+    if (claimed || writing || InterlockedCompareExchange(&stall_busy, 1, 0))
+        return false;
+    if (!stall_threads)
+        stall_threads = static_cast<Sampled *>(
+            VirtualAlloc(nullptr, sizeof(Sampled) * STALL_THREADS, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+    if (!stall_text.b) {
+        stall_text.b = static_cast<char *>(VirtualAlloc(nullptr, STALL_TEXT, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+        stall_text.cap = stall_text.b ? STALL_TEXT : 0;
+    }
+    if (!stall_threads || !stall_text.b) {
+        cl("[stall] no memory for a load-stall report");
+        InterlockedExchange(&stall_busy, 0);
+        return false;
+    }
+    snapshot_modules();
+    stall_tables();
+    ULONGLONG t0 = GetTickCount64();
+    int n = stall_sample();
+    ULONGLONG took = GetTickCount64() - t0;
+    Text &t = stall_text;
+    t.n = 0;
+    t.b[0] = 0;
+    char now[32], stamp[32];
+    local_stamp(now, sizeof now, false);
+    local_stamp(stamp, sizeof stamp, true);
+    t.put("== Load stall report %d of at most %d (%s)\n", index, max, now);
+    t.put("%s\n", why);
+    t.put("%s", state);
+    t.put("game: F1_25.exe stamp %08x%s, %llu s since the core loaded%s%s\n", exe_stamp,
+          kb_build ? " (the known build)" : ea_build ? " (EA diagnostics on)" : "",
+          (unsigned long long)((GetTickCount64() - start_ms) / 1000), wine_version ? ", Wine " : "",
+          wine_version ? wine_version() : "");
+    if (n < 0)
+        t.put("\n== Threads\n  the thread list is not available (error %lu)\n", GetLastError());
+    else {
+        t.put("threads read in %llu ms (each suspended only while its context was read and its stack unwound)\n",
+              (unsigned long long)took);
+        stall_running_text(n);
+        stall_threads_text(n);
+        stall_core_text(n);
+    }
+    t.put("\n== Black box: last events (%llu recorded, oldest first)\n", (unsigned long long)events.total());
+    ULONGLONG ms = GetTickCount64();
+    if (!events.each([&](const blackbox::Copy &c) {
+            t.put("  -%9.3f s [%5lu] %-9s %s\n", double(ms - c.ms) / 1000, (unsigned long)c.tid, c.kind, c.text);
+        }))
+        t.put("  none\n");
+    t.put("\n== Loaded modules (%d)\n", nmods);
+    for (int i = 0; i < nmods; i++)
+        t.put("  %016llx %10llx  %s\n", (unsigned long long)mods[i].base, (unsigned long long)mods[i].size,
+              mods[i].path[0] ? mods[i].path : mods[i].name);
+    wchar_t path[MAX_PATH] = {};
+    HANDLE f = INVALID_HANDLE_VALUE;
+    std::wstring dir = swofty_dir;
+    if (!create_stall(dir, stamp, path, f)) {
+        std::wstring other = crash_dir::fallback(data_folder());
+        if (!other.empty()) {
+            CreateDirectoryW(other.c_str(), nullptr);
+            if (create_stall(other, stamp, path, f))
+                dir = other;
+        }
+    }
+    std::string where = "not written";
+    if (f != INVALID_HANDLE_VALUE) {
+        DWORD wrote = 0;
+        WriteFile(f, t.b, DWORD(t.n), &wrote, nullptr);
+        CloseHandle(f);
+        std::string name = narrow(wcsrchr(path, L'\\') ? wcsrchr(path, L'\\') + 1 : path);
+        where = crash_dir::logged(narrow(dir), narrow(swofty_dir), name);
+        if (index == 1)
+            prune(dir, L"stall-*.txt", KEEP_STALLS);
+    }
+    cl("[stall] load-stall report %d of at most %d: %s; %d thread(s) read in %llu ms; written to %s", index, max, why, n,
+       (unsigned long long)took, where.c_str());
+    for (char *line = t.b; *line;) {
+        char *nl = strchr(line, '\n');
+        size_t len = nl ? size_t(nl - line) : strlen(line);
+        cl("[stall] %.*s", int(std::min<size_t>(len, 1000)), line);
+        line += len + (nl ? 1 : 0);
+    }
+    cl("[stall] end of load-stall report %d", index);
+    InterlockedExchange(&stall_busy, 0);
+    return true;
+}
+
 }
 
 namespace blackbox {
@@ -1980,8 +2782,12 @@ void crash_attach(SwoftyApi *a, const std::wstring &dir)
     } else {
         writer_tid = 0;
     }
-    prune(L"crash-*.txt", KEEP_REPORTS);
-    prune(L"crash-*.dmp", KEEP_DUMPS);
+    for (auto &d : {swofty_dir, crash_dir::fallback(data_folder())}) {
+        if (d.empty())
+            continue;
+        prune(d, L"crash-*.txt", KEEP_REPORTS);
+        prune(d, L"crash-*.dmp", KEEP_DUMPS);
+    }
     AddVectoredExceptionHandler(1, veh);
     AddVectoredExceptionHandler(0, last_chance);
     previous = SetUnhandledExceptionFilter(unhandled);
@@ -1989,6 +2795,14 @@ void crash_attach(SwoftyApi *a, const std::wstring &dir)
     auto tp = safetyhook::InlineHook::create(reinterpret_cast<void *>(GetProcAddress(k32, "TerminateProcess")), hooked_terminate);
     auto ntt = safetyhook::InlineHook::create(reinterpret_cast<void *>(GetProcAddress(ntdll, "NtTerminateProcess")),
                                               hooked_nt_terminate);
+    bool fail_fast_hooked = false;
+    if (auto raise = GetProcAddress(kb ? kb : k32, "RaiseFailFastException")) {
+        auto ff = safetyhook::InlineHook::create(reinterpret_cast<void *>(raise), hooked_raise_fail_fast);
+        if (ff) {
+            fail_fast_hook = std::move(*ff);
+            fail_fast_hooked = true;
+        }
+    }
     if (e)
         exit_hook = std::move(*e);
     if (tp)
@@ -1999,9 +2813,12 @@ void crash_attach(SwoftyApi *a, const std::wstring &dir)
              "filter%s, ExitProcess %s, TerminateProcess %s",
              MAX_REPORTS, previous ? " (chained to the game's)" : "", e ? "hooked" : "NOT hooked",
              tp ? "hooked" : "NOT hooked");
-    cl("[crash] crash reports: swofty\\crash-<time>.txt with a %s minidump%s, written by %s; NtTerminateProcess %s",
+    cl("[crash] crash reports: swofty\\crash-<time>.txt (the data folder's state folder when the game folder refuses it) with a %s minidump%s, written by %s; NtTerminateProcess %s",
        dump_mode == DUMP_FULL ? "full-memory" : dump_mode == DUMP_OFF ? "no" : "stacks-only",
        dump_mode == DUMP_NORMAL ? " (SWOFTY_CRASH_DUMP=full for all memory, off for none)" : "",
        writer_tid ? "a dedicated thread" : "the reporting thread", ntt ? "hooked" : "NOT hooked");
+    cl("[crash] RaiseFailFastException %s; the CRT's fast-fail paths are hooked once the game's code is decrypted",
+       fail_fast_hooked ? "hooked" : "NOT hooked");
     runtime::dred::arm(swofty_dir, tap, self);
+    log_hardware_settings();
 }

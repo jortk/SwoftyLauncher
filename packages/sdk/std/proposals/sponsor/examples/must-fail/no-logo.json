@@ -1,0 +1,13 @@
+{
+  "sponsor": {
+    "nologo": {
+      "$comment": "a record needs a logo",
+      "name": "lng_sponsor_nologo",
+      "designs": [
+        {
+          "key": "p"
+        }
+      ]
+    }
+  }
+}

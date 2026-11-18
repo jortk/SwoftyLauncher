@@ -1,0 +1,18 @@
+{
+  "id": "grain",
+  "name": "Grain",
+  "description": "Film grain added to the picture's perceptual brightness, changing every frame.",
+  "params": [
+    { "id": "amount", "type": "float", "default": 0.15, "min": 0, "max": 1, "step": 0.01,
+      "label": "Amount", "doc": "How strong the grain is." },
+    { "id": "size", "type": "float", "default": 1.5, "min": 1, "max": 4, "step": 0.1,
+      "label": "Size", "doc": "The size of a grain in pixels." },
+    { "id": "colored", "type": "bool", "default": false,
+      "label": "Coloured grain", "doc": "Gives each colour channel its own grain instead of one grey grain." },
+    { "id": "luma_response", "type": "float", "default": 0.5, "min": 0, "max": 1, "step": 0.01,
+      "label": "Brightness response", "doc": "0 spreads the grain evenly, 1 keeps it to the midtones and away from black and white." }
+  ],
+  "passes": [
+    { "name": "grain", "shader": "grain.hlsl", "entry": "effect" }
+  ]
+}

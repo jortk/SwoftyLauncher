@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -83,6 +84,19 @@ inline std::string set_masks(const std::vector<const fuel::Set *> &sets)
     return out;
 }
 
+// Whether an addon set a track.data record's fuel.burn_per_lap: the record is an addon's own (its owner isn't the
+// game), or an addon's layer or variant left an origin on the field or on a field above it. A seeded record no addon
+// changed is the game's and has none, and must not overwrite the live value.
+inline bool burn_from_addon(const std::map<std::string, std::string> &origins, const std::string &owner = "game")
+{
+    if (!owner.empty() && owner != "game")
+        return true;
+    for (auto &[p, addon] : origins)
+        if (!addon.empty() && (p.empty() || p == "/fuel" || p == "/fuel/burn_per_lap"))
+            return true;
+    return false;
+}
+
 inline void plan_burn(std::vector<FuelWrite> &out, const fuel::Set &set, const std::string &code, float burn,
                       const std::string &entry)
 {
@@ -93,6 +107,101 @@ inline void plan_burn(std::vector<FuelWrite> &out, const fuel::Set &set, const s
     if (fuel::same(after, t->fuel))
         return;
     out.push_back({t->object, code, entry, t->fuel, after});
+}
+
+// A box's pit speed limit (track.per_package pit.speed_limit, km/h): TrackDataTrack +0x21c, filled by the track data
+// reader (0x142e47817) and read by Game_PitLane_GenerateSplines (0x1434ca550: [[mgr+0xb30]+0x1d0]+0x21c, km/h to m/s
+// into mgr+0xba4) when the session builds its pit lane. Written at the box press into the box's sets like the fuel and
+// at the session load into the sets the query picks, put back when the box is left. read(address, value) gives the
+// current float.
+constexpr uintptr_t kPitSpeed = 0x21c;
+
+struct PitWrite {
+    uintptr_t object = 0;
+    std::string track, entry;
+    float before = 0, after = 0;
+};
+
+template <class Read>
+inline std::vector<PitWrite> plan_box_pit(const Base &base, const Entries &entries, const std::vector<const fuel::Set *> &sets,
+                                          std::string_view session_code, Read read)
+{
+    std::vector<PitWrite> out;
+    for (auto &[id, e] : entries.by_track) {
+        const BaseTrack *t = base.by_id(id);
+        if (!e.pit_speed || !t || (!session_code.empty() && t->code != session_code))
+            continue;
+        for (auto *s : sets) {
+            const fuel::Track *ft = fuel::find(*s, t->code);
+            float now = 0;
+            if (!ft || !ft->object || !read(ft->object + kPitSpeed, now) || !(now > 0 && now <= 400))
+                continue;   // not a pit speed limit as the game's tracks hold it (60..80): left alone
+            bool seen = false;
+            for (auto &w : out)
+                seen = seen || w.object == ft->object;
+            if (seen || now == *e.pit_speed)
+                continue;
+            out.push_back({ft->object, t->code, e.id, now, *e.pit_speed});
+        }
+    }
+    return out;
+}
+
+// A box's race laps (track.per_package laps, at full race length). TrackDataTrack +0xe0 holds the Gdb value slot of
+// the TrackData row's number_of_laps (writer 0x142e46e8c), not the value: every reader takes
+// laps = ((int32 *)[[slot]+0x10])[race] at use (race 0, 1 for session type 0x10, 2 for 0x11; 0x141782564,
+// 0x1436966xx) and scales it by the chosen race length option (0x140af68b0), so the box's laps are written into the
+// value record's int list (begin +0x10, end +0x18, filled by the list parser 0x1445a4c80) and the race length option
+// scales from them. Only sets of the default weekend format are written (a sprint set's list holds the sprint's laps),
+// only the list's entries that hold the race's laps (entry 0's value: stock lists are "57,57,57"), each address once
+// (a set without its own number_of_laps shares its parent set's record). Put back when the box is left.
+constexpr uintptr_t kLapsSlot = 0xe0;
+constexpr uintptr_t kListBegin = 0x10, kListEnd = 0x18;
+constexpr size_t kLapsMax = 8;
+
+struct LapsWrite {
+    uintptr_t at = 0;   // the int32 in the number_of_laps list
+    std::string track, entry;
+    int32_t before = 0, after = 0;
+};
+
+// read_ptr(address, value) and read_int(address, value) give the current pointer / int32, false when unreadable.
+template <class ReadPtr, class ReadInt>
+inline std::vector<LapsWrite> plan_box_laps(const Base &base, const Entries &entries, const std::vector<const fuel::Set *> &sets,
+                                            std::string_view session_code, ReadPtr read_ptr, ReadInt read_int)
+{
+    std::vector<LapsWrite> out;
+    auto seen = [&out](uintptr_t at) {
+        for (auto &w : out)
+            if (w.at == at)
+                return true;
+        return false;
+    };
+    for (auto &[id, e] : entries.by_track) {
+        const BaseTrack *t = base.by_id(id);
+        if (!e.laps || !t || (!session_code.empty() && t->code != session_code))
+            continue;
+        for (auto *s : sets) {
+            if (!((s->formats >> fuel::kFormatDefault) & 1u) || ((s->formats >> fuel::kFormatSprint) & 1u))
+                continue;
+            const fuel::Track *ft = fuel::find(*s, t->code);
+            uintptr_t slot = 0, rec = 0, begin = 0, end = 0;
+            if (!ft || !ft->object || !read_ptr(ft->object + kLapsSlot, slot) || !slot || !read_ptr(slot, rec) || !rec ||
+                !read_ptr(rec + kListBegin, begin) || !read_ptr(rec + kListEnd, end) || !begin || end <= begin ||
+                (end - begin) % 4 || (end - begin) / 4 > kLapsMax)
+                continue;
+            int32_t race = 0;
+            if (!read_int(begin, race) || race < 1 || race > 999)
+                continue;   // not a lap count as the game's tracks hold it: left alone
+            for (uintptr_t at = begin; at < end; at += 4) {
+                int32_t now = 0;
+                if (!read_int(at, now) || now != race || now == *e.laps || seen(at))
+                    continue;
+                out.push_back({at, t->code, e.id, now, *e.laps});
+            }
+        }
+    }
+    return out;
 }
 
 inline std::vector<FuelWrite> plan_box_fuel(const Base &base, const Entries &entries, const std::vector<const fuel::Set *> &sets,

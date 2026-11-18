@@ -14,7 +14,8 @@
 //
 // Feature detection: the table is read only when the running swofty_core.dll exports SwoftyCoreHud, so
 // an addon built against this header also loads on an older core and sees available() false there. The
-// table is versioned (SWOFTY_HUD_VERSION); version 1 holds available, toast and set.
+// table is versioned (SWOFTY_HUD_VERSION); version 1 holds available, toast and set, version 2 adds the
+// registered leaf table that swofty/hud_leaves.hpp wraps.
 
 namespace swofty::hud {
 

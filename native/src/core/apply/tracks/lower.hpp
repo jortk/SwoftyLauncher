@@ -447,6 +447,7 @@ struct Request {
     int64_t stat_id = -1;
     bool route = true;
     std::vector<std::string> ui_lists;
+    std::vector<std::string> sprint;
 };
 
 struct Lowered {
@@ -539,6 +540,22 @@ inline std::vector<Key> texture_keys(const Db &db, const Tables &t, const Key &t
     return keys;
 }
 
+inline constexpr const char *WEEKEND_TABLE = "TrackAuthenticWeekendData";
+
+inline std::optional<std::string> weekend_format(const Db &db, const Key &data_row)
+{
+    return db.text(field(row(sub_table(data_row, WEEKEND_TABLE), 0), "weekend_format").h);
+}
+
+inline bool set_weekend_format(Db &db, const Key &data_row, const std::string &format)
+{
+    std::size_t n = db.count(sub_count(data_row, WEEKEND_TABLE).h).value_or(0);
+    bool set = false;
+    for (std::size_t i = 0; i < n; i++)
+        set = db.set_text(field(row(sub_table(data_row, WEEKEND_TABLE), i), "weekend_format"), format) || set;
+    return set;
+}
+
 inline std::vector<std::string> split_items(const std::string &v)
 {
     std::vector<std::string> out;
@@ -620,6 +637,7 @@ inline Lowered lower_track(Db &db, const Tables &t, const Request &req)
     }
     Table sets = Table::of(t.datasets);
     std::vector<Key> data_rows;
+    std::vector<std::string> sprint_sets;
     std::size_t n = sets.ok ? sets.len(db) : 0;
     if (!n) {
         out.error = "the dataset table is missing or empty";
@@ -633,6 +651,9 @@ inline Lowered lower_track(Db &db, const Tables &t, const Request &req)
         if (!src)
             continue;
         auto dst = data.row_of(db, code, "track");
+        std::optional<std::string> own;
+        if (dst)
+            own = weekend_format(db, *dst);
         if (!dst)
             dst = data.push(db);
         if (!dst) {
@@ -641,6 +662,11 @@ inline Lowered lower_track(Db &db, const Tables &t, const Request &req)
         }
         clone_row(db, t.track_data.schema, *src, *dst);
         relabel(db, *dst, t.track_data.labels, code);
+        if (dst->h != src->h) {
+            bool sprint = std::find(req.sprint.begin(), req.sprint.end(), set_label) != req.sprint.end();
+            if (set_weekend_format(db, *dst, sprint ? std::string("sprint") : own.value_or("default")) && sprint)
+                sprint_sets.push_back(set_label);
+        }
         data_rows.push_back(*dst);
         out.sets.push_back(set_label);
     }
@@ -649,6 +675,16 @@ inline Lowered lower_track(Db &db, const Tables &t, const Request &req)
         joined += (joined.empty() ? "" : ", ") + s;
     out.lines.push_back("track data: " + code + " cloned from " + from + " in " + std::to_string(out.sets.size()) +
                         " dataset(s): " + joined);
+    if (!sprint_sets.empty()) {
+        std::string listed;
+        for (auto &s : sprint_sets)
+            listed += (listed.empty() ? "" : ", ") + s;
+        out.lines.push_back("weekend format: " + code + " runs sprint weekends in " + listed);
+    }
+    for (auto &s : req.sprint)
+        if (std::find(sprint_sets.begin(), sprint_sets.end(), s) == sprint_sets.end())
+            out.warnings.push_back("sprint " + s + ": " + code +
+                                   " has no weekend format in that data set, so it takes its parent data set's");
     for (auto &spec : t.sorted_orders) {
         Table table = Table::of(spec);
         std::string l = spec.labels.empty() ? std::string("_metadata_") : spec.labels.front();

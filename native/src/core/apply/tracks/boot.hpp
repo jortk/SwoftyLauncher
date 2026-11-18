@@ -179,7 +179,8 @@ inline Plan lower_records(registry::Store &st, Db &db, const Tables &t, const Sc
             refuse("code " + code + " is already " + (holder.empty() ? std::string("a track row") : holder + "'s"));
             continue;
         }
-        Request req{id, code, from->second, slot_code, -1, true, ui_lists ? ui_lists(code) : std::vector<std::string>{}};
+        Request req{id, code, from->second, slot_code, -1, true, ui_lists ? ui_lists(code) : std::vector<std::string>{},
+                    strings_of(rec["sprint"])};
         StatId sid;
         if (!fills && stat) {
             int64_t pin = rec["stat_id"].is_int() ? rec["stat_id"].as_int() : -1;

@@ -180,6 +180,25 @@ extern "C" __attribute__((noinline)) void sa_dir_set_active(void *dir, bool on)
     }
 }
 
+static uint8_t rules_mem[0x40];
+extern "C" __attribute__((noinline)) uint32_t sa_rules_init(void *self, void *systems, void *components)
+{
+    volatile uintptr_t pad = reinterpret_cast<uintptr_t>(self) + reinterpret_cast<uintptr_t>(systems) + reinterpret_cast<uintptr_t>(components);
+    for (volatile int i = 0; i < 1; i = i + 1)
+        pad = pad + 0;
+    trail.push_back("game rules init");
+    return 0;
+}
+
+extern "C" __attribute__((noinline)) void sa_disqualify(void *rules, uint32_t vehicle)
+{
+    volatile uintptr_t pad = reinterpret_cast<uintptr_t>(rules);
+    for (volatile int i = 0; i < 1; i = i + 1)
+        pad = pad + 0;
+    trail.push_back("game disqualify rules " + std::string(rules == rules_mem ? "ok" : "wrong") + " car " + std::to_string(vehicle));
+    sa_control(sys_mem, vehicle, 1, 2);
+}
+
 static std::map<std::string, std::string> overwrites;
 static std::vector<std::string> conflicts;
 static bool image_ok = true;
@@ -197,6 +216,10 @@ static uintptr_t resolve(const std::string &b)
         return reinterpret_cast<uintptr_t>(&sa_build);
     if (b == sp::HIDE.binding)
         return reinterpret_cast<uintptr_t>(&sa_hide);
+    if (b == sp::RULES_INIT.binding)
+        return reinterpret_cast<uintptr_t>(&sa_rules_init);
+    if (b == sp::DISQUALIFY_BINDING)
+        return reinterpret_cast<uintptr_t>(&sa_disqualify);
     if (b == sp::DIRECTOR_UPDATE.binding)
         return reinterpret_cast<uintptr_t>(&sa_dir_update);
     if (b == sp::DIRECTOR_SET_ACTIVE.binding)
@@ -276,6 +299,7 @@ template <class P, class F> static uint32_t on(Table &t, const char *addon, uint
 struct T1 {};
 struct T2 {};
 struct T3 {};
+struct T4 {};
 
 static void test_untouched()
 {
@@ -627,6 +651,51 @@ static void test_spectator()
     expect(joined() == "game hide", "with no subscriber the game hides the HUD as before");
 }
 
+static void test_disqualify()
+{
+    lines.clear();
+    trail.clear();
+    build_world(true);
+    memset(rules_mem, 0, sizeof rules_mem);
+    at<uintptr_t>(rules_mem, 0) = 0x1234500;
+    Table t(Platform0::make());
+    t.declare_core();
+    using S = sp::Set<T4>;
+    S::system = reinterpret_cast<uintptr_t>(sys_mem);
+    S::rebuilding = false;
+    S::depth = 0;
+    S::rules = 0;
+    S::pending.clear();
+    S::declare(t, vops(), env());
+    t.arm();
+    S::arm();
+    expect(S::op_disqualify(1) == SWOFTY_ASSET_LATE, "before the rule manager initialises disqualify answers late");
+    trail.clear();
+    void *volatile self = rules_mem;
+    uint32_t (*volatile init)(void *, void *, void *) = &sa_rules_init;
+    expect(init(self, nullptr, nullptr) == 0 && S::rules.load() == reinterpret_cast<uintptr_t>(rules_mem),
+           "the rule manager init hook captures the rules object and returns the game's result: " + joined());
+    trail.clear();
+    expect(S::op_disqualify(1) == SWOFTY_ASSET_OK && joined() == "game disqualify rules ok car 1 > game control car 1 ai 1 flag 2",
+           "disqualify calls the game with the captured rules and the car: " + joined());
+    trail.clear();
+    expect(S::op_disqualify(9) == SWOFTY_ASSET_INVALID && trail.empty(), "a car with no controller set is invalid and the game is not called");
+    expect(S::op_disqualify(0xff) == SWOFTY_ASSET_INVALID, "no-car index is invalid");
+    flow = false;
+    expect(S::op_disqualify(1) == SWOFTY_ASSET_LATE, "off the flow thread: late");
+    flow = true;
+    at<uintptr_t>(rules_mem, 0) = 0;
+    expect(S::op_disqualify(1) == SWOFTY_ASSET_LATE && trail.empty(), "a rules object whose vtable changed is treated as gone");
+    at<uintptr_t>(rules_mem, 0) = 0x1234500;
+    S::depth = 1;
+    expect(S::op_disqualify(2) == SWOFTY_ASSET_OK && trail.empty() && S::pending.size() == 1,
+           "inside a controller switch disqualify is queued");
+    expect(S::op_disqualify(2) == SWOFTY_ASSET_OK && S::pending.size() == 1, "and not queued twice");
+    S::depth = 0;
+    S::drain();
+    expect(joined().find("game disqualify rules ok car 2") == 0 && S::pending.empty(), "the next frame applies it: " + joined());
+}
+
 static void test_layout()
 {
     expect(sizeof(aie::ControllerUpdate) == sizeof(SwoftyEvControllerUpdate) && sizeof(sse::PlayerControl) == sizeof(SwoftyEvPlayerControl) &&
@@ -649,6 +718,7 @@ int main()
     test_apply_site();
     test_control_and_rebuild();
     test_spectator();
+    test_disqualify();
     test_layout();
     printf("%s: %d failure(s)\n", fails ? "FAIL" : "ok", fails);
     return fails ? 1 : 0;

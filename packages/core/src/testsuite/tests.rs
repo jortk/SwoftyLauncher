@@ -566,8 +566,8 @@ fn the_default_lock_follows_the_environment() {
     let path = lock::default_path(data);
     match std::env::var_os(lock::ENV).filter(|v| !v.is_empty()) {
         Some(v) => assert_eq!(path, PathBuf::from(v)),
-        None if cfg!(target_os = "linux") && Path::new("/mnt/work").is_dir() => {
-            assert_eq!(path, Path::new("/mnt/work/.f1-game.lock.d"))
+        None if cfg!(target_os = "linux") && Path::new("/mnt/work/F1").is_dir() => {
+            assert_eq!(path, Path::new("/mnt/work/F1/f1-game.lock.d"))
         }
         None => assert_eq!(path, Path::new("/home/me/.local/share/swofty-game.lock.d")),
     }

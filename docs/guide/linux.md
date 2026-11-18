@@ -31,7 +31,7 @@ You can now start the modded game with either Steam's **Play** button or the lau
 2. [Install your addons](/using/addons) and [mods](/using/mods), then pick a [profile](/using/profiles).
 3. Press **Play**.
 4. On your first Play, the launcher opens a one-time setup. Say whether your game folder holds mods Swofty didn't add, then select **I understand**. If you said no on a Steam copy, the launcher checks the game files against Steam's own list at launch and goes straight on. Otherwise select **Verify game files in Steam**, wait for Steam to finish, then select **I've verified, continue**. On the EA app copy, repair the game in the EA app instead.
-5. On your first launch, you'll see the **Modded play runs offline** dialog. Select **Accept and launch**. For details, see [Offline play](/reference/safety).
+5. **Play** launches straight away, since you accepted the **Swofty Launcher EULA** when the launcher first opened. For details, see [Offline play](/reference/safety).
 6. The first launch after the setup can take 5 to 8 minutes. Don't press Play in Steam or the EA app while it runs.
 
 If Steam is closed, the launcher starts it and waits for it to sign in first; see [Steam](/reference/launch#steam).
@@ -48,7 +48,7 @@ Install the launcher and set the launch option in Desktop Mode. Once that's set,
 
 ## If your game files aren't the ones Steam installed
 
-Before a modded session builds anything, the launcher checks the game against Steam's record of the files it installed. If a file was changed outside the launcher, for example by another mod tool or a manual install, F1 25 is not started and a **Your game files have been edited** modal says how many files changed, names the first six, and lists the fix.
+Before a modded session builds anything, the launcher checks the game against Steam's record of the files it installed. If a file was changed outside the launcher, for example by another mod tool or a manual install, F1 25 is not started and a **Your game files have been edited** modal says how many files changed, names the first six, and lists the fix. A DLL other than `steam_api64.dll` that differs from Steam's copy, such as an FSR 4, DLSS or VR runtime drop-in, doesn't stop the launch; a missing one does.
 
 To fix it:
 

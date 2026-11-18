@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-// career::set_car_number's rules, moved from Career Mode Editor's drivers.number.set (addons/career-editor/
+// career::set_car_number's rules, moved from Career Mode Editor's drivers.number.set (its
 // native/src/race_numbers.cpp plan()): pure logic over the career's entrant rows, so native/test builds it on
 // the host. A number is 1..99 and free when no other row of the championship holds it; with swap the row
 // holding it takes the driver's old number instead, which needs the driver to have one.

@@ -113,7 +113,7 @@ impl Addon {
         let status = host.call("game_status", Value::Null).unwrap_or(Value::Null);
         self.running = status["running"] == true;
         let addon_dir = host.path("addon_game_dir");
-        let saves = host.path("steam_save_dir");
+        let saves = host.path("save_dir");
         let items = self.items();
         let on = self.enabled(host)?;
         let live = match (self.running, status["session"].as_str()) {

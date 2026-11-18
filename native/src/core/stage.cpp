@@ -1,7 +1,9 @@
 #include "runtime.hpp"
 
+#include <swofty/mem.hpp>
 #include <swofty/mixin.hpp>
 
+#include "game_manager_layout.hpp"
 #include "state_logic.hpp"
 
 #include <mutex>
@@ -19,7 +21,7 @@ const Feature FEATURES[] = {{"group", true},    {"erp", true},        {"db", tru
                             {"lang", true},     {"file", false},      {"events", true},
                             {"storage", true},  {"overlay", false},   {"telemetry", false},
                             {"shaders", false}, {"career", true},     {"popup", true},
-                            {"postfx", false},  {"registry_rows", true}};
+                            {"postfx", false},  {"registry_rows", true}, {"lap_rec", true}};
 
 std::once_flag config_once;
 json::Value config_doc;
@@ -199,17 +201,35 @@ std::string load_stage()
     return n && n < sizeof buf ? std::string(buf, n) : std::string("window");
 }
 
-bool same_build()
+ImageId image_id()
 {
     auto b = reinterpret_cast<const uint8_t *>(swofty::api->module_base());
     auto nt = reinterpret_cast<const IMAGE_NT_HEADERS *>(b + reinterpret_cast<const IMAGE_DOS_HEADER *>(b)->e_lfanew);
-    return nt->FileHeader.TimeDateStamp == 1789118616u && nt->OptionalHeader.SizeOfImage > 0x6000000;
+    return {nt->FileHeader.TimeDateStamp, nt->OptionalHeader.SizeOfImage};
+}
+
+bool same_build()
+{
+    ImageId id = image_id();
+    return id.stamp == 1789118616u && id.size > 0x6000000;
+}
+
+bool verified_build()
+{
+    auto [stamp, size] = image_id();
+    return (stamp == 1789118616u && size > 0x6000000) || (stamp == 1789128892u && size == 0x155dc000) ||
+           (stamp == 1794312636u && size == 0x18434000);
+}
+
+uintptr_t manager_entrants_system()
+{
+    return game_manager::entrants_system(build_distribution());
 }
 
 uintptr_t find(const Sig &s, const char *tag, const char *channel)
 {
     uintptr_t at = 0, base = swofty::api->module_base();
-    int hits = swofty::api->scan(".xtls", s.pattern, &at);
+    int hits = swofty::api->scan(s.section, s.pattern, &at);
     if (hits != 1 || !at) {
         swofty::log("[%s] %s: %s signature matched %d time(s)", channel, tag, s.what, hits);
         return 0;
@@ -225,10 +245,7 @@ uintptr_t find(const Sig &s, const char *tag, const char *channel)
 
 bool readable(const void *p, size_t n)
 {
-    MEMORY_BASIC_INFORMATION m{};
-    if (!p || !VirtualQuery(p, &m, sizeof m) || m.State != MEM_COMMIT || (m.Protect & (PAGE_NOACCESS | PAGE_GUARD)))
-        return false;
-    return uintptr_t(p) + n <= uintptr_t(m.BaseAddress) + m.RegionSize;
+    return swofty::mem::readable(p, n);
 }
 
 std::string read_file(const std::wstring &path, size_t limit)
@@ -254,6 +271,12 @@ std::string read_file(const std::wstring &path, size_t limit)
     return out;
 }
 
+const std::wstring &files_root()
+{
+    const std::wstring &state = state_root();
+    return state.empty() ? swofty_root() : state;
+}
+
 bool write_file(const std::wstring &path, const std::string &data)
 {
     std::wstring tmp = path + L".tmp";
@@ -269,7 +292,9 @@ bool write_file(const std::wstring &path, const std::string &data)
     }
     CloseHandle(f);
     if (!ok || !MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+        DWORD e = GetLastError();
         DeleteFileW(tmp.c_str());
+        SetLastError(e);
         return false;
     }
     return true;

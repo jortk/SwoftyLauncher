@@ -255,7 +255,7 @@ Each table has its page in the standard library:
 - `career`: [Career](/reference/std/career). `popup`: [Popup](/reference/std/popup). `lang`: [Strings](/reference/std/strings).
 - `career_content`: [Career contents](/reference/std/career-content). `characters`: [Characters](/reference/std/characters). `career_wizard`: [Career wizard](/reference/std/career-wizard). `era`: [Era picker boxes](/reference/std/era-picker).
 
-For guarded reads of game memory (`read`, `in_image`, `object_like`, `c_string`), include the header-only [`swofty/mem.hpp`](/reference/std/memory); it needs no table.
+For guarded reads of game memory (`read`, `in_image`, `object_like`, `c_string`), include the header-only [`swofty/mem.hpp`](/reference/std/memory); it needs no `SwoftyApi` table, and its checks go to the core's page table through the core export `SwoftyCoreMem` when the core has it.
 
 The API version depends on what's loaded: `version.dll` alone offers version 1; `swofty_core.dll` raises it to 8 (7 before string overrides, 6 before core 0.2.12, 5 before core 0.2.11). For the engine functions and structs you can call and hook, see the [Game API](/reference/game/).
 

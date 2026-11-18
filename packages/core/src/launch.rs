@@ -23,7 +23,7 @@ pub const EARLY_EXIT: Duration = Duration::from_secs(15);
 pub const SECOND_COPY: &str = "single instance: ";
 /// The loader's lines once the game reached its window: the window stage
 /// after an early load, or the window trigger itself.
-const WINDOW: &[&str] = &[
+pub(crate) const WINDOW: &[&str] = &[
     "stage: window (",
     "trigger: USER32!",
     "trigger: main window visible",
@@ -54,6 +54,9 @@ pub enum Cause {
     /// An EA app repair replaced offline play's file, so the game started
     /// without mods; the session put the file back.
     EaRepaired,
+    /// Windows won't start a program an EA app session needs: it is set to
+    /// run as administrator.
+    RunAsAdmin(crate::compat::RunAsAdmin),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -99,6 +102,7 @@ impl Failure {
             Cause::ClosedEarly { .. } => "F1 25 closed as it started",
             Cause::Blocked(b) => b.title(),
             Cause::EaRepaired => "The EA app repaired F1 25",
+            Cause::RunAsAdmin(_) => crate::compat::RunAsAdmin::TITLE,
         }
     }
 
@@ -114,6 +118,7 @@ impl Failure {
             Cause::EaRepaired => {
                 "the EA app's repair replaced offline play's file, so F1 25 started without mods".into()
             }
+            Cause::RunAsAdmin(r) => r.headline(),
         }
     }
 
@@ -149,6 +154,7 @@ impl Failure {
                  the file as the EA app installed it."
                     .into()
             }
+            Cause::RunAsAdmin(r) => r.text(),
         }
     }
 }

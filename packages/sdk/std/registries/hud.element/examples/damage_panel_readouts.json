@@ -1,0 +1,44 @@
+{
+  "hud.element": {
+    "readouts": {
+      "$comment": "Two readouts in the stock damage panel (mfd_car_damage_panel.idf). No dial: scene and parent_ui name the target.",
+      "scene": "eaid://ui_package/art/osd/components/dial/mfd_car_damage_panel.idf",
+      "parent_ui": "hud_mfd_dynamic.mfd.attacher.car_damage_panel",
+      "elements": [
+        {
+          "kind": "text",
+          "id": "brake_fl",
+          "style": "OSD_17_bold",
+          "align": "left",
+          "box": 30,
+          "cap_height": 6,
+          "at": [
+            -60,
+            40
+          ],
+          "value": {
+            "view_model": "ui_menu_data.hud_brake_check_fl"
+          },
+          "visible": {
+            "view_model": "ui_menu_data.hud_brake_check_visible"
+          }
+        },
+        {
+          "kind": "text",
+          "id": "plank",
+          "style": "OSD_17_bold",
+          "align": "centre",
+          "box": 60,
+          "cap_height": 6,
+          "at": [
+            0,
+            50
+          ],
+          "value": {
+            "view_model": "ui_menu_data.hud_planked_text"
+          }
+        }
+      ]
+    }
+  }
+}

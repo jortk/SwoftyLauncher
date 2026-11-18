@@ -1,0 +1,12 @@
+{
+  "content.package": {
+    "f1_1980": {
+      "$comment": "off, corner_cutting_only, esports, on or null",
+      "entrant_list": "f1_1980",
+      "season": 1980,
+      "rules": {
+        "penalties": "reduced"
+      }
+    }
+  }
+}

@@ -81,6 +81,21 @@ static void test_numbers()
     CHECK(numbers::plan(rows, key(5), 100, false).error == Error::bad_value);
     CHECK(numbers::plan(rows, key(5), 7.5, false).error == Error::bad_value);
     CHECK(numbers::plan(rows, key(99), 7, false).error == Error::no_entrant);
+
+    std::vector<numbers::Row> with_player = rows;
+    with_player.push_back({rows::key_of_id(16388), 12, true});
+    p = numbers::plan(with_player, rows::key_of_id(16388), 33, false);
+    CHECK(p.error == Error::none && p.row == 4 && !p.unchanged);
+    CHECK(numbers::plan(with_player, rows::key_of_id(16388), 44, true).swap_with == 0);
+}
+
+static void test_driver_ids()
+{
+    CHECK(rows::driver_id(0) && rows::driver_id(16382) && rows::driver_id(16387) && rows::driver_id(16388));
+    CHECK(rows::driver_id(0xfffe) && !rows::driver_id(0x3fff) && !rows::driver_id(0x7fff) && !rows::driver_id(0x10000));
+    CHECK(rows::key_of_id(16388) == ((4u << 16) | 1u) && rows::key_of_id(208) == (208u << 16));
+    std::vector<rows::Row> view = {{key(5), false}, {rows::key_of_id(16388), false}};
+    CHECK(rows::pick(view, 4, 1) == 1 && rows::pick(view, 4) == rows::kNone && rows::pick(view, 5) == 0);
 }
 
 static fuel::Track track(uint32_t index, uintptr_t object, uintptr_t record, const char *name, float burn, uint64_t rows)
@@ -146,6 +161,7 @@ int main()
     test_driver_rows();
     test_seats();
     test_numbers();
+    test_driver_ids();
     test_fuel_sets();
     if (failures) {
         std::printf("ops_logic_test: %d failure(s)\n", failures);

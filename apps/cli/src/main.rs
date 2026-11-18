@@ -3,6 +3,8 @@ mod db;
 mod dev;
 mod doctor;
 mod ea;
+mod hud;
+mod laps;
 mod offline;
 mod postfx;
 mod recover;
@@ -11,6 +13,7 @@ mod run;
 mod saves;
 mod send_logs;
 mod setup;
+mod shaders;
 mod testing;
 mod time;
 mod update;
@@ -146,6 +149,11 @@ enum Command {
     },
     #[command(
         subcommand,
+        about = "Shader configs and effects: list, edit, check and choose the profile's config"
+    )]
+    Shaders(shaders::ShadersCommand),
+    #[command(
+        subcommand,
         about = "Post-process passes: compile an addon's shaders to check them"
     )]
     Postfx(postfx::PostfxCommand),
@@ -154,6 +162,11 @@ enum Command {
         about = "The career vault: snapshots of the profile save around every session; list, show, back up and restore them"
     )]
     Saves(saves::SavesCommand),
+    #[command(
+        subcommand,
+        about = "Time Trial boards: the laps waiting to upload and the ones sent"
+    )]
+    Laps(laps::LapsCommand),
     #[command(
         subcommand,
         about = "Test addons in the game: plan the game starts, run the tests and write the report"
@@ -169,6 +182,11 @@ enum Command {
         about = "The addon registry: check dependencies, and show the core's conflicts and status from your last session"
     )]
     Registry(registry::RegistryCommand),
+    #[command(
+        subcommand,
+        about = "The HUD composer: check the stock dial facts and compose an addon's hud.element records"
+    )]
+    Hud(hud::HudCommand),
     #[command(about = "List every career in the career index, the profile that started it and what it needs")]
     Careers,
     #[command(about = "Check for a new release and install it into this copy")]
@@ -549,6 +567,7 @@ fn run_cli(store: &Store, mut args: Vec<OsString>) -> Result<ExitCode> {
 
 fn dispatch(store: &Store, cli: Cli) -> Result<ExitCode> {
     let store = store.clone();
+    let named = cli.profile.clone();
     let profile = cli.profile.unwrap_or_else(|| store.active_profile());
     match cli.command {
         Command::Run(args) => run::run(&store, &profile, args),
@@ -571,12 +590,15 @@ fn dispatch(store: &Store, cli: Cli) -> Result<ExitCode> {
         Command::Doctor => doctor::doctor(&store),
         Command::Game(cmd) => game(&store, cmd).map(|_| ExitCode::SUCCESS),
         Command::Saves(cmd) => saves::command(&store, cmd),
+        Command::Laps(cmd) => laps::command(&store, &profile, cmd),
         Command::Steam { start } => run::steam_check(&store, start),
         Command::Postfx(cmd) => postfx::command(cmd),
-        Command::Test(cmd) => testing::command(&store, cmd),
+        Command::Shaders(cmd) => shaders::command(&store, &profile, cmd),
+        Command::Test(cmd) => testing::command(&store, named.as_deref(), &profile, cmd),
         Command::Dev(cmd) => dev::command(&store, &profile, cmd),
         Command::Update { check } => update::update(check),
         Command::Registry(cmd) => registry::command(&store, &profile, cmd),
+        Command::Hud(cmd) => hud::command(&store, cmd),
         Command::Careers => registry::careers(&store, &profile).map(|_| ExitCode::SUCCESS),
     }
 }
@@ -650,6 +672,8 @@ fn addons(store: &Store, profile: &str, cmd: AddonsCommand) -> Result<()> {
             for (id, m) in store.addons()? {
                 let state = if m.is_builtin() {
                     "built in"
+                } else if m.is_shader_only() {
+                    "shaders"
                 } else if enabled.contains(&id.as_str()) {
                     "enabled"
                 } else {
@@ -889,6 +913,7 @@ fn settings(store: &Store, profile: &str, cmd: SettingsCommand) -> Result<()> {
         SettingsCommand::List { id } => {
             let p = store.profile(profile)?;
             let pending = p.rebuild_pending(&addons);
+            let on = swofty_core::settings::OnAddons::of(&p, &addons);
             for m in addons
                 .values()
                 .filter(|m| id.as_deref().is_none_or(|i| i == m.id))
@@ -898,11 +923,11 @@ fn settings(store: &Store, profile: &str, cmd: SettingsCommand) -> Result<()> {
                 }
                 println!("{} ({})", m.name, m.id);
                 for o in &m.options {
-                    let v = p.option(m, o);
-                    let mark = if pending.contains(&format!("{}.{}", m.id, o.id)) {
-                        ", rebuild pending"
-                    } else {
-                        ""
+                    let v = on.value(&p, m, o);
+                    let mark = match on.missing(o) {
+                        Some(n) => format!(", off: needs {n} on"),
+                        None if pending.contains(&format!("{}.{}", m.id, o.id)) => ", rebuild pending".into(),
+                        None => String::new(),
                     };
                     let binds = match o.binds {
                         Binds::Native => "live",
@@ -1366,6 +1391,35 @@ mod tests {
             data_dir_arg(&os(&["swofty", "--data-dir=/e", "build"])),
             Some("/e".into())
         );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_profile_that_starts_with_a_dash_goes_through_as_one_value() {
+        use swofty_core::process::flag;
+        let root = std::env::temp_dir().join(format!("swofty-cli-dash-profile-{}", std::process::id()));
+        std::fs::remove_dir_all(&root).ok();
+        let store = store(&root);
+        let cmd = AddonCommands::load(&store).command();
+        let args = vec![
+            OsString::from("swofty"),
+            flag("data-dir", "/data/-swofty"),
+            flag("profile", "-swofty"),
+            "run".into(),
+            "--apply".into(),
+            flag("game", "/games/-F1 25"),
+        ];
+        let cli = Cli::from_arg_matches(&cmd.clone().try_get_matches_from(&args).unwrap()).unwrap();
+        assert_eq!(cli.profile.as_deref(), Some("-swofty"));
+        assert_eq!(cli.data_dir.as_deref(), Some(Path::new("/data/-swofty")));
+        assert!(matches!(cli.command, Command::Run(_)));
+        assert_eq!(command_at(&args), Some(3));
+        assert_eq!(data_dir_arg(&args), Some("/data/-swofty".into()));
+
+        let split = cmd
+            .try_get_matches_from(["swofty", "--profile", "-swofty", "run", "--apply"])
+            .unwrap_err();
+        assert_eq!(split.kind(), clap::error::ErrorKind::UnknownArgument);
         std::fs::remove_dir_all(&root).ok();
     }
 
